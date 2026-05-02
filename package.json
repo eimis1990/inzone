@@ -65,6 +65,7 @@
       "out/**/*",
       "package.json"
     ],
+    "asar": false,
     "extraResources": [
       {
         "from": "bundled-resources",
@@ -80,7 +81,9 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": false,
+      "notarize": {
+        "teamId": "EG48WRW632"
+      },
       "extendInfo": {
         "NSMicrophoneUsageDescription": "INZONE uses the microphone for the Voice agent feature, which lets you drive INZONE by voice.",
         "ITSAppUsesNonExemptEncryption": false
