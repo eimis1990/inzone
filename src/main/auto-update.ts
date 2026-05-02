@@ -23,7 +23,14 @@
  */
 
 import { app, dialog, BrowserWindow } from 'electron';
-import { autoUpdater } from 'electron-updater';
+// electron-updater is a CJS module, but our main bundle emits as
+// ESM (so it can import the ESM-only Claude Agent SDK). Node's
+// ESM loader only reliably exposes the default export of CJS
+// modules — named imports fail at runtime even when TypeScript is
+// happy at compile time. Use the destructure-from-default pattern
+// so this works in the packaged build.
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
 
 let started = false;
 

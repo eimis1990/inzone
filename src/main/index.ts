@@ -1,3 +1,41 @@
+// IMPORTANT: this PATH augmentation runs at module-load time, BEFORE
+// any other import that might spawn a child process. Electron apps
+// launched from the macOS Finder (i.e. by double-clicking the .app)
+// inherit a minimal PATH that doesn't include /opt/homebrew/bin or
+// /usr/local/bin. The Claude Agent SDK spawns `node` for its agent
+// + MCP subprocesses, the gh CLI subprocess for the PR flow, etc. —
+// every one of those needs to find its binary on PATH.
+//
+// Dev (`electron-vite dev`) doesn't hit this because Electron there
+// inherits the terminal's PATH. The packaged app from Finder is the
+// only place this matters, but it's the case that ships to users.
+{
+  const home = process.env.HOME ?? '';
+  // User-level bins first so user-installed tools win over system
+  // ones with the same name. ~/.local/bin is where the official
+  // Claude Code installer (`curl https://claude.ai/install`) drops
+  // its binary; ~/bin is the classic user-bin path.
+  const homeExtras = home
+    ? [`${home}/.local/bin`, `${home}/bin`]
+    : [];
+  const extras = [
+    ...homeExtras,
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    '/usr/local/bin',
+    '/usr/local/sbin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+  ];
+  const seen = new Set(
+    (process.env.PATH ?? '').split(':').filter(Boolean),
+  );
+  for (const p of extras) seen.add(p);
+  process.env.PATH = [...seen].join(':');
+}
+
 import { app, BrowserWindow, shell } from 'electron';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import path from 'path';
