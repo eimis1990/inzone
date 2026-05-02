@@ -1,74 +1,229 @@
-# Claude Panels
+<div align="center">
+  <img src="src/renderer/src/assets/inzone-app-logo.png" width="120" alt="INZONE logo" />
 
-A macOS app that runs multiple Claude Agent SDK sessions side‑by‑side inside one window. Each pane is an independent session bound to an agent from `~/.claude/agents`. Skills and MCP servers from `~/.claude` flow in automatically.
+  <h1>INZONE</h1>
 
-## What's inside
+  <p>
+    <strong>A macOS cockpit for orchestrating multiple Claude agents in one window.</strong><br/>
+    Run several agents in parallel, chain them into pipelines, isolate work in git worktrees,
+    and ship code without ever leaving the app.
+  </p>
 
-- **Electron + TypeScript + React** renderer, with `react-resizable-panels` for tiled splits.
-- **Main process** spawns and pumps `@anthropic-ai/claude-agent-sdk` `query()` sessions, one per pane, and forwards events over IPC.
-- **Persistence** via `electron-store` for layouts and workspace presets; per‑pane JSONL transcripts under `app.getPath('userData')/transcripts/`.
-- **Auto‑accept tools** (`permissionMode: 'bypassPermissions'`) — agents run without prompting. A "Stop" action per pane is wired for when you need to yank the cord.
+  <p>
+    <a href="https://github.com/eimis1990/inzone/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/eimis1990/inzone?label=download&style=for-the-badge&color=E4F250&labelColor=141821" /></a>
+    <img alt="macOS" src="https://img.shields.io/badge/macOS-12%2B-141821?style=for-the-badge&labelColor=141821&color=8E8E93" />
+    <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-%E2%9C%93-141821?style=for-the-badge&labelColor=141821&color=8E8E93" />
+    <img alt="Intel" src="https://img.shields.io/badge/Intel-%E2%9C%93-141821?style=for-the-badge&labelColor=141821&color=8E8E93" />
+    <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-141821?style=for-the-badge&labelColor=141821&color=8E8E93" />
+  </p>
+
+  <p>
+    <a href="https://github.com/eimis1990/inzone/releases/latest"><strong>⬇ Download for macOS</strong></a>
+    &nbsp;·&nbsp;
+    <a href="#features">Features</a>
+    &nbsp;·&nbsp;
+    <a href="#quick-start">Quick start</a>
+    &nbsp;·&nbsp;
+    <a href="#for-developers">Build from source</a>
+  </p>
+</div>
+
+<br/>
+
+<p align="center">
+  <img src="src/renderer/src/assets/app-screenshots/multi-agents-feature.png" alt="INZONE multi-agent workspace" />
+</p>
+
+## Why INZONE
+
+Most AI coding tools give you one chat window with one agent. INZONE gives you a workspace.
+
+You bind agents to panes, point each at the same project folder, and they work in parallel — a frontend agent on the UI, a backend agent on the API, a code-reviewer watching both. When you need something more structured, switch to **Lead** mode and let an orchestrator delegate to sub-agents through a built-in messaging protocol. When you need something pipelined, enable **Flow** and chain panes into a sequence that passes output downstream.
+
+INZONE is local-first. Your agent definitions, transcripts, and credentials live on your machine. The only data that leaves goes to Anthropic (for Claude turns) and any MCP servers you explicitly add.
+
+It's compatible with Claude Code's `~/.claude/` directory, so any agents and skills you've already authored work here unchanged.
+
+<a id="features"></a>
+
+## Features
+
+### Multi-Agent Workspace
+
+Drop several Claude agents into independent panes inside one window. Each pane has its own conversation, transcript, and SDK session, so agents can work on different parts of the same project in parallel without stepping on each other. Pre-set 1, 2, 4, 6, 8, or 10-pane grids are one click away — and they're resizable.
+
+<p align="center">
+  <img src="src/renderer/src/assets/app-screenshots/multi-agents-feature.png" alt="Multiple Claude agents running side by side" />
+</p>
+
+### Lead Agent — Delegate, Don't Micromanage
+
+Promote one pane to a top-row orchestrator. The Lead agent sees a custom MCP toolset for assigning work, asking questions, and broadcasting context to its sub-agents. You write the goal once; the Lead figures out who does what and routes results back. Switch between Multi and Lead with a single segmented control in the workspace bar.
+
+<p align="center">
+  <img src="src/renderer/src/assets/app-screenshots/lead-agent-feature.png" alt="Lead agent orchestrating sub-agents" />
+</p>
+
+### Flow — Sequential Agent Pipelines
+
+Chain panes into a synchronous sequence. Each step fires the next as soon as it finishes, passing the previous agent's output downstream via a `{previous}` placeholder. Authored on a free-form canvas with draggable cards, bezier connection lines, per-card prompts, configurable per-step delay, and a live logs side panel with autoscroll. Toggle Flow off and the cards lock; pane composers reclaim message authoring.
+
+<p align="center">
+  <img src="src/renderer/src/assets/app-screenshots/multi-agents-flow-feature.png" alt="Flow pipeline canvas with chained agents" />
+</p>
+
+### Worktrees — Parallel Branches Without Stepping On Yourself
+
+Spin up a git worktree off any branch directly from the sidebar. INZONE creates a sibling directory with its own branch (with optional `feature/`, `fix/`, `chore/`, `experiment/` prefix) and registers it as a sister project under the parent, indented in the sidebar with a "WT" chip. Run several agents on different branches of the same repo in parallel without them clobbering each other's working trees.
+
+<p align="center">
+  <img src="src/renderer/src/assets/app-screenshots/worktree-feature.png" alt="Worktree projects indented under their parent in the sidebar" />
+</p>
+
+### Built-In Diff Review + PR Workflow
+
+The second half of the worktree story. A Review chip in the workspace bar opens a per-pane file tree of changes with a side-by-side / inline diff viewer. Per-hunk approve/reject. Rejected hunks plus a comment can be sent back to the agent for revision. Once clean, **Open PR** detects `gh` CLI, supports multi-account push, switches SSH-only remotes to HTTPS for you, and drafts the PR title/body from the diff. After merge, INZONE pulls into the parent project, removes the worktree, and switches you back.
+
+<p align="center">
+  <img src="src/renderer/src/assets/app-screenshots/in-app-diff.png" alt="Side-by-side diff review with per-hunk controls" />
+</p>
+
+### Built-In Terminal
+
+A real PTY shell (zsh/bash via node-pty) docked at the bottom of the pane host. `⌘T` toggles a slide-up overlay with a blurred backdrop. Full ANSI color support, interactive programs, persistent across panel open/close. Configurable shortcut buttons for quick commands like `npm run dev` or `git status`. Terminal cwd follows the active project's folder automatically.
+
+<p align="center">
+  <img src="src/renderer/src/assets/app-screenshots/in-app-terminal.png" alt="Built-in terminal docked at the bottom" />
+</p>
+
+### Preview Window
+
+In-app browser for localhost. INZONE auto-detects URLs printed by agents *and* by the terminal, surfaces a Preview pill in the workspace bar, and opens a centered 16:10 webview at 90% viewport with `⌘⇧P`. Multi-URL picker when several services are running, with a kill action to free a port. Liveness sweeps prune URLs that no longer respond.
+
+<p align="center">
+  <img src="src/renderer/src/assets/app-screenshots/browser-preview.png" alt="In-app browser preview window" />
+</p>
+
+### Voice Agent
+
+Talk to a dedicated voice agent (powered by ElevenLabs Conversational AI) that drives the rest of INZONE. Tap the mic in the sidebar, ask in plain English — *"spin up a frontend agent on this folder"* — and it calls real INZONE actions: switch projects, run agents, send messages to specific panes, set Lead, close panes. A three-slide setup wizard walks first-time users through getting it configured.
+
+### Workers Tab — Agents + CLI Tools In One Place
+
+The middle sidebar tab houses both LLM agents and non-agent CLI tools. The **Other** section ships with presets for **Claude Code**, **Codex CLI**, **Aider**, **Gemini CLI**, plus a plain **Terminal**. Drop one onto a pane and it flips from a chat surface into an embedded shell running that tool. Install detection shows a "not installed" pill with a one-click install path that types the right command into the bottom-bar terminal — no tab switching.
+
+### MCP Server Support
+
+Connect external MCP servers — Figma, JIRA, Atlassian, Context7, Supabase, GitHub, Filesystem, custom. Built-in OAuth flow (PKCE + localhost callback) for connectors that need it. Tokens persist in macOS keychain via `safeStorage`. Per-agent opt-in keeps each agent's toolbox focused. Reads MCP servers from Claude Code's project-local and project-other config files automatically.
+
+### Bundled Starter Library
+
+On first launch, INZONE copies a curated set of starter agents and skills into `~/.claude/` — never overwriting anything you've authored:
+
+- **5 starter agents**: backend-developer, fullstack-developer, frontend-developer, solo-founder, lead-users-agent
+- **8 starter skills**: code-reviewer, frontend-design, mobile-design, motion-system, senior-frontend, senior-fullstack, senior-prompt-engineer, seo-optimizer
+
+### Project Resume + Auto-Update
+
+Pane layouts, agent assignments, transcripts, Claude SDK session ids, mode (Multi or Lead), Lead-pane history, terminal-pane preset bindings, and pipeline configuration all persist across restarts. Reopen the app and the same agents are right where you left them with full context intact.
+
+`electron-updater` checks the release feed every 30 minutes and silently downloads new versions in the background. When a download completes, you get a small "Update ready" prompt with Restart now / Later — never a forced restart.
+
+<a id="quick-start"></a>
+
+## Quick start
+
+1. **[Download the latest release](https://github.com/eimis1990/inzone/releases/latest)** — pick the Apple Silicon zip if you're on M-series, the Intel zip otherwise.
+2. **Unzip and drag `INZONE.app` to Applications.** Safari unzips automatically; right-click → Open the first time if Gatekeeper hesitates (it shouldn't — the build is notarized).
+3. **First launch — choose your auth path:**
+   - **API key**: paste your Claude API key from `console.anthropic.com` into Settings → Profile. Encrypted at rest in macOS keychain.
+   - **Subscription**: if you've already run `claude login` from the Claude Code CLI, INZONE picks up the credentials automatically.
+4. **Pick a project folder** in the welcome modal. Every pane in that project will run with that folder as its working directory.
+5. **Drop an agent on a pane** — the Workers tab shows your library. Click any card to bind it.
+6. **Open another pane** with one of the layout templates (1, 2, 4, 6, 8, 10) and let two agents go at it in parallel.
+
+That's it. From there, explore Lead mode, Flow, worktrees, the Review chip, and the Voice setup wizard at your own pace.
 
 ## Requirements
 
-- macOS 12+
-- Node.js 18+
-- An `ANTHROPIC_API_KEY` in your environment (or a logged‑in `~/.claude` from Claude Code, which the SDK also picks up).
-- Agents under `~/.claude/agents/*.md` with YAML frontmatter:
+- macOS 12 or later (Apple Silicon or Intel)
+- A Claude API key (`console.anthropic.com`) **or** an active Claude Code subscription
+- (Optional) An ElevenLabs account for the Voice agent
+- (Optional) `gh` CLI installed for the one-click PR flow
 
-  ```md
-  ---
-  name: code-reviewer
-  description: Reviews diffs and flags risks.
-  model: sonnet
-  ---
-  You are a meticulous code reviewer. ...
-  ```
+<a id="for-developers"></a>
 
-## Scripts
+## For developers
+
+INZONE is open source. To run from source:
 
 ```bash
-npm install          # install deps
-npm run dev          # run the app in dev mode with HMR
+git clone https://github.com/eimis1990/inzone.git
+cd inzone
+npm install
+npm run dev          # HMR dev mode
+```
+
+Other useful scripts:
+
+```bash
 npm run typecheck    # tsc --noEmit for main + renderer
 npm run build        # production bundle into out/
-npm run package      # build a signed .dmg via electron-builder (mac)
-npm run package:dir  # build an unsigned .app for local testing
+npm run package      # build a signed .zip via electron-builder (requires Apple Dev ID env vars)
+npm run package:dir  # build an unsigned .app for local testing — fastest iteration
 ```
 
-First launch will prompt for a project folder — every pane in that window runs with that folder as its `cwd`.
-
-## How it fits together
+### Architecture at a glance
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│ Renderer (React)                                         │
-│                                                          │
-│   ┌─────────────┬──────────────────────────────────┐     │
-│   │ Sidebar     │ Pane tree (resizable splits)     │     │
-│   │ (agents +   │  ┌────────┬────────┐             │     │
-│   │  skills)    │  │ Pane A │ Pane B │  …          │     │
-│   │             │  └────────┴────────┘             │     │
-│   └─────────────┴──────────────────────────────────┘     │
-│                    │ ipc invoke/on                       │
-└────────────────────┼─────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ Renderer (React + Zustand)                                   │
+│   ┌─────────────┬────────────────────────────────────────┐   │
+│   │ Sidebar     │ Pane tree (resizable splits)           │   │
+│   │ Projects /  │  ┌────────┬────────┐                   │   │
+│   │ Workers /   │  │ Pane A │ Pane B │  …                │   │
+│   │ Voice       │  └────────┴────────┘                   │   │
+│   │             │ Workspace bar · Flow canvas · Review   │   │
+│   └─────────────┴────────────────────────────────────────┘   │
+│                    │ ipc invoke / on                          │
+└────────────────────┼─────────────────────────────────────────┘
                      ▼
-┌──────────────────────────────────────────────────────────┐
-│ Main process (Node)                                      │
-│   IPC handlers  ─►  SessionPool                          │
-│                      ├── SessionController (pane A)      │
-│                      │    └─ @anthropic-ai/claude-agent-sdk
-│                      └── SessionController (pane B) …    │
-│   Agent + skill scanner (~/.claude watch)                │
-│   Persistence (electron-store + JSONL transcripts)       │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ Main process (Node)                                          │
+│   IPC handlers   ─►  SessionPool                             │
+│                       ├── SessionController (pane A)         │
+│                       │    └─ @anthropic-ai/claude-agent-sdk │
+│                       └── SessionController (pane B) …       │
+│   Agents/skills watcher · MCP loader · Git ops · PTYs        │
+│   AskUserQuestion in-process MCP server                      │
+│   Auto-update (electron-updater)                             │
+│   Persistence (electron-store + JSONL transcripts)           │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-Events flow main → renderer over the `session:event` channel. User messages flow renderer → main via `session:send` and get fed into each session's async input queue.
+Core stack: **Electron + TypeScript + React + Zustand**, `@anthropic-ai/claude-agent-sdk` for agent runtime, `react-resizable-panels` for tiled splits, `node-pty` + `xterm.js` for terminals, `electron-builder` for packaging, `electron-updater` for in-app updates.
 
-## Notes & limitations
+For a deeper feature list see [FEATURES.md](FEATURES.md). For the release flow see [RELEASE.md](RELEASE.md).
 
-- The SDK's message shapes can evolve; `src/main/sessions.ts` treats incoming messages as unknown and inspects only the fields it needs.
-- Auto‑accept + a shared project folder means any pane has full filesystem access under that folder. If you want guardrails, swap `permissionMode` in `sessions.ts` to `'default'` (per‑tool prompts) or `'acceptEdits'` (edits without prompts, but bash still asks).
-- MDI window tracking is single‑window for now. Multiple BrowserWindows are supported at the infra level but no menu item opens a second one yet — easy follow‑up.
-- To package for distribution outside your machine you need an Apple Developer ID and notarization. `electron-builder` handles both when the right env vars are set (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, `CSC_LINK`, `CSC_KEY_PASSWORD`).
+## Compatibility with Claude Code
+
+INZONE reads the same configuration directories Claude Code uses:
+
+- `~/.claude/agents/` — global agent definitions
+- `~/.claude/skills/` — global skill definitions
+- `<project>/.claude/agents/` — project-scoped agents
+- `<project>/CLAUDE.md` and `~/.claude/CLAUDE.md` — memory files
+- `<project>/.mcp.json` — project-local MCP servers
+- `~/.claude.json` — project-other MCP servers
+
+Whatever you've already set up for Claude Code keeps working.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+---
+
+<p align="center">
+  <sub>Built for people who treat Claude as a team, not a chatbot.</sub>
+</p>

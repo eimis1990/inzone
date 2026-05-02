@@ -81,21 +81,12 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": {
-        "teamId": "EG48WRW632"
-      },
+      "notarize": true,
       "extendInfo": {
         "NSMicrophoneUsageDescription": "INZONE uses the microphone for the Voice agent feature, which lets you drive INZONE by voice.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
         {
           "target": "zip",
           "arch": [
@@ -104,10 +95,6 @@
           ]
         }
       ]
-    },
-    "dmg": {
-      "writeUpdateInfo": true,
-      "sign": false
     },
     "publish": [
       {
