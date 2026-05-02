@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+# Apple Developer ID code-signing cert exports — NEVER commit.
+*.p12
+*.cer
+*.mobileprovision

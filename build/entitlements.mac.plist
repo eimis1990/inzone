@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS entitlements for INZONE.
+
+  We ship as a notarized direct-download DMG (NOT the Mac App Store),
+  which means the hardened runtime must be enabled but we don't have
+  to live inside the App Sandbox. The entitlements below are the
+  minimum set Electron + node-pty + the Claude Agent SDK need:
+
+    - allow-jit / allow-unsigned-executable-memory:
+        Electron's V8 needs JIT memory for the renderer.
+
+    - allow-dyld-environment-variables / disable-library-validation:
+        node-pty-prebuilt-multiarch loads a native .node addon
+        compiled against the system's Electron headers. Library
+        validation must be off so the dyld loader doesn't reject it
+        for not being signed by us.
+
+    - cs.disable-executable-page-protection:
+        Backup hook for V8 on some macOS versions where page
+        protection blocks JIT page reuse.
+
+    - inherit:
+        Child processes (the SDK's stdio MCP servers, node-pty
+        shells, gh CLI subprocess) inherit our entitlements.
+
+  No microphone / camera / network entitlements needed —
+  hardened-runtime + notarization happen above the entitlement layer
+  for those. Add NSMicrophoneUsageDescription to Info.plist (already
+  configured below) for the Voice feature's mic permission prompt.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <true/>
+    <key>com.apple.security.inherit</key>
+    <true/>
+    <!-- Microphone access for the Voice feature. The user is prompted
+         the first time they activate the mic. -->
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+  </dict>
+</plist>

@@ -1,0 +1,118 @@
+{
+  "name": "inzone",
+  "version": "1.0.0",
+  "description": "INZONE — a macOS cockpit for running multiple Claude Agent SDK sessions side-by-side.",
+  "main": "out/main/index.mjs",
+  "author": "INZONE",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "start": "electron-vite preview",
+    "package": "electron-vite build && electron-builder --mac --arm64 --x64",
+    "package:dir": "electron-vite build && electron-builder --mac --dir",
+    "release": "electron-vite build && electron-builder --mac --arm64 --x64 --publish always",
+    "release:dryrun": "electron-vite build && electron-builder --mac --arm64 --x64 --publish never"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.9",
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/lang-markdown": "^6.3.1",
+    "@codemirror/language-data": "^6.5.1",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@elevenlabs/react": "^1.2.1",
+    "@uiw/react-codemirror": "^4.23.7",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "chokidar": "^4.0.3",
+    "electron-store": "^10.0.1",
+    "electron-updater": "^6.8.3",
+    "gray-matter": "^4.0.3",
+    "highlight.js": "^11.10.0",
+    "nanoid": "^5.0.9",
+    "node-pty-prebuilt-multiarch": "^0.10.1-pre.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "react-resizable-panels": "^2.1.7",
+    "rehype-highlight": "^7.0.1",
+    "remark-gfm": "^4.0.0",
+    "zod": "^3.23.8",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  },
+  "build": {
+    "appId": "app.inzone.desktop",
+    "productName": "INzone",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bundled-resources",
+        "to": "bundled-resources",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "INZONE uses the microphone for the Voice agent feature, which lets you drive INZONE by voice.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "writeUpdateInfo": true,
+      "sign": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "eimis1990",
+        "repo": "inzone",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

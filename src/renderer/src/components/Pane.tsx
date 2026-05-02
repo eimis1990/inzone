@@ -1,0 +1,787 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PaneId, SessionStatus } from '@shared/types';
+import { getAgentColor } from '@shared/palette';
+import {
+  getPaneDisplayName,
+  useStore,
+  type ChatItem,
+} from '../store';
+import { MessageView, type ChatItemView } from './Message';
+import { TerminalPane } from './TerminalPane';
+import {
+  attachmentToMessageImage,
+  fileToAttachment,
+  isSupportedImage,
+  type PendingAttachment,
+} from '../attachments';
+import {
+  CloseIcon,
+  MicIcon,
+  PaperclipIcon,
+  SendIcon,
+  StopIcon,
+} from './icons';
+import placemarkUrl from '../assets/in-zone-placeholder.png';
+
+/**
+ * Friendly, humane status labels. "waiting_for_input" means two things
+ * in the SDK: "never had a turn yet, waiting for the first message" and
+ * "finished a turn, waiting for the next one". We disambiguate by
+ * looking at whether any result event has landed in the transcript.
+ */
+function statusLabel(status: SessionStatus, items: ChatItem[]): string {
+  switch (status) {
+    case 'idle':
+      return 'Idle';
+    case 'starting':
+      return 'Starting…';
+    case 'streaming':
+      return 'Agent is working';
+    case 'waiting_for_input':
+      return items.some((it) => it.kind === 'result')
+        ? 'Task completed'
+        : 'Waiting for input';
+    case 'error':
+      return 'Error';
+    case 'stopped':
+      return 'Stopped';
+    default:
+      return status;
+  }
+}
+
+/** Coarser variant for status-badge tinting (working / completed / waiting / error / neutral). */
+function statusVariant(
+  status: SessionStatus,
+  items: ChatItem[],
+): 'working' | 'completed' | 'waiting' | 'error' | 'neutral' {
+  if (status === 'streaming' || status === 'starting') return 'working';
+  if (status === 'error') return 'error';
+  if (status === 'waiting_for_input')
+    return items.some((it) => it.kind === 'result') ? 'completed' : 'waiting';
+  return 'neutral';
+}
+
+function formatPaneCost(usd: number): string {
+  if (usd > 0 && usd < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
+/**
+ * Three-vertical-dots glyph for the pane "more" affordance. Same
+ * footprint as StopIcon / CloseIcon (14px) so it sits cleanly in the
+ * pane-actions row.
+ */
+function MoreIcon() {
+  return (
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  );
+}
+
+/** Refresh-arrow icon for the Clear menu item — reads as "start over". */
+function RefreshIcon() {
+  return (
+    <svg
+      width={13}
+      height={13}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  );
+}
+
+/**
+ * Compact dropdown for the per-pane "more" actions. Replaces the row
+ * of inline icon buttons that crowded the header at narrow widths.
+ * Each menu item shows an icon + text label, click-outside dismisses.
+ */
+function PaneMoreMenu({
+  canClear,
+  canClose,
+  onClear,
+  onClose,
+}: {
+  canClear: boolean;
+  canClose: boolean;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div className="pane-more" ref={wrapRef}>
+      <button
+        type="button"
+        className="pane-icon-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        title="More actions"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <MoreIcon />
+      </button>
+      {open && (
+        <div className="pane-more-menu" role="menu">
+          {canClear && (
+            <button
+              type="button"
+              role="menuitem"
+              className="pane-more-item"
+              onClick={() => {
+                setOpen(false);
+                onClear();
+              }}
+            >
+              <span className="pane-more-icon" aria-hidden>
+                <RefreshIcon />
+              </span>
+              Clear conversation
+            </button>
+          )}
+          {canClose && (
+            <button
+              type="button"
+              role="menuitem"
+              className="pane-more-item danger"
+              onClick={() => {
+                setOpen(false);
+                onClose();
+              }}
+            >
+              <span className="pane-more-icon" aria-hidden>
+                <CloseIcon size={13} />
+              </span>
+              Close pane
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Inline pencil icon for the pane-rename affordance. */
+function PencilIcon() {
+  return (
+    <svg
+      width={12}
+      height={12}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+interface PaneProps {
+  id: PaneId;
+}
+
+export function Pane({ id }: PaneProps) {
+  const pane = useStore((s) => s.panes[id]);
+  const isActive = useStore((s) => s.activePaneId === id);
+  const isLead = useStore((s) => s.leadPaneId === id);
+  const setActivePane = useStore((s) => s.setActivePane);
+  const closePane = useStore((s) => s.closePane);
+  const clearPane = useStore((s) => s.clearPane);
+  const sendMessage = useStore((s) => s.sendMessage);
+  const interrupt = useStore((s) => s.interrupt);
+  const setPaneName = useStore((s) => s.setPaneName);
+  const tree = useStore((s) => s.tree);
+  const leadPaneId = useStore((s) => s.leadPaneId);
+  const leadPaneName = useStore((s) => s.leadPaneName);
+  const agent = useStore((s) =>
+    pane?.agentName
+      ? s.agents.find((a) => a.name === pane.agentName)
+      : undefined,
+  );
+  // When Flow mode is ON, every pane that's part of the chain blocks
+  // manual sends — kickoff comes from the Run button on the Flow
+  // board, and subsequent steps auto-fire. Toggling Flow off
+  // re-enables direct messaging. Returning a primitive bool keeps
+  // the Zustand selector stable across renders.
+  const flowBlocked = useStore((s) => {
+    const p = s.pipeline;
+    if (!p?.enabled) return false;
+    return p.steps.some((st) => st.paneId === id);
+  });
+  const color = getAgentColor(agent?.color);
+  const paneDisplay = useMemo(
+    () =>
+      getPaneDisplayName(
+        tree,
+        id,
+        leadPaneId
+          ? { paneId: leadPaneId, paneName: leadPaneName ?? undefined }
+          : null,
+      ),
+    [tree, id, leadPaneId, leadPaneName],
+  );
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (renaming) {
+      // Pre-fill with the current display name and select-all so a
+      // first keystroke replaces it cleanly.
+      setRenameDraft(paneDisplay.name);
+      requestAnimationFrame(() => {
+        renameInputRef.current?.focus();
+        renameInputRef.current?.select();
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renaming]);
+  const commitRename = () => {
+    setPaneName(id, renameDraft);
+    setRenaming(false);
+  };
+  const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [attachError, setAttachError] = useState<string | undefined>();
+  const [dragging, setDragging] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | undefined>();
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow the composer up to ~2× its single-line height. We measure
+  // `scrollHeight` after every input change and clamp to a max so a
+  // wall of pasted text doesn't push the message scroll area into the
+  // top of the screen. Resetting `height` to 0 first is required —
+  // otherwise scrollHeight would only ever grow, never shrink.
+  useEffect(() => {
+    const ta = composerTextareaRef.current;
+    if (!ta) return;
+    ta.style.height = '0px';
+    // 2× the typical single-line composer height (about 22px line +
+    // 18px vertical padding ≈ 40px → cap at ~80px = 2 lines of room).
+    const max = 84;
+    const next = Math.min(ta.scrollHeight, max);
+    ta.style.height = next + 'px';
+  }, [input]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recorderStreamRef = useRef<MediaStream | null>(null);
+  const recorderChunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [pane?.items.length]);
+
+  // Pair tool_use with its matching tool_result so we can render the two
+  // as a single collapsed block in the transcript. Items without a pair
+  // (tool_use still running, or orphan tool_result) fall through as-is.
+  const viewItems = useMemo(
+    () => buildViewItems(pane?.items ?? []),
+    [pane?.items],
+  );
+
+  if (!pane) {
+    return <div className="pane empty">No pane.</div>;
+  }
+
+  // Terminal-kind panes get an entirely different render — xterm
+  // embedded in the pane area, no chat composer, no agent bindings.
+  // We branch here (after all hooks have run) to keep React's hook
+  // ordering invariant; TerminalPane is a self-contained component
+  // with its own pane chrome so this can be a clean replacement.
+  if (pane.workerKind === 'terminal') {
+    return <TerminalPane id={id} />;
+  }
+
+  const addFiles = async (files: FileList | File[]) => {
+    const images: File[] = [];
+    for (const f of Array.from(files)) {
+      if (isSupportedImage(f.type)) images.push(f);
+    }
+    if (images.length === 0) {
+      setAttachError('Only PNG, JPEG, WEBP, or GIF images can be attached.');
+      return;
+    }
+    try {
+      const next = await Promise.all(images.map((f) => fileToAttachment(f)));
+      setAttachments((prev) => [...prev, ...next]);
+      setAttachError(undefined);
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const removeAttachment = (attachmentId: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+  };
+
+  const submit = async () => {
+    const text = input;
+    const toSend = attachments;
+    if (!text.trim() && toSend.length === 0) return;
+    setInput('');
+    setAttachments([]);
+    setAttachError(undefined);
+    await sendMessage(
+      id,
+      text,
+      toSend.length > 0 ? toSend.map(attachmentToMessageImage) : undefined,
+    );
+  };
+
+  const onPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (const it of Array.from(items)) {
+      if (it.kind === 'file') {
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      await addFiles(files);
+    }
+  };
+
+  const onDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer?.files?.length) {
+      await addFiles(e.dataTransfer.files);
+    }
+  };
+
+  const busy = pane.status === 'streaming' || pane.status === 'starting';
+  const canSend =
+    pane.agentName &&
+    (input.trim() || attachments.length > 0) &&
+    !flowBlocked;
+
+  // Propagate the agent's colour via CSS custom properties so the active
+  // border, inset shadow, and LEAD badge all pick it up automatically.
+  const paneStyle = color
+    ? ({
+        '--pane-accent': color.vivid,
+        '--pane-accent-soft': color.pale,
+      } as React.CSSProperties)
+    : undefined;
+
+  return (
+    <div
+      className={'pane' + (isActive ? ' active' : '') + (dragging ? ' dragging' : '')}
+      style={paneStyle}
+      onMouseDown={() => setActivePane(id)}
+      onDragOver={(e) => {
+        if (!pane.agentName) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={onDrop}
+    >
+      <div
+        className={'pane-header' + (isActive ? ' pane-header-active' : '')}
+        // Active pane gets a 4px bottom accent stripe in the agent's
+        // vivid color — same color as the title text, so the whole
+        // header reads as one tinted band without altering the body
+        // background. CSS controls the stripe height; we pass the
+        // color via a CSS variable so unset agents fall back gracefully.
+        style={
+          isActive && color
+            ? ({
+                ['--pane-active-stripe' as string]: color.vivid,
+              } as React.CSSProperties)
+            : undefined
+        }
+      >
+        {isLead && <span className="lead-badge">Lead</span>}
+        {agent?.emoji && (
+          <div className="pane-emoji" aria-hidden>
+            {agent.emoji}
+          </div>
+        )}
+        <div className="pane-titles">
+          {renaming ? (
+            <input
+              ref={renameInputRef}
+              className="pane-rename-input"
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Escape') setRenaming(false);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              spellCheck={false}
+              maxLength={48}
+            />
+          ) : (
+            <div
+              className="pane-title-row"
+              style={color ? { color: color.vivid } : undefined}
+            >
+              <span
+                className={
+                  'pane-title' +
+                  (paneDisplay.isCustom ? '' : ' pane-title-default')
+                }
+                title={paneDisplay.name}
+              >
+                {paneDisplay.name}
+              </span>
+              {isActive && (
+                <button
+                  type="button"
+                  className="pane-rename-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRenaming(true);
+                  }}
+                  title="Rename pane"
+                  aria-label="Rename pane"
+                >
+                  <PencilIcon />
+                </button>
+              )}
+            </div>
+          )}
+          <div className="pane-subtitle">
+            {pane.agentName ? (
+              <span className="pane-agent-name">{pane.agentName}</span>
+            ) : (
+              <em className="pane-title-empty">No agent</em>
+            )}
+          </div>
+        </div>
+        <div className="pane-actions">
+          {(() => {
+            const total = pane.items.reduce(
+              (acc, it) =>
+                it.kind === 'result' && typeof it.totalCostUsd === 'number'
+                  ? acc + it.totalCostUsd
+                  : acc,
+              0,
+            );
+            const variant = statusVariant(pane.status, pane.items);
+            return (
+              <div
+                className={`pane-status-badge variant-${variant}`}
+                title={pane.error ? `Error: ${pane.error}` : undefined}
+              >
+                <StatusDot status={pane.status} />
+                <span className="pane-status-label">
+                  {statusLabel(pane.status, pane.items)}
+                </span>
+                <span className="pane-status-sep" aria-hidden>
+                  ·
+                </span>
+                <span className="pane-status-cost">
+                  {formatPaneCost(total)}
+                </span>
+              </div>
+            );
+          })()}
+          {busy && (
+            <button
+              className="pane-icon-btn"
+              onClick={() => void interrupt(id)}
+              title="Interrupt"
+              aria-label="Interrupt"
+            >
+              <StopIcon size={14} />
+            </button>
+          )}
+          {(pane.agentName || !isLead) && (
+            <PaneMoreMenu
+              canClear={!!pane.agentName}
+              canClose={!isLead}
+              onClear={() => {
+                const ok = confirm(
+                  `Clear the conversation in ${pane.agentName}'s pane? The transcript will be erased and a new session will start. This cannot be undone.`,
+                );
+                if (!ok) return;
+                void clearPane(id);
+              }}
+              onClose={() => {
+                if (pane.agentName) {
+                  const ok = confirm(
+                    `Close the ${pane.agentName} pane? This will stop its session.`,
+                  );
+                  if (!ok) return;
+                }
+                void closePane(id);
+              }}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="pane-scroller" ref={scrollerRef}>
+        {pane.items.length === 0 && (
+          <div className="pane-empty">
+            <div className="pane-empty-icon" aria-hidden>
+              <img
+                className="pane-empty-mark"
+                src={placemarkUrl}
+                alt=""
+              />
+            </div>
+            <div className="pane-empty-title">
+              {pane.agentName
+                ? `Talk to ${pane.agentName}`
+                : 'Pick an agent'}
+            </div>
+            <div className="pane-empty-sub">
+              {pane.agentName
+                ? 'Type a message below to start the conversation.'
+                : 'Choose one from the sidebar to start a session.'}
+            </div>
+          </div>
+        )}
+        {viewItems.map((item) => (
+          <MessageView key={item.id} item={item} paneId={id} />
+        ))}
+      </div>
+
+      {dragging && (
+        <div className="pane-drop-overlay">
+          <div>Drop to attach image</div>
+        </div>
+      )}
+
+      {/* Flow-blocked banner — Flow is ON so manual sends are routed
+          through the Run button on the Flow board. Kept short on
+          purpose; the explanation lives in the Flow board itself. */}
+      {flowBlocked && (
+        <div className="pane-flow-banner">
+          <div className="pane-flow-banner-msg">
+            <strong>🔗 Flow is ON</strong> — manage prompts in the Flow board.
+          </div>
+        </div>
+      )}
+
+      {/* Recovery banner — shown when the SDK loop has died (status:
+          'error'). Without this, the user types into a closed input
+          queue and the UI just sits on "Agent is working…" forever.
+          Clicking Restart calls clearPane(id), which stops the dead
+          session, wipes its saved id, and bootstraps a fresh one. */}
+      {pane.status === 'error' && pane.agentName && (
+        <div className="pane-recovery-banner">
+          <div className="pane-recovery-msg">
+            <strong>Session ended in an error.</strong>{' '}
+            {pane.error
+              ? pane.error
+              : 'The agent stopped responding. Start a fresh session to continue.'}
+          </div>
+          <button
+            type="button"
+            className="pane-recovery-restart"
+            onClick={() => {
+              if (
+                confirm(
+                  `Restart ${pane.agentName}'s session? The conversation history will be cleared.`,
+                )
+              ) {
+                void clearPane(id);
+              }
+            }}
+          >
+            Restart session
+          </button>
+        </div>
+      )}
+
+      <form
+        className="pane-composer"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        {attachments.length > 0 && (
+          <div className="composer-attachments">
+            {attachments.map((a) => (
+              <div className="attachment-chip" key={a.id} title={a.filename}>
+                <img src={a.dataUrl} alt={a.filename} />
+                <button
+                  type="button"
+                  className="attachment-remove"
+                  onClick={() => removeAttachment(a.id)}
+                  title="Remove"
+                  aria-label="Remove attachment"
+                >
+                  <CloseIcon size={10} stroke={2.5} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {attachError && <div className="attach-error">{attachError}</div>}
+        <div className="composer-row">
+          <button
+            type="button"
+            className="composer-attach"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!pane.agentName || flowBlocked}
+            title="Attach image"
+            aria-label="Attach image"
+          >
+            <PaperclipIcon size={16} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              if (e.target.files) void addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <textarea
+            ref={composerTextareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+            onPaste={onPaste}
+            placeholder={
+              flowBlocked
+                ? 'Flow is ON — use the Flow board'
+                : pane.agentName
+                  ? 'Message the agent… (⌘⏎)'
+                  : 'Pick an agent first'
+            }
+            disabled={!pane.agentName || flowBlocked}
+            rows={1}
+          />
+          <button
+            type="submit"
+            className="composer-send"
+            disabled={!canSend}
+            title="Send (⌘⏎)"
+            aria-label="Send"
+          >
+            <span className="composer-send-label">Send</span>
+            <SendIcon size={14} stroke={2} />
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * Walk the raw transcript and merge each tool_use with its matching
+ * tool_result (paired by toolUseId) into a single `tool_block` view
+ * item. The result list is what the renderer iterates over.
+ */
+function buildViewItems(items: ChatItem[]): ChatItemView[] {
+  const resultsById = new Map<
+    string,
+    Extract<ChatItem, { kind: 'tool_result' }>
+  >();
+  for (const it of items) {
+    if (it.kind === 'tool_result') resultsById.set(it.toolUseId, it);
+  }
+  const out: ChatItemView[] = [];
+  for (const it of items) {
+    if (it.kind === 'tool_result') {
+      // Already attached to its tool_use; skip.
+      continue;
+    }
+    if (it.kind === 'tool_use') {
+      // Suppress the AskUserQuestion tool block — its inline form
+      // chat item carries the question UI, and the parallel
+      // tool_use/tool_result that the SDK emits would be visual
+      // noise (raw JSON of the questions payload + duplicated answer
+      // text). We still keep them in the underlying transcript for
+      // resume / debug, just hidden from the view stream.
+      if (it.name === 'mcp__AskUserQuestion__ask') {
+        continue;
+      }
+      const r = resultsById.get(it.toolUseId);
+      out.push({
+        id: it.id,
+        kind: 'tool_block',
+        toolUseId: it.toolUseId,
+        name: it.name,
+        input: it.input,
+        result: r ? { content: r.content, isError: r.isError } : undefined,
+        ts: it.ts,
+      });
+      continue;
+    }
+    out.push(it);
+  }
+  return out;
+}
+
+function StatusDot({ status }: { status: string }) {
+  const color =
+    status === 'streaming'
+      ? 'var(--accent)'
+      : status === 'error'
+        ? 'var(--danger)'
+        : status === 'waiting_for_input'
+          ? 'var(--ok)'
+          : 'var(--muted)';
+  return (
+    <span
+      className={'status-dot' + (status === 'streaming' ? ' pulse' : '')}
+      style={{ background: color }}
+      aria-hidden
+    />
+  );
+}
