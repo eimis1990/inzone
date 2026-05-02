@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/renderer/src/assets/inzone-app-logo.png" width="120" alt="INZONE logo" />
+  <img src="docs/inzone-app-logo.png" width="120" alt="INZONE logo" />
 
   <h1>INZONE</h1>
 
@@ -31,7 +31,7 @@
 <br/>
 
 <p align="center">
-  <img src="src/renderer/src/assets/app-screenshots/multi-agents-feature.png" alt="INZONE multi-agent workspace" />
+  <img src="docs/screenshots/multi-agents-feature.png" alt="INZONE multi-agent workspace" />
 </p>
 
 ## Why INZONE
@@ -53,7 +53,7 @@ It's compatible with Claude Code's `~/.claude/` directory, so any agents and ski
 Drop several Claude agents into independent panes inside one window. Each pane has its own conversation, transcript, and SDK session, so agents can work on different parts of the same project in parallel without stepping on each other. Pre-set 1, 2, 4, 6, 8, or 10-pane grids are one click away — and they're resizable.
 
 <p align="center">
-  <img src="src/renderer/src/assets/app-screenshots/multi-agents-feature.png" alt="Multiple Claude agents running side by side" />
+  <img src="docs/screenshots/multi-agents-feature.png" alt="Multiple Claude agents running side by side" />
 </p>
 
 ### Lead Agent — Delegate, Don't Micromanage
@@ -61,7 +61,7 @@ Drop several Claude agents into independent panes inside one window. Each pane h
 Promote one pane to a top-row orchestrator. The Lead agent sees a custom MCP toolset for assigning work, asking questions, and broadcasting context to its sub-agents. You write the goal once; the Lead figures out who does what and routes results back. Switch between Multi and Lead with a single segmented control in the workspace bar.
 
 <p align="center">
-  <img src="src/renderer/src/assets/app-screenshots/lead-agent-feature.png" alt="Lead agent orchestrating sub-agents" />
+  <img src="docs/screenshots/lead-agent-feature.png" alt="Lead agent orchestrating sub-agents" />
 </p>
 
 ### Flow — Sequential Agent Pipelines
@@ -69,7 +69,7 @@ Promote one pane to a top-row orchestrator. The Lead agent sees a custom MCP too
 Chain panes into a synchronous sequence. Each step fires the next as soon as it finishes, passing the previous agent's output downstream via a `{previous}` placeholder. Authored on a free-form canvas with draggable cards, bezier connection lines, per-card prompts, configurable per-step delay, and a live logs side panel with autoscroll. Toggle Flow off and the cards lock; pane composers reclaim message authoring.
 
 <p align="center">
-  <img src="src/renderer/src/assets/app-screenshots/multi-agents-flow-feature.png" alt="Flow pipeline canvas with chained agents" />
+  <img src="docs/screenshots/multi-agents-flow-feature.png" alt="Flow pipeline canvas with chained agents" />
 </p>
 
 ### Worktrees — Parallel Branches Without Stepping On Yourself
@@ -77,7 +77,7 @@ Chain panes into a synchronous sequence. Each step fires the next as soon as it 
 Spin up a git worktree off any branch directly from the sidebar. INZONE creates a sibling directory with its own branch (with optional `feature/`, `fix/`, `chore/`, `experiment/` prefix) and registers it as a sister project under the parent, indented in the sidebar with a "WT" chip. Run several agents on different branches of the same repo in parallel without them clobbering each other's working trees.
 
 <p align="center">
-  <img src="src/renderer/src/assets/app-screenshots/worktree-feature.png" alt="Worktree projects indented under their parent in the sidebar" />
+  <img src="docs/screenshots/worktree-feature.png" alt="Worktree projects indented under their parent in the sidebar" />
 </p>
 
 ### Built-In Diff Review + PR Workflow
@@ -85,7 +85,7 @@ Spin up a git worktree off any branch directly from the sidebar. INZONE creates 
 The second half of the worktree story. A Review chip in the workspace bar opens a per-pane file tree of changes with a side-by-side / inline diff viewer. Per-hunk approve/reject. Rejected hunks plus a comment can be sent back to the agent for revision. Once clean, **Open PR** detects `gh` CLI, supports multi-account push, switches SSH-only remotes to HTTPS for you, and drafts the PR title/body from the diff. After merge, INZONE pulls into the parent project, removes the worktree, and switches you back.
 
 <p align="center">
-  <img src="src/renderer/src/assets/app-screenshots/in-app-diff.png" alt="Side-by-side diff review with per-hunk controls" />
+  <img src="docs/screenshots/in-app-diff.png" alt="Side-by-side diff review with per-hunk controls" />
 </p>
 
 ### Built-In Terminal
@@ -93,7 +93,7 @@ The second half of the worktree story. A Review chip in the workspace bar opens 
 A real PTY shell (zsh/bash via node-pty) docked at the bottom of the pane host. `⌘T` toggles a slide-up overlay with a blurred backdrop. Full ANSI color support, interactive programs, persistent across panel open/close. Configurable shortcut buttons for quick commands like `npm run dev` or `git status`. Terminal cwd follows the active project's folder automatically.
 
 <p align="center">
-  <img src="src/renderer/src/assets/app-screenshots/in-app-terminal.png" alt="Built-in terminal docked at the bottom" />
+  <img src="docs/screenshots/in-app-terminal.png" alt="Built-in terminal docked at the bottom" />
 </p>
 
 ### Preview Window
@@ -101,7 +101,7 @@ A real PTY shell (zsh/bash via node-pty) docked at the bottom of the pane host. 
 In-app browser for localhost. INZONE auto-detects URLs printed by agents *and* by the terminal, surfaces a Preview pill in the workspace bar, and opens a centered 16:10 webview at 90% viewport with `⌘⇧P`. Multi-URL picker when several services are running, with a kill action to free a port. Liveness sweeps prune URLs that no longer respond.
 
 <p align="center">
-  <img src="src/renderer/src/assets/app-screenshots/browser-preview.png" alt="In-app browser preview window" />
+  <img src="docs/screenshots/browser-preview.png" alt="In-app browser preview window" />
 </p>
 
 ### Voice Agent
