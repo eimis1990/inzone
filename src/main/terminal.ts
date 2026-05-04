@@ -1,7 +1,12 @@
 /**
- * PTY pool — wraps `node-pty-prebuilt-multiarch` so the renderer can
- * spin up a real shell (zsh / bash on macOS, falling back to whatever's
- * in $SHELL) and stream its stdout/stderr back. One PTY per terminal id.
+ * PTY pool — wraps `@homebridge/node-pty-prebuilt-multiarch` so the
+ * renderer can spin up a real shell (zsh / bash on macOS, PowerShell
+ * on Windows, falling back to whatever's in $SHELL) and stream its
+ * stdout/stderr back. One PTY per terminal id.
+ *
+ * We use the @homebridge fork because the original Microsoft package
+ * is unmaintained and its vendored winpty source no longer compiles
+ * on modern MSVC. Drop-in API-compatible replacement.
  *
  * The renderer treats the terminal as a single global panel — it spawns
  * a PTY on first open, reuses the same id while INZONE stays running,
@@ -9,7 +14,7 @@
  * window closes (or the user explicitly kills it).
  */
 
-import { spawn, type IPty } from 'node-pty-prebuilt-multiarch';
+import { spawn, type IPty } from '@homebridge/node-pty-prebuilt-multiarch';
 import { nanoid } from 'nanoid';
 import { BrowserWindow } from 'electron';
 import { IPC } from '@shared/ipc-channels';
