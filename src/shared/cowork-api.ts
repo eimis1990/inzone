@@ -14,6 +14,8 @@ import type {
   GhStatus,
   PaneSpawnRequest,
   PRDraft,
+  PrDetail,
+  PrSummary,
   ReviewHunk,
   ReviewState,
   SessionEvent,
@@ -358,6 +360,17 @@ export interface CoworkApi {
       branch: string;
       baseBranch: string;
     }): Promise<{ sha?: string; fastForward: boolean }>;
+  };
+  pr: {
+    /** List PRs for the repo at `cwd` (most recent 30, any state). */
+    list(cwd: string): Promise<PrSummary[]>;
+    /** Full detail for one PR (body + checks + comments). */
+    detail(cwd: string, number: number): Promise<PrDetail>;
+    /** Last `lines` (default 80) of the failed-step output for a
+     *  GitHub Actions run id. */
+    checkLogs(cwd: string, runId: string, lines?: number): Promise<string>;
+    /** Boolean: is gh installed AND authenticated for this repo? */
+    available(cwd: string): Promise<boolean>;
   };
   state: {
     get(): Promise<AppState>;

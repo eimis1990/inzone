@@ -17,6 +17,7 @@ import { TerminalPanel } from './components/TerminalPanel';
 import { PipelineBoardSafe } from './components/PipelineBoardSafe';
 import { ReviewViewSafe } from './components/ReviewViewSafe';
 import { MissionControlSafe } from './components/MissionControlSafe';
+import { PrModal } from './components/PrModal';
 import { WelcomeModal } from './components/WelcomeModal';
 import { VoiceSetupWizard } from './components/VoiceSetupWizard';
 
@@ -88,6 +89,48 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // PR inbox auto-poll for the active project. Fires once on app
+  // boot (so the pill has data when the user clicks), then every
+  // 5 minutes while the window is focused. Blur pauses; focus
+  // resumes (and refreshes immediately if it's been a while).
+  useEffect(() => {
+    if (!cwd) return;
+    let timer: number | null = null;
+    let lastFetchAt = 0;
+    const POLL_MS = 5 * 60 * 1000;
+
+    const tick = () => {
+      void useStore.getState().refreshPrs();
+      lastFetchAt = Date.now();
+    };
+    const start = () => {
+      if (timer != null) return;
+      timer = window.setInterval(tick, POLL_MS);
+    };
+    const stop = () => {
+      if (timer == null) return;
+      window.clearInterval(timer);
+      timer = null;
+    };
+    const onFocus = () => {
+      // If we've been blurred for a while, refresh immediately on
+      // focus return — staring at stale data is the failure mode.
+      if (Date.now() - lastFetchAt > POLL_MS) tick();
+      start();
+    };
+
+    // Initial fetch on mount + on cwd change.
+    tick();
+    if (document.hasFocus()) start();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', stop);
+    return () => {
+      stop();
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', stop);
+    };
+  }, [cwd]);
+
   return (
     <ConversationProvider>
       <div className="app">
@@ -136,6 +179,7 @@ export function App() {
         <EditorModal />
         <PreviewModal />
         <MissionControlSafe />
+        <PrModal />
         <WelcomeModal />
         <VoiceSetupWizard />
       </div>

@@ -7,6 +7,7 @@ import { SettingsDrawer } from './SettingsDrawer';
 import type { SettingsSection } from './settings/types';
 import { AppLogo } from './AppLogo';
 import { PreviewButton } from './PreviewButton';
+import { PrButton } from './PrButton';
 import {
   BellIcon,
   BellOffIcon,
@@ -370,6 +371,7 @@ export function WorkspaceBar() {
           })()}
         </div>
 
+        <PrButton />
         <PreviewButton />
       </div>
 

@@ -96,13 +96,57 @@ async function runGh(opts: RunGhOptions): Promise<string> {
       .join('\n')
       .trim();
     throw new GhError(
-      `gh ${opts.args[0] ?? '?'} failed${stderrTail ? `: ${stderrTail}` : ''}`,
+      friendlyMessage(opts.args[0] ?? '?', stderrTail),
       typeof (err as { code?: number }).code === 'number'
         ? (err as { code?: number }).code
         : undefined,
       stderrTail || undefined,
     );
   }
+}
+
+/**
+ * Translate gh's raw stderr into a message that's actually useful to a
+ * non-technical user. Most failures fall into a small handful of
+ * buckets — repo access, auth expiry, rate limit, network — and a
+ * concrete next step beats a wall of GraphQL error text.
+ */
+function friendlyMessage(subcommand: string, stderr: string): string {
+  // Most common case for users with multiple GitHub accounts or work
+  // repos behind SSO: the authenticated account just can't see the
+  // repo. Strip the GraphQL noise and tell them what to do.
+  if (
+    /could not resolve to a repository/i.test(stderr) ||
+    /not found/i.test(stderr)
+  ) {
+    const repoMatch = stderr.match(/['"]([^'"]+\/[^'"]+)['"]/);
+    const repo = repoMatch ? repoMatch[1] : 'this repository';
+    return (
+      `No access to ${repo}. Your gh account either isn't a member, or ` +
+      `the org requires SSO. Try: gh auth status (verify the right account ` +
+      `is active) and gh auth refresh -h github.com -s read:org (re-auth ` +
+      `with org access).`
+    );
+  }
+  // Auth expired / never set up.
+  if (
+    /not authenticated/i.test(stderr) ||
+    /authentication failed/i.test(stderr) ||
+    /token has expired/i.test(stderr)
+  ) {
+    return (
+      'gh is not authenticated. Run `gh auth login` in your terminal, ' +
+      'pick GitHub.com + HTTPS, and follow the device prompt.'
+    );
+  }
+  if (/rate limit/i.test(stderr)) {
+    return 'GitHub rate limit hit — try again in a few minutes.';
+  }
+  if (/network|enotfound|econnrefused/i.test(stderr)) {
+    return 'Network error reaching GitHub. Check your connection and retry.';
+  }
+  // Fall back to the raw tail, with the gh subcommand as context.
+  return `gh ${subcommand} failed${stderr ? `: ${stderr}` : ''}`;
 }
 
 /** Minimal arg-quoting for the exec command line. We only ever pass
@@ -134,20 +178,28 @@ function mapCheckState(
   if (s === 'queued' || s === 'pending' || s === 'requested') return 'pending';
   if (s === 'in_progress' || s === 'running') return 'running';
 
-  // Some `gh` payloads use the status field for what's actually a
-  // conclusion (e.g. status="success"). Normalise to a single value
-  // we test against below.
+  // Two field shapes in the wild:
+  //   • GraphQL CheckRun: status (queued/in_progress/completed) +
+  //     conclusion (success/failure/skipped/cancelled/timed_out/...)
+  //   • `gh pr checks`: bucket (pass/fail/pending/skipping/cancel) —
+  //     gh's friendlier roll-up. We accept either via the second arg.
   const verdict = c || s;
-  if (verdict === 'success') return 'success';
-  if (verdict === 'cancelled') return 'cancelled';
+  if (verdict === 'success' || verdict === 'pass') return 'success';
+  if (verdict === 'cancelled' || verdict === 'cancel') return 'cancelled';
   if (
     verdict === 'failure' ||
+    verdict === 'fail' ||
     verdict === 'timed_out' ||
     verdict === 'action_required' ||
     verdict === 'startup_failure'
   )
     return 'failure';
-  if (verdict === 'skipped' || verdict === 'neutral') return 'skipped';
+  if (
+    verdict === 'skipped' ||
+    verdict === 'skipping' ||
+    verdict === 'neutral'
+  )
+    return 'skipped';
   return 'unknown';
 }
 
@@ -232,6 +284,9 @@ export async function getPullRequestDetail(
   cwd: string,
   number: number,
 ): Promise<PrDetail> {
+  // Fields valid for `gh pr view --json`. Notably absent: reviewThreads
+  // (not a valid gh field — inline review comments fetched separately
+  // via the REST API below). Validated against `gh pr view --help`.
   const fields = [
     'number',
     'title',
@@ -244,17 +299,20 @@ export async function getPullRequestDetail(
     'reviewDecision',
     'body',
     'comments',
-    'reviewThreads',
     'createdAt',
     'updatedAt',
     'mergeable',
     'statusCheckRollup',
   ].join(',');
 
-  // Fire `pr view` and `pr checks` in parallel — they hit the same
-  // GitHub endpoints under the hood, but gh resolves the run-id +
-  // detail-url plumbing we need only on `pr checks`.
-  const [viewOut, checksOut] = await Promise.all([
+  // Three parallel fetches:
+  //   1. PR metadata (`gh pr view`)
+  //   2. Check runs with detail URLs (`gh pr checks`) — the only place
+  //      gh exposes per-run links we can deep-link to.
+  //   3. Inline review comments (`gh api .../pulls/N/comments`) — gh's
+  //      JSON view for `pr view` doesn't expose these; we hit the REST
+  //      endpoint directly. Best-effort: empty array on any failure.
+  const [viewOut, checksOut, reviewCommentsOut] = await Promise.all([
     runGh({
       cwd,
       args: ['pr', 'view', String(number), '--json', fields],
@@ -266,7 +324,10 @@ export async function getPullRequestDetail(
         'checks',
         String(number),
         '--json',
-        'name,state,conclusion,link,startedAt,completedAt',
+        // bucket = gh's roll-up verdict (pass/fail/pending/skipping/cancel).
+        // Use this instead of `conclusion`; the latter is GraphQL-only
+        // and not exposed by `gh pr checks --json`.
+        'name,state,bucket,link,startedAt,completedAt,workflow',
       ],
     }).catch((err) => {
       console.warn(
@@ -275,6 +336,13 @@ export async function getPullRequestDetail(
       );
       return '[]';
     }),
+    fetchReviewComments(cwd, number).catch((err) => {
+      console.warn(
+        '[pr] review comments fetch failed:',
+        err instanceof Error ? err.message : err,
+      );
+      return [] as PrReviewComment[];
+    }),
   ]);
 
   const view = JSON.parse(viewOut) as Record<string, unknown>;
@@ -282,15 +350,18 @@ export async function getPullRequestDetail(
 
   // Prefer dedicated `gh pr checks` data — it has detail URLs we can
   // deep-link to. Fall back to statusCheckRollup if the call failed.
+  // Note: `gh pr checks --json` exposes `bucket` (pass/fail/pending/
+  // skipping/cancel) instead of GraphQL's `conclusion`. mapCheckState
+  // accepts either.
   const checks: CheckRun[] =
     checksRaw.length > 0
       ? checksRaw.map((c) => ({
-          name: String(c.name ?? 'unknown'),
+          name: String(c.name ?? c.workflow ?? 'unknown'),
           state: mapCheckState(
             c.state as string | undefined,
-            c.conclusion as string | undefined,
+            c.bucket as string | undefined,
           ),
-          conclusion: (c.conclusion as string) || undefined,
+          conclusion: (c.bucket as string) || undefined,
           detailsUrl: (c.link as string) || undefined,
           runId: extractRunId(c.link as string | undefined),
           startedAt: (c.startedAt as string) || undefined,
@@ -318,37 +389,9 @@ export async function getPullRequestDetail(
     url: String(c.url ?? ''),
   }));
 
-  // Inline review comments — flatten nested threads.
-  const reviewComments: PrReviewComment[] = [];
-  for (const thread of (view.reviewThreads as Array<
-    Record<string, unknown>
-  >) ?? []) {
-    const threadPath = String(thread.path ?? '');
-    const threadComments = (thread.comments as Array<
-      Record<string, unknown>
-    >) ?? [];
-    for (const c of threadComments) {
-      reviewComments.push({
-        id: String(c.id ?? `rc-${threadPath}-${reviewComments.length}`),
-        author: getAuthorLogin(c.author),
-        body: String(c.body ?? ''),
-        path: String(c.path ?? threadPath),
-        line:
-          typeof c.line === 'number'
-            ? c.line
-            : typeof c.originalLine === 'number'
-              ? (c.originalLine as number)
-              : undefined,
-        diffHunk: (c.diffHunk as string) || undefined,
-        createdAt: String(c.createdAt ?? ''),
-        updatedAt: (c.updatedAt as string) || undefined,
-        url: String(c.url ?? ''),
-        inReplyTo:
-          ((c.replyTo as { id?: string } | undefined)?.id as string) ||
-          undefined,
-      });
-    }
-  }
+  // Inline review comments came from a separate REST call above
+  // (gh pr view --json doesn't expose reviewThreads).
+  const reviewComments = reviewCommentsOut;
 
   const checkSummary = {
     total: checks.length,
@@ -469,4 +512,73 @@ function extractRunId(url: string | undefined): string | undefined {
   if (!url) return undefined;
   const m = url.match(/\/runs\/(\d+)/);
   return m ? m[1] : undefined;
+}
+
+/**
+ * Fetch inline review comments via the REST API. `gh pr view --json`
+ * doesn't expose them; this hits /repos/{owner}/{repo}/pulls/{N}/comments
+ * directly. Returns empty array if the call fails (we don't want to
+ * crash the whole detail load just because comments are missing).
+ *
+ * gh resolves the owner/repo from the cwd's remote, so we just pass
+ * the relative path with `{owner}/{repo}` placeholders that `gh api`
+ * fills in. The `--repo` shortcut lets gh do that resolution.
+ */
+async function fetchReviewComments(
+  cwd: string,
+  number: number,
+): Promise<PrReviewComment[]> {
+  // Use gh api with --hostname-aware repo derivation so the call
+  // works for any GitHub host (including Enterprise) without us
+  // re-implementing remote-URL parsing.
+  const stdout = await runGh({
+    cwd,
+    args: [
+      'api',
+      `repos/{owner}/{repo}/pulls/${number}/comments`,
+      '--paginate',
+      '-q',
+      // Project the REST fields we need into a flat shape so the
+      // renderer code doesn't have to know about the API surface.
+      '[.[] | { id: (.id|tostring), author: (.user.login // "unknown"), ' +
+        'body: (.body // ""), path: (.path // ""), line: (.line // .original_line), ' +
+        'diffHunk: (.diff_hunk // null), createdAt: (.created_at // ""), ' +
+        'updatedAt: (.updated_at // null), url: (.html_url // ""), ' +
+        'inReplyTo: ((.in_reply_to_id // null) | tostring) }]',
+    ],
+  });
+  if (!stdout.trim()) return [];
+  // --paginate returns concatenated arrays — one JSON array per page.
+  // Parse line-by-line and flatten.
+  const parts = stdout
+    .split(/\n(?=\[)/) // split before any '[' that starts a line
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: PrReviewComment[] = [];
+  for (const part of parts) {
+    try {
+      const arr = JSON.parse(part) as Array<Record<string, unknown>>;
+      for (const c of arr) {
+        out.push({
+          id: String(c.id ?? `rc-${out.length}`),
+          author: String(c.author ?? 'unknown'),
+          body: String(c.body ?? ''),
+          path: String(c.path ?? ''),
+          line:
+            typeof c.line === 'number' ? c.line : undefined,
+          diffHunk: (c.diffHunk as string) || undefined,
+          createdAt: String(c.createdAt ?? ''),
+          updatedAt: (c.updatedAt as string) || undefined,
+          url: String(c.url ?? ''),
+          inReplyTo:
+            c.inReplyTo && c.inReplyTo !== 'null'
+              ? String(c.inReplyTo)
+              : undefined,
+        });
+      }
+    } catch {
+      // Bad JSON chunk — skip, keep what we've parsed so far.
+    }
+  }
+  return out;
 }

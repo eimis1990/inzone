@@ -17,6 +17,8 @@ import type {
   GhStatus,
   PaneSpawnRequest,
   PRDraft,
+  PrDetail,
+  PrSummary,
   ReviewHunk,
   ReviewState,
   SessionEvent,
@@ -305,6 +307,29 @@ const api: CoworkApi = {
       baseBranch: string;
     }): Promise<{ sha?: string; fastForward: boolean }> =>
       ipcRenderer.invoke(IPC.REVIEW_LOCAL_MERGE, args),
+  },
+  pr: {
+    /** List up to 30 recent PRs (any state) for the repo at `cwd`.
+     *  Throws if gh isn't installed/authenticated — call available()
+     *  first to render a friendlier "set up gh" hint. */
+    list: (cwd: string): Promise<PrSummary[]> =>
+      ipcRenderer.invoke(IPC.PR_LIST, { cwd }),
+    /** Detailed view of one PR: body + full check list + comments +
+     *  inline review comments. Lazy — fetched on PR card open. */
+    detail: (cwd: string, number: number): Promise<PrDetail> =>
+      ipcRenderer.invoke(IPC.PR_DETAIL, { cwd, number }),
+    /** Last `lines` (default 80) of failed-step output for a check
+     *  run, by GitHub Actions run id. */
+    checkLogs: (
+      cwd: string,
+      runId: string,
+      lines?: number,
+    ): Promise<string> =>
+      ipcRenderer.invoke(IPC.PR_CHECK_LOGS, { cwd, runId, lines }),
+    /** Boolean: is `gh` installed and authenticated for this repo's
+     *  remote? Drives the inline "install gh" hint. */
+    available: (cwd: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC.PR_AVAILABLE, { cwd }),
   },
   state: {
     get: (): Promise<AppState> => ipcRenderer.invoke(IPC.STATE_GET),

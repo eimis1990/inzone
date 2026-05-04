@@ -24,6 +24,23 @@ import type {
   Workspace,
 } from '@shared/types';
 
+/**
+ * Strip Electron's IPC wrapper from a thrown error so the user-facing
+ * message is just our friendly text. Errors that bubble out of
+ * ipcMain.handle come back to the renderer wrapped like:
+ *   "Error invoking remote method 'pr:list': GhError: <our message>"
+ * We strip everything up to and including the last ":" before our
+ * actual message.
+ */
+function cleanIpcError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  // Match "Error invoking remote method '...': SomeErrorName: <rest>"
+  const m = raw.match(
+    /^Error invoking remote method '[^']+':\s*(?:\w+Error:\s*)?(.+)$/s,
+  );
+  return (m ? m[1] : raw).trim();
+}
+
 export type EditorDraft =
   | { kind: 'agent'; draft: AgentDraft }
   | { kind: 'skill'; draft: SkillDraft };
@@ -173,6 +190,55 @@ interface StoreState {
    *  across the workspace — a top-level "what's running everywhere"
    *  view. Transient; never persisted. */
   missionControlOpen: boolean;
+
+  // ── Pull request inbox ─────────────────────────────────────────
+  /** Cached PR snapshots, keyed by project (windowId). The active
+   *  project polls every 5 minutes (paused when window blurs);
+   *  inactive projects keep whatever was cached on their last
+   *  switch-out. Transient; never persisted to disk. */
+  prInboxes: Record<WindowId, import('@shared/types').PrInbox>;
+  /** Fully-loaded detail for one PR, fetched lazily when the user
+   *  opens a PR card. Keyed by PR number (per active project). */
+  prDetail: import('@shared/types').PrDetail | null;
+  /** Loading flag for the lazy detail fetch above. */
+  prDetailLoading: boolean;
+  /** Most recent fetch error for the detail call (banner above the
+   *  detail body until cleared by next successful fetch). */
+  prDetailError: string | null;
+  /** Whether the PR modal/overlay is open. Transient. */
+  prModalOpen: boolean;
+  /** Loaded log buffer for a check run, plus loading + error state.
+   *  Cleared between check selections. */
+  prCheckLog:
+    | { runId: string; text: string }
+    | null;
+  prCheckLogLoading: boolean;
+  prCheckLogError: string | null;
+
+  /**
+   * Cache of fully-loaded PR details, keyed by PR number for the
+   * active project. Warmed in the background by refreshPrs() so the
+   * detail view opens instantly when the user clicks a card.
+   * Re-fetched on a per-PR basis when the list reports a newer
+   * `updatedAt` than the cached snapshot. Cleared on session switch.
+   */
+  prDetails: Record<number, import('@shared/types').PrDetail>;
+  /**
+   * Cache of failed-step logs, keyed by GitHub Actions run id. Logs
+   * don't change for a given run id (the id changes on re-run), so
+   * caching is straightforward and large.
+   */
+  prCheckLogs: Record<string, string>;
+
+  /**
+   * One-shot "seed text" delivery to a specific pane's composer.
+   * The Send-to-agent flow drops a prepared prompt here; the
+   * targeted Pane component watches this field and copies the text
+   * into its local input state, then clears the slot. Tracking it
+   * as state rather than an event lets us avoid race conditions on
+   * mount + makes it inspectable while debugging.
+   */
+  pendingPaneSeed: { paneId: PaneId; text: string; nonce: number } | null;
   /**
    * Which view the project's main area is showing — the regular pane
    * tree, the pipeline board, or the diff Review view. Transient;
@@ -394,6 +460,28 @@ interface StoreActions {
   setPipelineView: (view: 'panes' | 'board' | 'review') => void;
   /** Toggle the Mission Control overlay. */
   setMissionControlOpen: (open: boolean) => void;
+
+  // ── PR inbox actions ──────────────────────────────────────────
+  /** Open or close the PR overlay. Opening also kicks off a fresh
+   *  list-fetch if the cached data is stale or absent. */
+  setPrModalOpen: (open: boolean) => void;
+  /** Fetch the PR list for the active project. No-op when there's no
+   *  cwd. Sets prInboxes[windowId].syncing while in flight. */
+  refreshPrs: () => Promise<void>;
+  /** Lazy-load full detail for one PR (body, all checks, comments). */
+  openPrDetail: (number: number) => Promise<void>;
+  /** Clear the PR detail view (used when going back to the list). */
+  closePrDetail: () => void;
+  /** Fetch the failed-step output for a check's run id. */
+  openCheckLog: (runId: string) => Promise<void>;
+  /** Clear the loaded check log (also dismisses the log modal). */
+  closeCheckLog: () => void;
+  /** Drop a prepared prompt into a pane's composer + focus that
+   *  pane. Used by the PR Send-to-agent flow. */
+  seedPaneInput: (paneId: PaneId, text: string) => void;
+  /** Called by a Pane after it has consumed the seed, to clear
+   *  it and prevent re-application on subsequent renders. */
+  consumePaneSeed: () => void;
   /** Refresh the review state for the active worktree project. Sets
    *  reviewLoading while in flight, populates reviewState on success,
    *  reviewError on failure. */
@@ -608,7 +696,7 @@ interface LeafMeta {
   presetId?: string;
 }
 
-function collectLeavesWithAgents(
+export function collectLeavesWithAgents(
   node: PaneNode,
   out: LeafMeta[] = [],
 ): LeafMeta[] {
@@ -857,6 +945,23 @@ function runPipelineStep(paneId: PaneId, prompt: string): Promise<string> {
 }
 
 /**
+ * Convert an agent slug to a human-readable title.
+ *   "frontend-developer"  -> "Frontend Developer"
+ *   "lead_users_agent"    -> "Lead Users Agent"
+ *
+ * Used for default pane titles when an agent is bound and the user
+ * hasn't explicitly renamed the pane, plus by other surfaces (PR
+ * "Send to agent" picker) that need a friendly label for an agent.
+ */
+export function humanizeAgentName(slug: string): string {
+  return slug
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
  * Resolve a pane's display name. Returns the user-set `paneName` from
  * the tree if there is one, otherwise "Pane N" where N is the leaf's
  * 1-based DOM-order index. The Lead pane lives outside the main tree
@@ -1072,6 +1177,18 @@ export const useStore = create<Store>((set, get) => ({
   previewUrl: null,
   previewOpen: false,
   missionControlOpen: false,
+
+  prInboxes: {},
+  prDetail: null,
+  prDetailLoading: false,
+  prDetailError: null,
+  prModalOpen: false,
+  prCheckLog: null,
+  prCheckLogLoading: false,
+  prCheckLogError: null,
+  prDetails: {},
+  prCheckLogs: {},
+  pendingPaneSeed: null,
   pipelineView: 'panes' as 'panes' | 'board' | 'review',
   pipeline: undefined as Pipeline | undefined,
   reviewState: undefined,
@@ -2211,6 +2328,177 @@ export const useStore = create<Store>((set, get) => ({
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
   setMissionControlOpen: (open) => set({ missionControlOpen: open }),
+
+  // -- PR inbox actions ---------------------------------------------------
+  setPrModalOpen: (open) => {
+    set({ prModalOpen: open });
+    // Opening with stale or missing data → kick off a fresh fetch.
+    if (open) {
+      const s = get();
+      const inbox = s.prInboxes[s.windowId];
+      const stale =
+        !inbox ||
+        inbox.notAvailable ||
+        Date.now() - inbox.syncedAt > 5 * 60 * 1000;
+      if (stale && !inbox?.syncing) void s.refreshPrs();
+    }
+  },
+
+  refreshPrs: async () => {
+    const { cwd, windowId } = get();
+    if (!cwd || !windowId) return;
+    set((s) => ({
+      prInboxes: {
+        ...s.prInboxes,
+        [windowId]: {
+          ...(s.prInboxes[windowId] ?? {
+            syncedAt: 0,
+            prs: [],
+          }),
+          syncing: true,
+        },
+      },
+    }));
+    try {
+      // Fast availability probe first — if gh isn't set up, render an
+      // inline hint in the modal instead of an opaque error banner.
+      const available = await window.cowork.pr.available(cwd);
+      if (!available) {
+        set((s) => ({
+          prInboxes: {
+            ...s.prInboxes,
+            [windowId]: {
+              syncedAt: Date.now(),
+              prs: [],
+              syncing: false,
+              notAvailable: true,
+            },
+          },
+        }));
+        return;
+      }
+      const prs = await window.cowork.pr.list(cwd);
+      set((s) => ({
+        prInboxes: {
+          ...s.prInboxes,
+          [windowId]: {
+            syncedAt: Date.now(),
+            prs,
+            syncing: false,
+            notAvailable: false,
+          },
+        },
+      }));
+      // Prefetch full details for open PRs in the background so the
+      // detail view opens instantly. Only fetches PRs that are
+      // missing from the cache OR whose updatedAt has advanced —
+      // skips ones whose snapshot is still fresh.
+      void prefetchOpenPrDetails(get, set);
+    } catch (err) {
+      set((s) => ({
+        prInboxes: {
+          ...s.prInboxes,
+          [windowId]: {
+            ...(s.prInboxes[windowId] ?? { syncedAt: 0, prs: [] }),
+            syncing: false,
+            error: cleanIpcError(err),
+          },
+        },
+      }));
+    }
+  },
+
+  openPrDetail: async (number) => {
+    const { cwd, prDetails, prInboxes, windowId } = get();
+    if (!cwd) return;
+    const cached = prDetails[number];
+    const summary = prInboxes[windowId]?.prs.find((p) => p.number === number);
+    // If we have a cache hit and it's not obviously stale (the
+    // summary's updatedAt didn't advance), show the cached detail
+    // immediately — instant open, no spinner.
+    const stale =
+      cached && summary && summary.updatedAt !== cached.updatedAt;
+    if (cached && !stale) {
+      set({ prDetail: cached, prDetailLoading: false, prDetailError: null });
+      return;
+    }
+    // Cache miss or stale: paint cached entry first if any (so the
+    // user sees something while the fresh fetch lands), then fetch.
+    if (cached) {
+      set({ prDetail: cached, prDetailLoading: true, prDetailError: null });
+    } else {
+      set({ prDetailLoading: true, prDetailError: null });
+    }
+    try {
+      const detail = await window.cowork.pr.detail(cwd, number);
+      set((s) => ({
+        prDetail: detail,
+        prDetailLoading: false,
+        prDetails: { ...s.prDetails, [number]: detail },
+      }));
+    } catch (err) {
+      set({
+        prDetailLoading: false,
+        prDetailError: cleanIpcError(err),
+      });
+    }
+  },
+
+  closePrDetail: () =>
+    set({ prDetail: null, prDetailError: null, prDetailLoading: false }),
+
+  openCheckLog: async (runId) => {
+    const { cwd, prCheckLogs } = get();
+    if (!cwd) return;
+    // Logs don't change for a given run id (re-runs get new ids), so
+    // a cache hit always wins — no spinner, no fetch.
+    const cached = prCheckLogs[runId];
+    if (cached !== undefined) {
+      set({
+        prCheckLog: { runId, text: cached },
+        prCheckLogLoading: false,
+        prCheckLogError: null,
+      });
+      return;
+    }
+    set({
+      prCheckLogLoading: true,
+      prCheckLogError: null,
+      prCheckLog: { runId, text: '' },
+    });
+    try {
+      const text = await window.cowork.pr.checkLogs(cwd, runId);
+      set((s) => ({
+        prCheckLog: { runId, text },
+        prCheckLogLoading: false,
+        prCheckLogs: { ...s.prCheckLogs, [runId]: text },
+      }));
+    } catch (err) {
+      set({
+        prCheckLogLoading: false,
+        prCheckLogError: cleanIpcError(err),
+      });
+    }
+  },
+
+  closeCheckLog: () =>
+    set({
+      prCheckLog: null,
+      prCheckLogError: null,
+      prCheckLogLoading: false,
+    }),
+
+  seedPaneInput: (paneId, text) => {
+    // Bring the target pane to focus first so the user lands on it
+    // when the PR drawer dismisses. The Pane component picks up the
+    // seed via its own effect.
+    set({
+      pendingPaneSeed: { paneId, text, nonce: Date.now() },
+      activePaneId: paneId,
+    });
+  },
+
+  consumePaneSeed: () => set({ pendingPaneSeed: null }),
 
   setMemoryScope: (scope) => {
     set({ memoryScope: scope });
@@ -3595,6 +3883,61 @@ export const useStore = create<Store>((set, get) => ({
     await window.cowork.state.saveWindow(updated);
   },
 }));
+
+/**
+ * After a PR list refresh, warm the detail cache for every open PR
+ * whose snapshot we don't have or whose `updatedAt` has advanced.
+ * Capped at 3 concurrent fetches so we don't blow GH rate limits or
+ * stall the gh CLI on big repos. Errors per-PR are swallowed
+ * (logged) so one bad PR doesn't stop the others.
+ */
+async function prefetchOpenPrDetails(
+  get: () => Store,
+  set: (
+    partial: Partial<Store> | ((s: Store) => Partial<Store>),
+  ) => void,
+): Promise<void> {
+  const { cwd, windowId, prInboxes, prDetails } = get();
+  if (!cwd || !windowId) return;
+  const prs = prInboxes[windowId]?.prs ?? [];
+  // Open-only — closed/merged details are far less likely to be
+  // opened and not worth pre-spending budget on.
+  const openPrs = prs.filter((p) => p.state === 'open');
+  const queue = openPrs.filter((p) => {
+    const cached = prDetails[p.number];
+    if (!cached) return true;
+    return cached.updatedAt !== p.updatedAt; // refresh on activity
+  });
+  if (queue.length === 0) return;
+
+  const CONCURRENCY = 3;
+  const workers: Array<Promise<void>> = [];
+  let cursor = 0;
+  for (let w = 0; w < CONCURRENCY; w++) {
+    workers.push(
+      (async () => {
+        while (true) {
+          const i = cursor;
+          cursor += 1;
+          if (i >= queue.length) return;
+          const num = queue[i].number;
+          try {
+            const detail = await window.cowork.pr.detail(cwd, num);
+            set((s) => ({
+              prDetails: { ...s.prDetails, [num]: detail },
+            }));
+          } catch (err) {
+            console.warn(
+              `[pr-prefetch] PR #${num} detail failed:`,
+              err instanceof Error ? err.message : err,
+            );
+          }
+        }
+      })(),
+    );
+  }
+  await Promise.all(workers);
+}
 
 /**
  * Helper: write the live top-level state back into the matching entry in

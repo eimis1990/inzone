@@ -3,6 +3,7 @@ import type { PaneId, SessionStatus } from '@shared/types';
 import { getAgentColor } from '@shared/palette';
 import {
   getPaneDisplayName,
+  humanizeAgentName,
   useStore,
   type ChatItem,
 } from '../store';
@@ -67,22 +68,6 @@ function formatPaneCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-/**
- * Convert an agent slug to a human-readable title.
- *   "frontend-developer"  -> "Frontend Developer"
- *   "lead_users_agent"    -> "Lead Users Agent"
- *   "solo-founder"        -> "Solo Founder"
- * Splits on hyphens and underscores, drops empties, title-cases each
- * remaining word. Used as the default pane title when an agent is
- * bound and the user hasn't explicitly renamed the pane.
- */
-function humanizeAgentName(slug: string): string {
-  return slug
-    .split(/[-_]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
-}
 
 /**
  * Three-vertical-dots glyph for the pane "more" affordance. Same
@@ -309,6 +294,28 @@ export function Pane({ id }: PaneProps) {
     setRenaming(false);
   };
   const [input, setInput] = useState('');
+  // Pull "seed text" — typically a prepared prompt sent to this pane
+  // by the PR Send-to-agent flow — into our local input state, then
+  // tell the store we've consumed it so a re-render (or sibling pane
+  // mount) doesn't re-apply the same seed. Append rather than
+  // overwrite when there's already user input — protects half-typed
+  // messages.
+  const pendingSeed = useStore((s) => s.pendingPaneSeed);
+  const consumePaneSeed = useStore((s) => s.consumePaneSeed);
+  useEffect(() => {
+    if (!pendingSeed || pendingSeed.paneId !== id) return;
+    setInput((prev) =>
+      prev.trim().length > 0 ? `${prev}\n\n${pendingSeed.text}` : pendingSeed.text,
+    );
+    // Focus the textarea after the seed lands so the user can edit
+    // immediately — `requestAnimationFrame` waits for the DOM update.
+    requestAnimationFrame(() => {
+      composerTextareaRef.current?.focus();
+      const el = composerTextareaRef.current;
+      if (el) el.setSelectionRange(el.value.length, el.value.length);
+    });
+    consumePaneSeed();
+  }, [pendingSeed, id, consumePaneSeed]);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | undefined>();
   const [dragging, setDragging] = useState(false);

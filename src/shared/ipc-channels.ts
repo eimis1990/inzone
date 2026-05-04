@@ -106,6 +106,14 @@ export const IPC = {
   REVIEW_SUMMARIZE_PR: 'review:summarizePR',
   REVIEW_LOCAL_MERGE: 'review:localMerge',
 
+  // Pull request inbox (gh-CLI backed view of GitHub PRs for the
+  // current project). Read-only — listed every 5 minutes (paused
+  // when window blurred) plus on user "refresh" tap.
+  PR_LIST: 'pr:list',
+  PR_DETAIL: 'pr:detail',
+  PR_CHECK_LOGS: 'pr:checkLogs',
+  PR_AVAILABLE: 'pr:available',
+
   // Persistence
   STATE_GET: 'state:get',
   STATE_SAVE_WINDOW: 'state:saveWindow',

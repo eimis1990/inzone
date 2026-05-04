@@ -77,6 +77,12 @@ import {
 } from './pr-summarize';
 import { localMerge, type LocalMergeArgs } from './git-merge';
 import {
+  getCheckRunLogs,
+  getPullRequestDetail,
+  isGhAvailable,
+  listPullRequests,
+} from './pr';
+import {
   applyStoredApiKey,
   clearStoredApiKey,
   getClaudeAuthInfo,
@@ -415,6 +421,27 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.REVIEW_LOCAL_MERGE,
     async (_e, args: LocalMergeArgs) => localMerge(args),
+  );
+
+  // -- PR inbox -------------------------------------------------------------
+  // gh-CLI backed; renderer polls every 5 minutes plus on user
+  // refresh tap. Errors bubble back to the renderer untouched so it
+  // can show "install gh" hints when isGhAvailable returns false.
+  ipcMain.handle(IPC.PR_LIST, async (_e, args: { cwd: string }) =>
+    listPullRequests(args.cwd),
+  );
+  ipcMain.handle(
+    IPC.PR_DETAIL,
+    async (_e, args: { cwd: string; number: number }) =>
+      getPullRequestDetail(args.cwd, args.number),
+  );
+  ipcMain.handle(
+    IPC.PR_CHECK_LOGS,
+    async (_e, args: { cwd: string; runId: string; lines?: number }) =>
+      getCheckRunLogs(args.cwd, args.runId, args.lines),
+  );
+  ipcMain.handle(IPC.PR_AVAILABLE, async (_e, args: { cwd: string }) =>
+    isGhAvailable(args.cwd),
   );
 
   // -- Profile (Settings → Profile) -----------------------------------------
