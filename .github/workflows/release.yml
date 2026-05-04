@@ -1,0 +1,103 @@
+name: Release
+
+# Trigger on tag push (v1.2.3) or manual run from the Actions UI.
+# Manual dispatch defaults to a dry run (build but don't publish) so
+# you can test all three platforms without touching releases.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish artifacts to GitHub Releases?'
+        type: boolean
+        default: false
+
+# Avoid two simultaneous releases stepping on each other (e.g. if you
+# push a tag while a previous run is still going).
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# electron-builder publishes assets to the GitHub Release that matches
+# the current tag, so the workflow needs write access to releases.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      # Don't cancel sibling jobs if one platform fails — you'd rather
+      # ship "Mac + Linux" than nothing while debugging Windows.
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon runner. electron-builder still cross-builds
+          # x64 from here, matching what `npm run release:mac` does
+          # locally.
+          - os: macos-14
+            label: macOS
+
+          # Windows Server 2022. Builds Win x64 NSIS installer + portable.
+          - os: windows-latest
+            label: Windows
+
+          # Ubuntu 24.04. Builds AppImage + .deb for x64 Linux.
+          - os: ubuntu-latest
+            label: Linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Linux runners need a few system libs for the AppImage build
+      # to succeed. macOS and Windows runners come with everything.
+      - name: Install Linux build deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 libarchive-tools
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build & publish
+        env:
+          # GitHub release upload — the workflow's own token is enough.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # macOS code signing + notarization. Only the macOS runner
+          # actually uses these. CSC_LINK should be the base64-encoded
+          # contents of your Developer ID .p12.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+          # Windows code signing (optional). Leave the secrets empty
+          # to ship unsigned — Windows will warn users via SmartScreen
+          # but the install still works.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        # Tag push -> always publish. Manual dispatch -> use the input
+        # toggle (defaults to dry run).
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            npm run release
+          else
+            npm run release:dryrun
+          fi
+        shell: bash

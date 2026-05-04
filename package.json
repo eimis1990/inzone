@@ -1,7 +1,7 @@
 {
   "name": "inzone",
   "version": "1.0.0",
-  "description": "INZONE — a macOS cockpit for running multiple Claude Agent SDK sessions side-by-side.",
+  "description": "INZONE — a desktop cockpit for running multiple Claude Agent SDK sessions side-by-side.",
   "main": "out/main/index.mjs",
   "author": "INZONE",
   "license": "MIT",
@@ -11,10 +11,14 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "start": "electron-vite preview",
-    "package": "electron-vite build && electron-builder --mac --arm64 --x64",
-    "package:dir": "electron-vite build && electron-builder --mac --dir",
-    "release": "electron-vite build && electron-builder --mac --arm64 --x64 --publish always",
-    "release:dryrun": "electron-vite build && electron-builder --mac --arm64 --x64 --publish never"
+    "package": "electron-vite build && electron-builder",
+    "package:dir": "electron-vite build && electron-builder --dir",
+    "package:mac": "electron-vite build && electron-builder --mac --arm64 --x64",
+    "package:win": "electron-vite build && electron-builder --win --x64",
+    "package:linux": "electron-vite build && electron-builder --linux --x64",
+    "release": "electron-vite build && electron-builder --publish always",
+    "release:mac": "electron-vite build && electron-builder --mac --arm64 --x64 --publish always",
+    "release:dryrun": "electron-vite build && electron-builder --publish never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.9",
@@ -91,6 +95,47 @@
           "target": "zip",
           "arch": [
             "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Development",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
             "x64"
           ]
         }

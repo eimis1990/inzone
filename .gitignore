@@ -9,3 +9,6 @@ dist/
 *.p12
 *.cer
 *.mobileprovision
+
+# TypeScript incremental build cache
+*.tsbuildinfo

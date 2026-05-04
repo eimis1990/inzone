@@ -105,7 +105,15 @@ export function SettingsDrawer({
   return (
     <div
       className={'settings-drawer-root' + (open ? ' open' : '')}
-      aria-hidden={!open}
+      // `inert` is the modern replacement for `aria-hidden` on
+      // containers that hold focusable children: it hides the
+      // subtree from AT *and* removes focus from anything inside,
+      // so we don't get a "Blocked aria-hidden on a focused
+      // descendant" warning when the close button still has focus
+      // at the moment the drawer closes. We spread it conditionally
+      // because React (≤18.x) renders `inert={false}` as the
+      // attribute literal "false", which still activates inert.
+      {...(!open ? { inert: '' } : {})}
     >
       <div
         className="settings-drawer-backdrop"
