@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "INZONE — a desktop cockpit for running multiple Claude Agent SDK sessions side-by-side.",
   "main": "out/main/index.mjs",
-  "author": "INZONE",
+  "author": {
+    "name": "INZONE",
+    "email": "eimantas.kudarauskas@visma.com"
+  },
   "license": "MIT",
   "private": true,
   "scripts": {
