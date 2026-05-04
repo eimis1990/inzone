@@ -782,6 +782,23 @@ textarea {
 .wb-pill.wb-pill-has-current {
   /* matches base .wb-pill */
 }
+/* Pill state when one or more non-active projects have completed work
+   waiting. Subtle green border tint + a small green dot near the
+   chevron — designed to be glanceable but not alarming. Click to
+   open the dropdown and see which workspace contains the project. */
+.wb-pill.wb-pill-has-unread {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+}
+.wb-pill-unread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 70%, transparent);
+  animation: inzone-unread-pulse 2.8s ease-in-out infinite;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
 
 /* Workspaces dropdown — modernized as a single unified list with a
    minimal create row at the foot. Anchored flush to the left of the
@@ -890,6 +907,17 @@ textarea {
 .ws-row-dot-active {
   background: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* Workspace row contains at least one project with completed work
+   waiting. Same slow pulse + green hue used in the project sidebar
+   so the two surfaces feel like one notification system. Wins over
+   the active-state styling (the user can still see "ws-row-active"
+   on the row background; the dot is more important as a wayfinder). */
+.ws-row-dot-unread,
+.ws-row-dot-active.ws-row-dot-unread {
+  background: var(--ok);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 28%, transparent);
+  animation: inzone-unread-pulse 2.8s ease-in-out infinite;
 }
 .ws-row-text {
   flex: 1;
@@ -1497,6 +1525,47 @@ textarea {
 .session-row.active .session-dot {
   background: var(--accent);
   box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+/* "Completed work waiting for you" — set in the store when a result
+   event lands on a project the user isn't currently viewing.
+   Cleared on session switch. Slow pulse to draw the eye without
+   feeling alarmist. */
+.session-dot.session-dot-unread {
+  background: var(--ok);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 65%, transparent);
+  animation: inzone-unread-pulse 2.8s ease-in-out infinite;
+}
+/* Active + unread: keep the unread tone (the green) so the user
+   doesn't lose the cue when they happen to be on a different pane
+   in the same project — the row's active background already conveys
+   "you're here". */
+.session-row.active .session-dot.session-dot-unread {
+  background: var(--ok);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ok) 65%, transparent);
+}
+
+/* Slow, deliberate pulse used across every "completed work waiting"
+   indicator. Three things move at once so the dot grabs attention
+   without feeling alarmist:
+     1. a hard halo ring that expands outward and fades to transparent,
+        like a dropped-pebble ripple
+     2. an inner glow that brightens at the peak
+     3. a tiny scale on the dot itself so it feels "alive" rather than
+        just glowing
+   2.8s ease-in-out keeps the rhythm gentle. */
+@keyframes inzone-unread-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--ok) 70%, transparent),
+      0 0 4px color-mix(in srgb, var(--ok) 40%, transparent);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px color-mix(in srgb, var(--ok) 0%, transparent),
+      0 0 16px color-mix(in srgb, var(--ok) 95%, transparent);
+    transform: scale(1.25);
+  }
 }
 .session-row-body {
   flex: 1;
@@ -3283,10 +3352,28 @@ code.voice-tool-card-value {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+/* Small mono chips that show under the pane title — agent slug and
+   model. Same chip treatment as the agents library card meta line so
+   the two share a visual language. */
+.pane-meta-chip {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0px 5px;
+  color: var(--text-dim);
+  text-transform: none;
+  white-space: nowrap;
 }
 .pane-agent-name {
-  /* Agent names get the agent's color via inline style on the parent
-     row, but the subtitle stays dim — keep secondary tone. */
+  /* Legacy class kept for any references; the subtitle now uses
+     .pane-meta-chip pills instead. */
 }
 
 /* Pencil affordance — only renders when the pane is active. Same

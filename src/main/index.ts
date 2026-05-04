@@ -143,8 +143,17 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Track whether we've already done the async cleanup pass on quit.
+// The first call to before-quit blocks (preventDefault + cleanup),
+// then re-fires app.quit() which lands here again — this time
+// `cleanupDone` is true so we let the quit lifecycle proceed
+// uninterrupted. That second pass is what lets electron-updater's
+// `quit` listener fire and spawn its install helper. Using
+// `app.exit(0)` instead skips the quit event entirely and breaks
+// auto-update's "Restart now" flow.
+let cleanupDone = false;
 app.on('before-quit', async (event) => {
-  // Let sessions shut down cleanly and flush transcript streams.
+  if (cleanupDone) return;
   event.preventDefault();
   try {
     killAllTerminals();
@@ -152,6 +161,10 @@ app.on('before-quit', async (event) => {
     await closeAllTranscripts();
     await closeUsageStream();
   } finally {
-    app.exit(0);
+    cleanupDone = true;
+    // Re-trigger quit — this time the early-return above lets it
+    // proceed naturally so any installed quit listeners (notably
+    // electron-updater's install-on-quit hook) actually run.
+    app.quit();
   }
 });

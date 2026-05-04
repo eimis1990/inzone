@@ -105,6 +105,25 @@ export function WorkspaceBar() {
   }
   const canSplit = !!activePaneId;
 
+  // Any project anywhere with an unread completion — highlights the
+  // pill so the user notices when work finished while they were
+  // looking at a different project. Cleared per-project on switch.
+  const globalHasUnread = sessions.some((s) => s.hasUnreadCompletion);
+
+  // Per-workspace flag — used to dot the row in the dropdown so the
+  // user can see which workspace contains the project that just
+  // completed without having to scan every project name.
+  const workspaceHasUnread = new Map<string, boolean>();
+  for (const w of workspaces) {
+    workspaceHasUnread.set(
+      w.id,
+      w.projectIds.some(
+        (pid) =>
+          sessions.find((s) => s.id === pid)?.hasUnreadCompletion ?? false,
+      ),
+    );
+  }
+
   return (
     <div className="workspace-bar">
       {/* Left cluster: sidebar toggle + folder + workspaces */}
@@ -148,23 +167,30 @@ export function WorkspaceBar() {
               <>
                 <button
                   className={
-                    'wb-pill' + (currentWorkspace ? ' wb-pill-has-current' : '')
+                    'wb-pill' +
+                    (currentWorkspace ? ' wb-pill-has-current' : '') +
+                    (globalHasUnread ? ' wb-pill-has-unread' : '')
                   }
                   onClick={() => setShowPresets((v) => !v)}
                   title={
-                    currentWorkspace
-                      ? (() => {
-                          const n = countTopLevelProjects(
-                            currentWorkspace.projectIds,
-                            sessions,
-                          );
-                          return `On workspace "${currentWorkspace.name}" (${n} project${n === 1 ? '' : 's'})`;
-                        })()
-                      : 'No workspace yet — create one'
+                    globalHasUnread
+                      ? 'An agent finished while you were elsewhere — open the dropdown to see which project'
+                      : currentWorkspace
+                        ? (() => {
+                            const n = countTopLevelProjects(
+                              currentWorkspace.projectIds,
+                              sessions,
+                            );
+                            return `On workspace "${currentWorkspace.name}" (${n} project${n === 1 ? '' : 's'})`;
+                          })()
+                        : 'No workspace yet — create one'
                   }
                 >
                   <WorkspacesIcon />
                   <span className="wb-pill-label">{triggerLabel}</span>
+                  {globalHasUnread && (
+                    <span className="wb-pill-unread-dot" aria-hidden />
+                  )}
                   <ChevronDownIcon size={12} />
                 </button>
                 {showPresets && (
@@ -226,9 +252,17 @@ export function WorkspaceBar() {
                               <span
                                 className={
                                   'ws-row-dot' +
-                                  (isActive ? ' ws-row-dot-active' : '')
+                                  (isActive ? ' ws-row-dot-active' : '') +
+                                  (workspaceHasUnread.get(w.id)
+                                    ? ' ws-row-dot-unread'
+                                    : '')
                                 }
                                 aria-hidden
+                                title={
+                                  workspaceHasUnread.get(w.id)
+                                    ? 'A project in this workspace has completed work waiting for you'
+                                    : undefined
+                                }
                               />
                               <span className="ws-row-text">
                                 {isRenaming ? (

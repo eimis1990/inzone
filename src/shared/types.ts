@@ -255,6 +255,15 @@ export interface WindowState {
    */
   previewUrl?: string;
   /**
+   * Set to true when an agent in this project completes a turn while
+   * the user is viewing a different project. Surfaces as a green dot
+   * on the project row in the sidebar and (aggregated) on the
+   * workspace pill so the user knows where to look. Cleared when the
+   * user switches into this project. Not persisted across app
+   * restarts — stale on relaunch since agents don't survive.
+   */
+  hasUnreadCompletion?: boolean;
+  /**
    * If this project is a git worktree spawned from another project,
    * this points back at the parent project's id. The sidebar uses it
    * to render the worktree indented under its parent and to surface

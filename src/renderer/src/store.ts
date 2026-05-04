@@ -18,6 +18,7 @@ import type {
   SkillDef,
   SkillDraft,
   UsageSummary,
+  WindowId,
   WindowMode,
   WindowState,
   Workspace,
@@ -501,6 +502,31 @@ function collectLeaves(node: PaneNode, out: PaneId[] = []): PaneId[] {
     for (const c of node.children) collectLeaves(c, out);
   }
   return out;
+}
+
+/**
+ * Find which session (project) owns a given pane id. Walks both the
+ * tree leaves and the lead pane id of every session — the first match
+ * wins. Returns null if the pane belongs to no known session (e.g. a
+ * pane that's been removed in a race with its final result event).
+ */
+function findSessionIdForPane(
+  sessions: WindowState[],
+  paneId: PaneId,
+): WindowId | null {
+  for (const s of sessions) {
+    if (s.lead?.paneId === paneId) return s.id;
+    if (treeContainsPane(s.tree, paneId)) return s.id;
+  }
+  return null;
+}
+
+function treeContainsPane(node: PaneNode, paneId: PaneId): boolean {
+  if (node.kind === 'leaf') return node.id === paneId;
+  for (const c of node.children) {
+    if (treeContainsPane(c, paneId)) return true;
+  }
+  return false;
 }
 
 /** Collect all leaves with their associated agent (if any). */
@@ -1898,7 +1924,26 @@ export const useStore = create<Store>((set, get) => ({
           }
           break;
       }
-      return { panes: { ...s.panes, [ev.paneId]: nextPane } };
+
+      // If a result lands in a project the user isn't currently
+      // viewing, mark that session so the sidebar / workspace pill
+      // can surface a green "completed work elsewhere" indicator.
+      // Cleared when the user switches into that project.
+      let nextSessions = s.sessions;
+      if (ev.kind === 'result' && ev.subtype === 'success') {
+        const ownerId = findSessionIdForPane(s.sessions, ev.paneId);
+        if (ownerId && ownerId !== s.windowId) {
+          nextSessions = s.sessions.map((sess) =>
+            sess.id === ownerId
+              ? { ...sess, hasUnreadCompletion: true }
+              : sess,
+          );
+        }
+      }
+      return {
+        panes: { ...s.panes, [ev.paneId]: nextPane },
+        sessions: nextSessions,
+      };
     });
   },
 
@@ -3324,6 +3369,17 @@ export const useStore = create<Store>((set, get) => ({
     if (!target) return;
 
     snapshotActive(get, set);
+
+    // Clear the "completed work elsewhere" flag on the session we're
+    // entering — the user is about to see whatever happened, no need
+    // to keep nudging.
+    if (target.hasUnreadCompletion) {
+      set((s) => ({
+        sessions: s.sessions.map((sess) =>
+          sess.id === id ? { ...sess, hasUnreadCompletion: false } : sess,
+        ),
+      }));
+    }
 
     // Hydrate top-level state from the target session. Reset the
     // terminal-detected URL list — those URLs belong to the previous

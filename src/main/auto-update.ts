@@ -34,6 +34,15 @@ const { autoUpdater } = electronUpdater;
 
 let started = false;
 
+// Guard so the "Update ready · Restart now / Later" dialog only fires
+// once per downloaded version. Without this, the 30-minute re-check
+// can re-emit `update-downloaded` for a version that was already
+// downloaded but the user dismissed with Later — and the dialog
+// re-fires, sometimes more than once if the user dismisses again.
+// Reset whenever a NEW version becomes available so genuine future
+// updates still prompt.
+let promptedVersion: string | null = null;
+
 export function initAutoUpdate(): void {
   if (started) return;
   started = true;
@@ -62,6 +71,11 @@ export function initAutoUpdate(): void {
   });
   autoUpdater.on('update-available', (info) => {
     console.log('[auto-update] update available:', info.version);
+    // A newer version became available — clear the prompt guard so
+    // the dialog can fire again for this new version. (Without this,
+    // a user who said "Later" to v1.0.5 would never see the prompt
+    // for v1.0.6.)
+    if (promptedVersion !== info.version) promptedVersion = null;
   });
   autoUpdater.on('update-not-available', () => {
     console.log('[auto-update] up to date');
@@ -78,8 +92,22 @@ export function initAutoUpdate(): void {
   });
   autoUpdater.on('update-downloaded', async (info) => {
     console.log('[auto-update] downloaded:', info.version);
-    // Prompt the user — most apps that surprise-restart get
-    // dunked on. Three buttons: Restart now, Later, View notes.
+
+    // Don't re-prompt for a version we've already shown the dialog
+    // for this session. The user dismissed (or accepted) once; if
+    // they accepted but the install failed, surface that on the next
+    // launch instead of nagging. autoInstallOnAppQuit will retry on
+    // its own when the app actually closes cleanly.
+    if (promptedVersion === info.version) {
+      console.log(
+        '[auto-update] dialog already shown for',
+        info.version,
+        '— skipping repeat prompt',
+      );
+      return;
+    }
+    promptedVersion = info.version;
+
     const win = BrowserWindow.getAllWindows()[0];
     const result = await dialog.showMessageBox(win, {
       type: 'info',
@@ -92,7 +120,24 @@ export function initAutoUpdate(): void {
         'Restart now to apply, or keep working — the update will be applied automatically on next launch.',
     });
     if (result.response === 0) {
-      autoUpdater.quitAndInstall();
+      try {
+        // (isSilent=false, isForceRunAfter=true) — relaunch the new
+        // version after install completes. Wrapped in try/catch so a
+        // failure here doesn't leave the app in a half-quit state;
+        // we surface the error so the user can fall back to manual
+        // re-download.
+        autoUpdater.quitAndInstall(false, true);
+      } catch (err) {
+        console.error('[auto-update] quitAndInstall failed:', err);
+        await dialog.showMessageBox(win, {
+          type: 'error',
+          buttons: ['OK'],
+          title: 'Update install failed',
+          message: 'INZONE could not apply the update automatically.',
+          detail:
+            'Please quit INZONE and re-download the latest version from inzone-theta.vercel.app, or try again from a clean launch.',
+        });
+      }
     }
   });
 

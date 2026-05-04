@@ -216,7 +216,18 @@ export function SessionsList() {
               {depth > 0 && (
                 <span className="session-row-tree" aria-hidden />
               )}
-              <span className="session-dot" aria-hidden />
+              <span
+                className={
+                  'session-dot' +
+                  (s.hasUnreadCompletion ? ' session-dot-unread' : '')
+                }
+                aria-hidden
+                title={
+                  s.hasUnreadCompletion
+                    ? 'An agent in this project finished while you were elsewhere'
+                    : undefined
+                }
+              />
               <div className="session-row-body">
                 {isRenaming ? (
                   <input

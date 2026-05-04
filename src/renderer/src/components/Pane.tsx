@@ -68,6 +68,23 @@ function formatPaneCost(usd: number): string {
 }
 
 /**
+ * Convert an agent slug to a human-readable title.
+ *   "frontend-developer"  -> "Frontend Developer"
+ *   "lead_users_agent"    -> "Lead Users Agent"
+ *   "solo-founder"        -> "Solo Founder"
+ * Splits on hyphens and underscores, drops empties, title-cases each
+ * remaining word. Used as the default pane title when an agent is
+ * bound and the user hasn't explicitly renamed the pane.
+ */
+function humanizeAgentName(slug: string): string {
+  return slug
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
  * Three-vertical-dots glyph for the pane "more" affordance. Same
  * footprint as StopIcon / CloseIcon (14px) so it sits cleanly in the
  * pane-actions row.
@@ -260,14 +277,26 @@ export function Pane({ id }: PaneProps) {
       ),
     [tree, id, leadPaneId, leadPaneName],
   );
+  // When the pane hasn't been explicitly renamed by the user, prefer
+  // a humanized version of the bound agent's name over the generic
+  // "Pane N" — so a pane bound to `frontend-developer` reads as
+  // "Frontend Developer" by default. Falls back to "Pane N" when no
+  // agent is bound. The rename pencil still overrides this with a
+  // user-set custom name.
+  const titleName = useMemo(() => {
+    if (paneDisplay.isCustom) return paneDisplay.name;
+    if (agent?.name) return humanizeAgentName(agent.name);
+    return paneDisplay.name;
+  }, [paneDisplay.isCustom, paneDisplay.name, agent?.name]);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (renaming) {
-      // Pre-fill with the current display name and select-all so a
-      // first keystroke replaces it cleanly.
-      setRenameDraft(paneDisplay.name);
+      // Pre-fill with whatever's visible (humanized agent name or
+      // "Pane N") and select-all so a first keystroke replaces it
+      // cleanly.
+      setRenameDraft(titleName);
       requestAnimationFrame(() => {
         renameInputRef.current?.focus();
         renameInputRef.current?.select();
@@ -471,9 +500,9 @@ export function Pane({ id }: PaneProps) {
                   'pane-title' +
                   (paneDisplay.isCustom ? '' : ' pane-title-default')
                 }
-                title={paneDisplay.name}
+                title={titleName}
               >
-                {paneDisplay.name}
+                {titleName}
               </span>
               {isActive && (
                 <button
@@ -493,7 +522,12 @@ export function Pane({ id }: PaneProps) {
           )}
           <div className="pane-subtitle">
             {pane.agentName ? (
-              <span className="pane-agent-name">{pane.agentName}</span>
+              <>
+                <code className="pane-meta-chip">{pane.agentName}</code>
+                {agent?.model && (
+                  <code className="pane-meta-chip">{agent.model}</code>
+                )}
+              </>
             ) : (
               <em className="pane-title-empty">No agent</em>
             )}
