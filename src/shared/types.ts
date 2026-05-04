@@ -700,3 +700,156 @@ export interface GhAccount {
    *  use as its credentials when gh is the credential helper). */
   active: boolean;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+//  Pull request inbox
+//
+//  INZONE shows GitHub pull requests for the current project so the
+//  diff → PR → review → fix loop never has to leave the app. All
+//  data is sourced from `gh` CLI (`gh pr list`, `gh pr view`,
+//  `gh pr checks`, `gh run view`) — re-using the auth the user has
+//  already set up rather than introducing a separate OAuth flow.
+//  See src/main/pr.ts for the gh wrappers.
+// ─────────────────────────────────────────────────────────────────────
+
+/** High-level state surfaced in the PR pill / list view. The "merged"
+ *  state is distinct from "closed" — gh exposes both. */
+export type PrState = 'open' | 'closed' | 'merged';
+
+/** GitHub's reviewDecision aggregated from the PR's reviewers. */
+export type PrReviewDecision =
+  | 'APPROVED'
+  | 'CHANGES_REQUESTED'
+  | 'REVIEW_REQUIRED'
+  | 'COMMENTED';
+
+/** Aggregate state of a single check run on the PR head commit.
+ *  Maps gh's separate `state` (queued/in_progress/completed) and
+ *  `conclusion` (success/failure/skipped/...) into one terminal
+ *  enum the UI can paint without doing the join. */
+export type CheckState =
+  | 'pending'
+  | 'running'
+  | 'success'
+  | 'failure'
+  | 'skipped'
+  | 'cancelled'
+  | 'unknown';
+
+export interface CheckRun {
+  /** Display name from the workflow (e.g. "Continuous integration / Lint"). */
+  name: string;
+  state: CheckState;
+  /** Human-readable conclusion verbatim from gh, if any (e.g.
+   *  "neutral", "action_required"). Mostly for tooltip detail. */
+  conclusion?: string;
+  /** Direct URL to the run on GitHub — used by the "Open on GitHub"
+   *  button when the user wants the full log. */
+  detailsUrl?: string;
+  /** Numeric run id for `gh run view <id> --log-failed`. */
+  runId?: string;
+  startedAt?: string;
+  completedAt?: string;
+  /** Optional duration string already formatted by gh ("2m 14s"). */
+  durationLabel?: string;
+}
+
+/** Lightweight PR row — what the list view renders, what the polling
+ *  refresh fetches en masse. Detail data (full body, comments,
+ *  per-check logs) is loaded lazily when the user opens a PR. */
+export interface PrSummary {
+  number: number;
+  title: string;
+  url: string;
+  state: PrState;
+  isDraft: boolean;
+  /** Branch the PR is FROM (e.g. "feature/checkout-redesign"). */
+  headRef: string;
+  /** Branch the PR is INTO (e.g. "main"). */
+  baseRef: string;
+  /** Login of the PR author. */
+  author: string;
+  reviewDecision?: PrReviewDecision;
+  /** Aggregate check counts so the list can paint a single status
+   *  pill without re-walking the array. */
+  checksTotal: number;
+  checksPassed: number;
+  checksFailed: number;
+  checksPending: number;
+  /** Total of issue-level + review comments. Used for the comment
+   *  badge on the PR card. */
+  commentCount: number;
+  /** ISO timestamp of the most recent activity. */
+  updatedAt: string;
+  /** ISO timestamp of when the PR was created. */
+  createdAt: string;
+  /** GitHub mergeable state — useful as a hint when the user is
+   *  about to merge. Optional because gh sometimes returns null
+   *  while it computes. */
+  mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+}
+
+/** Top-level PR comment (issue comment) — the conversation tab on
+ *  GitHub. Distinct from review comments, which live on diff lines. */
+export interface PrComment {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: string;
+  updatedAt?: string;
+  url: string;
+}
+
+/** Inline review comment on a specific file + line. The diff hunk
+ *  field is what GitHub renders as the 3-line code preview; we keep
+ *  it here so the UI can show the same context. */
+export interface PrReviewComment {
+  id: string;
+  author: string;
+  body: string;
+  /** File path relative to repo root. */
+  path: string;
+  /** Resolved line number in the new file (gh's `line`). May be
+   *  absent for outdated comments where the line no longer exists. */
+  line?: number;
+  /** Original GitHub diff hunk — multi-line string starting with
+   *  @@ markers. Rendered verbatim above the comment. */
+  diffHunk?: string;
+  createdAt: string;
+  updatedAt?: string;
+  url: string;
+  /** ID of the parent comment if this one is a reply. */
+  inReplyTo?: string;
+}
+
+/** Full detail loaded when the user opens a specific PR. Extends the
+ *  summary with the heavyweight stuff: body, full check list with
+ *  details urls, and both comment kinds. */
+export interface PrDetail extends PrSummary {
+  /** Markdown body of the PR description. */
+  body: string;
+  checks: CheckRun[];
+  comments: PrComment[];
+  reviewComments: PrReviewComment[];
+}
+
+/** Last-fetched PR list for a project, plus sync metadata for the
+ *  refresh button + "last synced N min ago" label. Lives at the top
+ *  level of the renderer store, keyed by project id, so switching
+ *  projects shows whatever was cached for the new one immediately
+ *  while a fresh poll runs in the background. */
+export interface PrInbox {
+  /** ISO timestamp of when this snapshot was fetched. */
+  syncedAt: number;
+  prs: PrSummary[];
+  /** True while a fetch is in flight. Used to show a spinner on the
+   *  refresh button and gray the list. */
+  syncing: boolean;
+  /** Most recent error from the gh wrapper, surfaced as a banner.
+   *  Cleared on successful sync. */
+  error?: string;
+  /** True if `gh` is missing or unauthenticated for this repo. The
+   *  UI uses this to render an inline "install gh" / "gh auth login"
+   *  hint instead of an opaque error. */
+  notAvailable?: boolean;
+}
