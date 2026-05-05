@@ -761,9 +761,23 @@ function useEligibleAgentPanes(): Array<{
   const leadPaneName = useStore((s) => s.leadPaneName);
   return useMemo(() => {
     const list: Array<{ id: PaneId; label: string; agentName: string }> = [];
+    // IMPORTANT: read agentName + workerKind from the LIVE runtime
+    // panes map, not from the tree leaves. The tree leaf only catches
+    // up on saveWindow's `bakeAgentsIntoTree` pass, and even that
+    // writes the baked snapshot into `sessions[i].tree` rather than
+    // the live top-level `s.tree`. So for the entire lifetime of an
+    // unswitched session after `setPaneAgent`, the tree's
+    // `agentName` is stale and the dropdown was showing the OLD
+    // agent name (or filtering panes out entirely if the original
+    // tree leaf had no agentName at all). Reading from `panes[id]`
+    // makes the dropdown match what the user actually sees in their
+    // pane headers.
     for (const meta of collectLeavesWithAgents(tree)) {
-      if (meta.workerKind === 'terminal') continue;
-      if (!meta.agentName) continue;
+      const runtime = panes[meta.id];
+      const workerKind = runtime?.workerKind ?? meta.workerKind;
+      if (workerKind === 'terminal') continue;
+      const agentName = runtime?.agentName ?? meta.agentName;
+      if (!agentName) continue;
       const display = getPaneDisplayName(
         tree,
         meta.id,
@@ -773,8 +787,8 @@ function useEligibleAgentPanes(): Array<{
       );
       const label = display.isCustom
         ? display.name
-        : humanizeAgentName(meta.agentName);
-      list.push({ id: meta.id, label, agentName: meta.agentName });
+        : humanizeAgentName(agentName);
+      list.push({ id: meta.id, label, agentName });
     }
     if (leadPaneId) {
       const leadAgent = panes[leadPaneId]?.agentName;

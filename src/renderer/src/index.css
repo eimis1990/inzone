@@ -235,7 +235,241 @@ textarea {
   letter-spacing: 0.08em;
 }
 
-/* Mode switch — Multi Agents / Lead Agent (centered in the bar) */
+/* Mode switch — Multi Agents / Lead Agent (centered in the bar)
+   Modern v2 — frosted segmented track with a sliding accent thumb.
+   The thumb is a separate absolutely-positioned element so it can
+   smoothly translate between segments instead of the old hard-flip
+   background-color swap. The Flow button lives in its own slot to
+   the right of the track; it slides in/out via max-width + opacity
+   when Multi Agents mode is on. */
+
+.mode-switch-shell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mode-switch-track-v2 {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 4px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.015) 100%
+    );
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.18);
+  flex-shrink: 0;
+  isolation: isolate;
+}
+
+/* The sliding thumb — sits behind the buttons (z-index implicit via
+   document order; segments declare z-index: 1 to sit above). Width
+   is exactly half the inner track minus the centre gap (4px padding
+   on each side, plus 1px nudge for the border). The transform-based
+   slide is hardware-accelerated, so the animation reads buttery
+   even on lower-power machines. */
+.mode-switch-track-v2 .mode-switch-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    var(--accent) 0%,
+    color-mix(in srgb, var(--accent) 88%, #000) 100%
+  );
+  box-shadow:
+    0 4px 14px color-mix(in srgb, var(--accent) 28%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  transition:
+    transform 360ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 240ms ease;
+  pointer-events: none;
+  will-change: transform;
+}
+/* Lead is the LEFT segment, Multi is the RIGHT segment. Multi sits
+   closer to the Flow slot on purpose so the two read as a connected
+   unit — when you flip from Lead → Multi, the thumb glides toward
+   Flow and (with ≥2 panes) Flow slides in right beside it. */
+.mode-switch-track-v2.mode-lead .mode-switch-thumb {
+  transform: translateX(0);
+}
+.mode-switch-track-v2.mode-multi .mode-switch-thumb {
+  transform: translateX(100%);
+}
+
+/* Each segment — sits above the thumb, no background of its own.
+   Colour cross-fades between dim → high-contrast as the thumb glides
+   underneath. We don't transition the colour with a delay because
+   the eye reads the colour change as part of the slide motion. */
+.mode-segment {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1 1 0;
+  height: 30px;
+  padding: 0 18px;
+  min-width: 130px;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 220ms ease;
+}
+.mode-segment > svg {
+  flex-shrink: 0;
+  transition: color 220ms ease, transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.mode-segment:not(.active):hover {
+  color: var(--text);
+}
+.mode-segment.active {
+  color: var(--accent-on);
+}
+.mode-segment.active > svg {
+  color: var(--accent-on);
+}
+
+/* Flow slot — animates in/out from the right. Uses max-width + a
+   small translateX so the chip enters with motion (rather than just
+   a fade), and overflow is clipped during the transition so neither
+   the slot's edges nor the chip's drop-shadow leak past the closed
+   state. The chip itself stays mounted so its store hooks don't
+   re-subscribe each time. */
+.mode-flow-slot {
+  display: inline-flex;
+  align-items: center;
+  max-width: 0;
+  margin-left: -8px; /* swallow the parent gap when collapsed */
+  opacity: 0;
+  transform: translateX(-12px);
+  overflow: hidden;
+  transition:
+    max-width 380ms cubic-bezier(0.32, 0.72, 0, 1),
+    margin-left 380ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 240ms ease,
+    transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+}
+.mode-flow-slot.visible {
+  max-width: 220px;
+  margin-left: 0;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* Flow button (was .mode-flow-chip — same className kept for the
+   component, but the visual treatment is rebuilt here so it reads as
+   a sibling control to the segmented track instead of a nested
+   chip). Idle: a subtle dark glass pill matching the track. Active
+   (board view open): tinted with the accent, with a soft glow. The
+   class is reused on .mode-flow-chip from FlowChip below. */
+.mode-flow-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.18);
+  transition:
+    background 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 160ms ease;
+}
+.mode-flow-chip svg {
+  flex-shrink: 0;
+  display: block;
+  color: inherit;
+}
+.mode-flow-chip:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.mode-flow-chip:active {
+  transform: scale(0.985);
+}
+.mode-flow-chip.active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 22%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 10%, transparent) 100%
+  );
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+    0 4px 14px color-mix(in srgb, var(--accent) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+/* Subtle accent ring when flow is enabled (separate from active view).
+   Tells the user the toggle is on even when they're back in panes view. */
+.mode-flow-chip.enabled:not(.active) {
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.mode-flow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(94, 210, 123, 0.98);
+  box-shadow: 0 0 0 2px rgba(94, 210, 123, 0.22);
+  margin-left: 3px;
+  flex-shrink: 0;
+  animation: pipeline-pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Legacy aliases ────────────────────────────────────────────────
+   The old segmented control (.mode-switch / .mode-btn) is still used
+   in a couple of spots (mobile / settings preview), so keep its
+   minimal styling so those sites don't regress. The header now uses
+   the v2 track above. */
 .mode-switch {
   display: inline-flex;
   align-items: center;
@@ -267,109 +501,7 @@ textarea {
   background: var(--accent);
   color: var(--accent-on);
 }
-/* The mode-btn icon (Multi Agents dot cluster, Lead robot) sits as a
-   direct child of the button — scope the color override to that
-   layer only. Without this scoping the rule cascades into the Flow
-   sub-chip's SVG and forces it to render in --accent-on (dark) even
-   when the chip itself wants its icon to be accent yellow. */
 .mode-btn.active > svg {
-  color: var(--accent-on);
-}
-
-/* Bigger, more prominent variant — used in the header. Same shape and
-   colour treatment as the base segmented control, just sized up so it
-   reads as the primary mode selector and has room to host the Flow
-   sub-chip inside the active Multi Agents pill. */
-.mode-switch-large {
-  height: 38px;
-  padding: 3px;
-}
-.mode-switch-large .mode-btn {
-  height: 32px;
-  padding: 0 18px;
-  font-size: 13px;
-  gap: 8px;
-}
-
-/* Flow chip embedded inside the active Multi Agents pill. Idle state
-   reads as a clean white pill with dark text — high contrast against
-   the yellow parent so it stands out as a distinct sub-control.
-   Active state (board view open) flips to the dark accent treatment.
-   We ride on top of `--accent-on` so the chip is readable on both
-   the active (yellow) and inactive (dark) parent. */
-.mode-flow-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 11px;
-  margin-left: 8px;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  border-radius: 999px;
-  color: rgba(0, 0, 0, 0.85);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: background 140ms, color 140ms, border-color 140ms,
-    box-shadow 140ms;
-  flex-shrink: 0;
-  user-select: none;
-}
-.mode-flow-chip svg {
-  flex-shrink: 0;
-  display: block;
-  /* Defensive — make sure the chip's SVG always picks up the chip's
-     own `color` (not whatever the surrounding mode-btn cascade may
-     have set). This pairs with the > svg scoping above. */
-  color: inherit;
-}
-.mode-flow-chip:hover {
-  background: #f5f5f5;
-  border-color: rgba(0, 0, 0, 0.32);
-}
-.mode-flow-chip.active {
-  background: rgba(0, 0, 0, 0.88);
-  border-color: rgba(0, 0, 0, 0.9);
-  color: var(--accent);
-}
-.mode-flow-chip.active:hover {
-  background: rgba(0, 0, 0, 0.95);
-}
-/* Subtle outline glow when flow is enabled (separate from active view).
-   Tells the user the toggle is on even when they're back in panes view. */
-.mode-flow-chip.enabled:not(.active) {
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18);
-}
-.mode-flow-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(94, 210, 123, 0.98);
-  /* Soft outer glow so it stays visible on both white and dark
-     backgrounds without a halo border. */
-  box-shadow: 0 0 0 2px rgba(94, 210, 123, 0.22);
-  margin-left: 3px;
-  flex-shrink: 0;
-  animation: pipeline-pulse 1.4s ease-in-out infinite;
-}
-/* When Multi Agents is NOT active, the chip lives on a dark background.
-   Adapt the colours so the chip stays readable. (In practice the chip
-   is hidden when Multi isn't active because it's gated by mode in
-   FlowChip itself, but defensive styling keeps things sensible if the
-   markup ever stays mounted.) */
-.mode-btn:not(.active) .mode-flow-chip {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: var(--text);
-}
-
-/* (Review chip moved out of the mode area into the left wb-pill
-   cluster — its styling now lives under .wb-review-pill above.) */
-.mode-btn:not(.active) .mode-flow-chip.active {
-  background: var(--accent);
-  border-color: var(--accent);
   color: var(--accent-on);
 }
 
@@ -1195,6 +1327,10 @@ textarea {
   border-right: 0;
 }
 .sidebar-inner {
+  /* 350px is plenty when only the active tab shows its label —
+     three inactive icon tabs (44px each) plus an active tab with
+     ~190px to itself fits four tabs comfortably without eating
+     into the pane area. */
   width: 350px;
   height: 100%;
   display: flex;
@@ -1271,10 +1407,19 @@ textarea {
 .sidebar-tabstrip {
   position: relative;
   display: flex;
+  align-items: stretch;
   gap: 4px;
   padding: 8px 8px 0 8px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
+  /* Bound the strip to its parent's width — without min-width:0 +
+     box-sizing:border-box, flex containers can grow to their
+     min-content size (sum of all children at natural widths) and
+     overflow the sidebar. Belt-and-suspenders so the layout is
+     deterministic. */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 /*
  * Single sliding indicator that animates between active tabs. Position
@@ -1284,8 +1429,17 @@ textarea {
 .sidebar-tabstrip-indicator {
   position: absolute;
   bottom: -1px;
-  left: var(--tab-indicator-left, 0);
+  /* Center the indicator under the active content's midpoint and let
+     the width come from the measured content. The min-width below
+     keeps tabs without a count chip (Voice / Wiki) at the same visual
+     length as tabs with one (Projects / Workers) — the underline
+     extends symmetrically out from center, so it always reads as a
+     deliberate "this tab is selected" cap rather than an awkward
+     short stub or oversized overhang. */
+  left: var(--tab-indicator-center, 0);
+  transform: translateX(-50%);
   width: var(--tab-indicator-width, 0);
+  min-width: 96px;
   height: 2px;
   background: var(--accent);
   border-radius: 2px 2px 0 0;
@@ -1295,20 +1449,84 @@ textarea {
   opacity: var(--tab-indicator-opacity, 1);
 }
 .sidebar-tab {
-  flex: 1;
+  /* All tabs share the strip via flex ratios — inactive at 1×,
+     active at 2× (below). With 4 tabs that's 1+1+1+2 = 5 units;
+     active gets 2/5 ≈ 40% of the strip, inactive get 1/5 ≈ 20%
+     each. The strip stays full-width (no empty space at the right)
+     and the active tab always has enough room for "Workers 17"
+     style labels. flex-basis: 0 so each tab's natural content
+     width doesn't bias the distribution. */
+  flex: 1 1 0;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 10px 10px;
+  padding: 8px 6px 10px;
   background: transparent;
   border: 0;
-  /* Per-tab border removed — the shared indicator handles the underline. */
   color: var(--text-dim);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: color 200ms;
+  /* Animate the flex-grow change so widths slide rather than snap
+     between the 1× and 2× share. 280ms feels intentional but quick.
+     The JS indicator measurement uses requestAnimationFrame so the
+     CSS transition doesn't desync the underline from its tab. */
+  transition: color 200ms, flex-grow 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.sidebar-tab.active {
+  /* Active gets twice the share of an inactive tab, so the strip
+     looks like one expanded label tab + three icon tabs sharing
+     the rest. Padding bumped slightly so the label + count don't
+     hug the edges of the active tab. */
+  flex: 2 1 0;
+  padding: 8px 12px 10px;
+}
+
+/* Label + count are always rendered (so CSS transitions can run
+   from 0 to natural size). Inactive tabs hide them via opacity 0
+   + max-width 0 + zero margin; active tabs reveal with a smooth
+   max-width / margin / opacity transition that reads as "the
+   label expands out from behind the icon." */
+.sidebar-tab-label {
+  opacity: 0;
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    opacity 200ms ease,
+    max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.sidebar-tab.active .sidebar-tab-label {
+  opacity: 1;
+  max-width: 200px;
+  margin-left: 6px;
+}
+.sidebar-tab-count {
+  opacity: 0;
+  max-width: 0;
+  margin-left: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    opacity 200ms ease,
+    max-width 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin-left 280ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    padding 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.sidebar-tab.active .sidebar-tab-count {
+  opacity: 1;
+  max-width: 60px;
+  margin-left: 6px;
+  padding: 1px 6px;
 }
 .sidebar-tab:hover {
   color: var(--text);
@@ -1316,21 +1534,24 @@ textarea {
 .sidebar-tab.active {
   color: var(--accent);
 }
-.sidebar-tab-icon {
+.sidebar-tab-content {
+  /* Content wrapper inside each tab. Sized to natural content
+     width (icon-only when inactive, icon + label + count when
+     active). The JS measures THIS element to position the active-
+     tab underline indicator, so the line reads as "underline the
+     content" rather than "underline the whole button." */
   display: inline-flex;
   align-items: center;
 }
-.sidebar-tab-label {
+.sidebar-tab-icon {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
 }
-.sidebar-tab-count {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--bg-elev-2);
-  color: var(--text-dim);
-}
+/* The old .sidebar-tab-label and .sidebar-tab-count base rules
+   moved up next to .sidebar-tab so the expand/contract transitions
+   live in one place. Only the active accent tint stays here as an
+   override on top of the base. */
 .sidebar-tab.active .sidebar-tab-count {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent);
@@ -8439,14 +8660,32 @@ select:focus {
    Section headers under the Workers tab — collapsible group rails for
    "Agents" and "Other". Sits inline with the agent / preset cards in
    the same scrolling list, with a slim divider above each header. */
+/* The header is now a flex container (div) holding the toggle button
+   and an optional refresh button. The toggle owns the click-to-
+   expand semantics; the refresh button sits to its right when
+   provided. Styles formerly on the header itself moved onto the
+   toggle so the click target keeps its hover state, while the
+   wrapper handles the divider + spacing. */
 .workers-section-header {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.workers-section-header:first-child {
+  border-top: 0;
+  margin-top: 0;
+}
+.workers-section-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 6px 6px;
   background: transparent;
   border: 0;
-  width: 100%;
+  flex: 1;
   text-align: left;
   cursor: pointer;
   color: var(--text-dim);
@@ -8455,21 +8694,12 @@ select:focus {
   font-weight: 600;
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
   transition: color 120ms;
-  /* Same reason as .list-item — keep the header at intrinsic height
-     so it doesn't squish when the list is long. */
-  flex-shrink: 0;
 }
-/* The very first header in the list shouldn't carry a top divider —
-   it would push it past the create-agent CTA edge into the void. */
-.workers-section-header:first-child {
-  border-top: 0;
-  margin-top: 0;
+.workers-section-header:first-child .workers-section-toggle {
   padding-top: 4px;
 }
-.workers-section-header:hover {
+.workers-section-toggle:hover {
   color: var(--text);
 }
 .workers-section-chevron {
@@ -8483,6 +8713,46 @@ select:focus {
 }
 .workers-section-header.collapsed .workers-section-chevron {
   transform: rotate(-90deg);
+}
+/* Inline refresh action — compact ghost button, slightly indented
+   from the right edge so it doesn't kiss the sidebar boundary. The
+   spinning animation runs while a fetch is in-flight; pure CSS so
+   it doesn't cost a render cycle per frame. */
+.workers-section-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 6px 0 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.workers-section-refresh:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.workers-section-refresh:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.workers-section-refresh.is-refreshing {
+  animation: workers-section-refresh-spin 700ms linear infinite;
+}
+@keyframes workers-section-refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .workers-section-title {
   flex: 1;
@@ -9428,6 +9698,680 @@ select:focus {
 .voice-wizard-launcher {
   margin-bottom: 16px;
   width: 100%;
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   LLM Wiki — sidebar tab + page modal
+   ─ Onboard view when uninitialized; tree + search when initialized.
+   ─ Page modal mirrors the Settings drawer chrome (full screen, back
+     button, scrollable body) for consistency across drawers.
+   ────────────────────────────────────────────────────────────────── */
+
+/* ---- Sidebar onboarding (wiki not yet initialized) ---- */
+.wiki-onboard {
+  padding: 24px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wiki-onboard-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.wiki-onboard-body {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.wiki-onboard-hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.wiki-onboard-path {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: var(--bg-elev-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 4px;
+  word-break: break-all;
+}
+.wiki-init-btn {
+  margin-top: 8px;
+  background: var(--accent);
+  color: var(--accent-on);
+  border: 0;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wiki-init-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.wiki-init-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- Sidebar wiki tree (initialized) ---- */
+.wiki-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.wiki-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.wiki-search {
+  flex: 1;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  outline: none;
+}
+.wiki-search:focus {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.wiki-refresh-btn {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.wiki-refresh-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+.wiki-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* ---- Dashboard strip (post-first-ingest activity overview) ---- */
+/* One-line strip between the toolbar and the page tree showing page
+   count + last-ingest age + recent-edit count. Click to expand a
+   small panel listing the last few log entries. Quiet at rest so it
+   doesn't compete with the page tree for attention. */
+.wiki-dash {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elev) 60%, transparent);
+}
+.wiki-dash-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 140ms ease, background 140ms ease;
+}
+.wiki-dash-strip:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.wiki-dash-strip strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.wiki-dash-sep {
+  color: var(--muted);
+  opacity: 0.6;
+  user-select: none;
+}
+.wiki-dash-stat {
+  white-space: nowrap;
+}
+.wiki-dash-spacer {
+  flex: 1;
+}
+.wiki-dash-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.wiki-dash-chevron.open {
+  transform: rotate(180deg);
+}
+/* Expanded panel — recent log entries. Bordered top so it reads as
+   "drawer that slid out from below the strip" rather than floating
+   loose chrome. */
+.wiki-dash-panel {
+  padding: 4px 10px 10px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elev) 40%, transparent);
+}
+.wiki-dash-empty {
+  padding: 8px 4px;
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 11px;
+}
+.wiki-dash-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wiki-dash-entry {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 4px;
+  font-size: 11px;
+  color: var(--text);
+}
+.wiki-dash-entry-type {
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  text-align: center;
+  /* Bound long type names (decide / query / unknown) so the column
+     stays predictable. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Per-type tinted pills — accent for ingest (the workhorse), green
+   for lint (auditing is good for you), neutral for everything else. */
+.wiki-dash-entry-type-ingest {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.wiki-dash-entry-type-edit {
+  background: color-mix(in srgb, var(--accent-2) 22%, transparent);
+  color: var(--accent-2);
+}
+.wiki-dash-entry-type-lint {
+  background: rgba(94, 210, 123, 0.18);
+  color: rgba(94, 210, 123, 0.95);
+}
+.wiki-dash-entry-type-init {
+  background: var(--bg-elev-2);
+  color: var(--muted);
+}
+.wiki-dash-entry-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.wiki-dash-entry-date {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* "Scan project" uses the shared "+ Create Agent" CTA chrome
+   (.sidebar-create-card-wrap → .sessions-new-card → .sessions-new-btn)
+   so the two sidebar tabs offer an identically-styled primary action.
+   Only the brief acknowledgement note below the button is wiki-specific. */
+.wiki-scan-note {
+  margin: 4px 12px 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--accent) 80%, white);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.wiki-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 8px 16px;
+}
+.wiki-folder {
+  margin-bottom: 6px;
+}
+.wiki-folder-name {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 10px 4px;
+  font-weight: 600;
+}
+.wiki-page-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.wiki-page-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.wiki-page-row.active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.wiki-page-row.wiki-page-schema .wiki-page-name {
+  /* Schema is the contract — visually flag it differently from
+     content pages so it doesn't get casually edited via the UI. */
+  font-style: italic;
+  color: var(--accent-2);
+}
+.wiki-page-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wiki-page-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.wiki-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.wiki-foot-meta {
+  font-style: italic;
+  /* Allow the meta to shrink so the action links never wrap onto
+     a second line in narrow sidebars. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wiki-foot-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+/* Subtle text-link buttons for Lint / Re-scan after first ingest.
+   Quiet at rest, accent on hover — matches the "secondary, lives
+   in the chrome" feel of the wiki footer. */
+.wiki-foot-link {
+  position: relative;
+  background: transparent;
+  border: 0;
+  padding: 2px 4px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 140ms ease, background 140ms ease;
+}
+.wiki-foot-link:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.wiki-foot-sep {
+  color: var(--muted);
+  opacity: 0.6;
+  user-select: none;
+}
+
+/* Reusable hover/focus tooltip — rendered via React Portal into
+   document.body so the bubble can extend past `overflow: hidden`
+   ancestors. The sidebar host clips its children, so a pseudo-element
+   tooltip anchored inside the trigger gets its left edge chopped off
+   when the trigger sits near the sidebar's right edge (which is
+   exactly where the wiki footer actions live). The Tooltip.tsx
+   component sets `top` + `left` on the bubble from the trigger's
+   bounding rect; CSS does the lift + horizontal centering via
+   transform so the arrow lands on the trigger's centerline. */
+.ui-tooltip-wrap {
+  display: inline-flex;
+}
+.ui-tooltip {
+  position: fixed;
+  max-width: 280px;
+  padding: 9px 11px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  z-index: 10000;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  animation: ui-tooltip-fade 140ms ease-out;
+}
+.ui-tooltip-top {
+  /* Center horizontally on the trigger, lift above with an 8px gap. */
+  transform: translate(-50%, calc(-100% - 8px));
+}
+.ui-tooltip-bottom {
+  transform: translate(-50%, 8px);
+}
+@keyframes ui-tooltip-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ui-tooltip-arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  left: 50%;
+  background: var(--bg-elev-2);
+  pointer-events: none;
+}
+.ui-tooltip-top .ui-tooltip-arrow {
+  bottom: -5px;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.ui-tooltip-bottom .ui-tooltip-arrow {
+  top: -5px;
+  transform: translateX(-50%) rotate(45deg);
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+/* Legacy pseudo-element tooltip rules below kept temporarily so any
+   stray `data-tooltip` attribute still renders something — JSX has
+   been migrated to the <Tooltip> component, so these are dead in
+   practice and can be removed in a follow-up sweep. */
+.wiki-foot-link[data-tooltip] {
+  /* `position: relative` already declared above so the absolutely
+     positioned tooltip pseudo-elements anchor to this button. */
+}
+.wiki-foot-link[data-tooltip]:hover::after,
+.wiki-foot-link[data-tooltip]:focus-visible::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 9px);
+  right: -4px;
+  width: max-content;
+  max-width: 280px;
+  padding: 9px 11px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  animation: wiki-tooltip-fade 140ms ease-out;
+}
+/* Small arrow tail pointing from the bubble down at the button —
+   reuses two borders rotated 45° to inherit the bubble's outline
+   without manual SVG. */
+.wiki-foot-link[data-tooltip]:hover::before,
+.wiki-foot-link[data-tooltip]:focus-visible::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 5px);
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  background: var(--bg-elev-2);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
+  z-index: 101;
+  pointer-events: none;
+  animation: wiki-tooltip-fade 140ms ease-out;
+}
+@keyframes wiki-tooltip-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* The arrow needs its own keyframes because it already has a
+   rotate(45deg) baseline; we don't want translateY there or the
+   rotate axis fights with the lift. Override with a no-transform
+   variant. */
+.wiki-foot-link[data-tooltip]:hover::before,
+.wiki-foot-link[data-tooltip]:focus-visible::before {
+  animation: wiki-tooltip-arrow-fade 140ms ease-out;
+}
+@keyframes wiki-tooltip-arrow-fade {
+  from {
+    opacity: 0;
+    transform: rotate(45deg) translate(-2px, -2px);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(45deg);
+  }
+}
+.wiki-empty {
+  padding: 16px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.wiki-loading {
+  padding: 16px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.wiki-error {
+  margin: 12px 12px 0;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border));
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--danger) 90%, white);
+  font-size: 11.5px;
+}
+
+/* ---- Page modal (full-screen drawer, mirrors Settings chrome) ---- */
+.wiki-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+.wiki-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.wiki-overlay-card {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  margin: 0;
+  overflow: hidden;
+}
+.wiki-page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 32px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.wiki-back-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.wiki-back-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+.wiki-page-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Path takes whatever room is left after the back button + actions
+     so the actions hug the right edge of the header. */
+  flex: 1;
+}
+/* Tiny accent dot next to the path when the draft has unsaved
+   changes. Catches the eye without yelling. */
+.wiki-page-dirty {
+  color: var(--accent);
+  font-weight: 700;
+}
+.wiki-page-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.wiki-page-action-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+.wiki-page-action-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+.wiki-page-action-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Primary save action — solid accent fill so it reads as the default
+   commit button when the draft is dirty. */
+.wiki-page-action-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+}
+.wiki-page-action-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: var(--accent);
+}
+.wiki-page-action-btn.primary:disabled {
+  opacity: 0.45;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  border-color: transparent;
+}
+.wiki-page-save-error {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--danger) 85%, white);
+  font-weight: 600;
+}
+.wiki-page-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 48px 64px;
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+}
+/* Edit-mode wrapper — fills the modal body so CodeMirror has a real
+   height to stretch into. Drops the read-mode horizontal padding
+   since CM brings its own gutter / line-number whitespace. */
+.wiki-page-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: -24px -48px -64px;
+  border-top: 1px solid var(--border);
+  background: #0c0e12;
+}
+.wiki-page-editor > * {
+  flex: 1;
+  min-height: 0;
+}
+.wiki-page-editor .cm-editor {
+  height: 100%;
+}
+.wiki-page-editor .cm-scroller {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+/* Internal wiki link — clickable, accent-coloured, distinguishable
+   from external links (which open in browser). Underline-on-hover
+   only so the prose isn't visually noisy. */
+.wiki-link {
+  color: var(--accent-2);
+  text-decoration: none;
+  border-bottom: 1px dashed
+    color-mix(in srgb, var(--accent-2) 40%, transparent);
+  cursor: pointer;
+}
+.wiki-link:hover {
+  border-bottom-style: solid;
+  color: color-mix(in srgb, var(--accent-2) 90%, white);
 }
 
 /* ───────────────────────────────────────────────────────────────────

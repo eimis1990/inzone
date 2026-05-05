@@ -13,6 +13,7 @@ import { recordUsage } from './usage';
 import type { IAgentSession, SessionEmit } from './providers/types';
 import { loadSessionState, saveSessionState } from './session-store';
 import { buildSdkMcpMap } from './mcp-config';
+import { buildWikiContextBlock } from './wiki';
 
 // The SDK's concrete message types are elaborate and versioned; we treat
 // incoming messages as unknown and inspect the minimal fields we need.
@@ -209,11 +210,20 @@ export class SessionController implements IAgentSession {
       : [];
     const skillsBlock = buildSkillsPrompt(allowedSkills, !!agent.skills);
 
+    // Phase 3: when the project has an initialized wiki, inject the
+    // schema + curated index into the agent's system prompt. The block
+    // also tells the agent how to USE the wiki (read first, update
+    // inline as it learns, cite sources, don't invent details). Returns
+    // undefined when no wiki exists, in which case agents behave
+    // exactly as before — wiki context is opt-in per project.
+    const wikiBlock = await buildWikiContextBlock(params.cwd);
+
     const systemAppend = [
       leadExtras?.leadPrompt,
       agent.body,
       skillsBlock,
       memoryBlock,
+      wikiBlock,
       coordination,
     ]
       .filter((s): s is string => !!s && s.trim().length > 0)

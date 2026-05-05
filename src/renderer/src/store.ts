@@ -1359,6 +1359,16 @@ export const useStore = create<Store>((set, get) => ({
       void window.cowork.memory.ensure(cwd).catch(() => undefined);
     }
 
+    // The initial agents/skills fetch above ran without a cwd because
+    // we hadn't loaded the saved state yet. Now that cwd is hydrated
+    // from the active session, kick off a second fetch so any
+    // project-scoped agents (`<cwd>/.claude/agents/`) actually appear
+    // in the sidebar at first paint instead of "sometime later when I
+    // click around" (the current symptom). Cheap; one IPC round trip.
+    if (cwd) {
+      void get().refreshAgents();
+    }
+
     // Watch for agent/skill file changes.
     window.cowork.agents.onWatch(() => {
       void get().refreshAgents();
@@ -2711,14 +2721,20 @@ export const useStore = create<Store>((set, get) => ({
   closeEditor: () => set({ editor: null, editorError: undefined }),
 
   saveEditor: async () => {
-    const { editor } = get();
+    const { editor, cwd } = get();
     if (!editor) return;
     set({ editorSaving: true, editorError: undefined });
     try {
+      // Attach the active project's cwd so the main process can write
+      // new project-scoped agents/skills into `<cwd>/.claude/<kind>/`.
+      // Edits of existing project files don't strictly need this (the
+      // location is derived from `originalFilePath`), but passing it
+      // anyway is harmless and lets the renderer stay agnostic.
+      const draft = { ...editor.draft, projectCwd: cwd ?? undefined };
       if (editor.kind === 'agent') {
-        await window.cowork.agents.save(editor.draft);
+        await window.cowork.agents.save(draft);
       } else {
-        await window.cowork.skills.save(editor.draft);
+        await window.cowork.skills.save(draft);
       }
       await get().refreshAgents();
       set({ editor: null, editorSaving: false });

@@ -564,22 +564,34 @@ export function parsePortFromUrl(url: string): number | null {
  * on the user's PATH. The Workers tab uses this to mark CLI presets
  * as installed / not installed without spawning each binary.
  *
- * We use `command -v <name>` (POSIX) under `/bin/sh -c`, which is
- * cheaper than `which` and works even when /usr/bin/which is missing
- * — the typical pkill case. Empty / whitespace command name returns
- * true (the "Terminal" preset has no command, so it's always
- * available — the login shell itself is always present).
+ * Cross-platform implementation:
+ *   - macOS / Linux: `command -v <name>` under `/bin/sh -c` — POSIX,
+ *     cheap, no dependency on /usr/bin/which.
+ *   - Windows: `where <name>` via cmd.exe — built-in since Windows
+ *     Server 2003 / Windows 7, returns 0 when found, 1 otherwise.
+ *     `which` from Git Bash also works but `where` ships with the
+ *     OS so it's the safer choice.
  *
- * PATH augmentation mirrors `gh-cli.ts`: Electron launched outside a
- * login shell doesn't inherit Homebrew's bin paths, so we splice
- * `/opt/homebrew/bin` and `/usr/local/bin` in front. Otherwise tools
- * users definitely have installed (`claude`, `aider`, ...) would
- * spuriously show as missing.
+ * The previous implementation hard-coded `/bin/sh` which doesn't
+ * exist on Windows, so every probe threw and returned false — every
+ * CLI permanently showed as "not installed", even right after the
+ * user `npm install -g`'d it. This branch fixes that.
+ *
+ * Empty / whitespace command name returns true (the "Terminal" preset
+ * has no command, so it's always available — the login shell itself
+ * is always present).
+ *
+ * PATH augmentation: Electron launched outside a login shell doesn't
+ * inherit Homebrew's bin paths on macOS, and on Windows it doesn't
+ * always include the npm global folder. We splice the platform's
+ * common install dirs in front so tools the user definitely has
+ * installed don't spuriously show as missing.
  */
 export async function checkCommandsAvailable(
   commands: string[],
 ): Promise<Record<string, boolean>> {
   const out: Record<string, boolean> = {};
+  const isWindows = process.platform === 'win32';
   const augmentedPath = augmentPath(process.env.PATH ?? '');
   await Promise.all(
     commands.map(async (raw) => {
@@ -589,11 +601,24 @@ export async function checkCommandsAvailable(
         return;
       }
       try {
-        await execp(`command -v ${shEscape(cmd)} >/dev/null 2>&1`, {
-          timeout: 2000,
-          env: { ...process.env, PATH: augmentedPath },
-          shell: '/bin/sh',
-        });
+        if (isWindows) {
+          // `where <name>` exits 0 when the command resolves, 1 when
+          // not. Quoting protects against names with spaces (none in
+          // our preset list, but defensive).
+          await execp(`where ${winQuote(cmd)}`, {
+            timeout: 2500,
+            env: { ...process.env, PATH: augmentedPath },
+            // Default shell on Windows is cmd.exe — explicit for clarity.
+            shell: process.env.ComSpec || 'cmd.exe',
+            windowsHide: true,
+          });
+        } else {
+          await execp(`command -v ${shEscape(cmd)} >/dev/null 2>&1`, {
+            timeout: 2000,
+            env: { ...process.env, PATH: augmentedPath },
+            shell: '/bin/sh',
+          });
+        }
         out[raw] = true;
       } catch {
         out[raw] = false;
@@ -608,8 +633,47 @@ function shEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
-/** Add Homebrew + /usr/local/bin to PATH so we find user-installed CLIs. */
+/** Quote for cmd.exe — wraps in double quotes and escapes inner doubles.
+ *  Sufficient for our preset command names (no shell metacharacters). */
+function winQuote(s: string): string {
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Splice the platform's common install directories into PATH so the
+ * probe finds tools regardless of how Electron was launched. macOS
+ * Electron processes don't inherit a login shell's PATH (so Homebrew
+ * paths are missing); Windows Electron usually inherits a sensible
+ * PATH but we still nudge in the npm-global folder for safety.
+ */
 function augmentPath(existing: string): string {
+  const isWindows = process.platform === 'win32';
+  if (isWindows) {
+    const sep = ';';
+    const extras: string[] = [];
+    // npm's global prefix (where `npm install -g` puts shims) — usually
+    // %AppData%\npm. Without it, tools just installed via npm aren't
+    // visible to a probe that only inherits the system PATH.
+    if (process.env.AppData) {
+      extras.push(path.join(process.env.AppData, 'npm'));
+    }
+    // pip's user-scripts folder for `pip install --user`.
+    if (process.env.AppData) {
+      extras.push(
+        path.join(
+          process.env.AppData,
+          'Python',
+          'Scripts',
+        ),
+      );
+    }
+    const parts = existing.split(sep).filter(Boolean);
+    for (const ex of extras) {
+      if (!parts.includes(ex)) parts.unshift(ex);
+    }
+    return parts.join(sep);
+  }
+  // macOS / Linux — Homebrew + /usr/local/bin in front.
   const extras = ['/opt/homebrew/bin', '/usr/local/bin'];
   const parts = existing.split(':').filter(Boolean);
   for (const ex of extras) {

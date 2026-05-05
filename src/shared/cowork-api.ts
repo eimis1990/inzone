@@ -16,6 +16,8 @@ import type {
   PRDraft,
   PrDetail,
   PrSummary,
+  WikiPageMeta,
+  WikiStatus,
   ReviewHunk,
   ReviewState,
   SessionEvent,
@@ -29,6 +31,7 @@ import type {
   WindowState,
   Workspace,
 } from './types';
+import type { Platform } from './worker-presets';
 
 /**
  * Result of asking main for the credential to start an ElevenLabs
@@ -165,6 +168,15 @@ export interface CoworkApi {
     checkCommands(args: {
       commands: string[];
     }): Promise<Record<string, boolean>>;
+    /**
+     * Synchronous host platform getter. Returns one of the standard
+     * Node platform values ('darwin', 'win32', 'linux', ...). The
+     * renderer uses this to pick platform-specific install commands
+     * (Workers tab) and any other UX that branches on OS. We use the
+     * shared `Platform` alias so the renderer-side build doesn't
+     * need `@types/node`.
+     */
+    platform(): Platform;
   };
   /**
    * Diff Review + PR Workflow APIs. Surfaces git diff inspection plus
@@ -371,6 +383,27 @@ export interface CoworkApi {
     checkLogs(cwd: string, runId: string, lines?: number): Promise<string>;
     /** Boolean: is gh installed AND authenticated for this repo? */
     available(cwd: string): Promise<boolean>;
+  };
+  wiki: {
+    /** Probe whether <cwd>/.inzone/wiki/ is set up. */
+    status(cwd: string): Promise<WikiStatus>;
+    /** Idempotent first-run init: create the starter folder, schema,
+     *  and skeleton pages. Returns the new status. */
+    init(cwd: string): Promise<WikiStatus>;
+    /** List every page (excluding cache) for the sidebar tree. */
+    listPages(cwd: string): Promise<WikiPageMeta[]>;
+    /** Read one page's full markdown contents. */
+    readPage(cwd: string, relPath: string): Promise<string>;
+    /** Create or overwrite a page. */
+    writePage(
+      cwd: string,
+      relPath: string,
+      content: string,
+    ): Promise<{ ok: true }>;
+    /** Append a chronological entry to log.md. */
+    appendLog(cwd: string, entry: string): Promise<{ ok: true }>;
+    /** Remove a page. Refuses to delete the schema file. */
+    deletePage(cwd: string, relPath: string): Promise<{ ok: true }>;
   };
   state: {
     get(): Promise<AppState>;

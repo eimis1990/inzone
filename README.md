@@ -104,6 +104,14 @@ In-app browser for localhost. INZONE auto-detects URLs printed by agents *and* b
   <img src="docs/screenshots/browser-preview.png" alt="In-app browser preview window" />
 </p>
 
+### Project Wiki — LLM-Maintained Knowledge Base
+
+A persistent, agent-editable wiki that lives at `.inzone/wiki/` inside your project (committed to git, shared with the team). Inspired by Andrej Karpathy's "LLM Wiki" pattern. One click initialises a starter scaffold (architecture, glossary, gotchas, decisions, conventions) plus a schema file that defines the conventions agents must follow. **Scan project** drops a structured ingest prompt into the focused agent so it populates the pages from your real source. After that, every agent session automatically gets the schema + curated index injected into its system prompt, plus instructions to update pages as it learns — edits show up as visible Write/Edit tool calls in the transcript. **Lint** audits Sources cites, flags stale / orphan / broken-wikilink pages. A built-in markdown editor and an activity dashboard (page count, recent ingests, recent edits) round out the loop.
+
+<p align="center">
+  <img src="docs/screenshots/wiki-feature.png" alt="Project wiki sidebar with page tree, dashboard strip, and the in-app markdown viewer" />
+</p>
+
 ### Voice Agent
 
 Talk to a dedicated voice agent (powered by ElevenLabs Conversational AI) that drives the rest of INZONE. Tap the mic in the sidebar, ask in plain English — *"spin up a frontend agent on this folder"* — and it calls real INZONE actions: switch projects, run agents, send messages to specific panes, set Lead, close panes. A three-slide setup wizard walks first-time users through getting it configured.

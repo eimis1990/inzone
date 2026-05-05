@@ -35,6 +35,26 @@ export interface WorkerPreset {
   command: string;
 }
 
+/**
+ * Shadow of `NodeJS.Platform` for the renderer side, which doesn't
+ * pull in `@types/node`. Using this alias instead of `NodeJS.Platform`
+ * keeps the same string set without making the shared module require
+ * a Node typings dependency. Update if Node ever adds new values
+ * (rare).
+ */
+export type Platform =
+  | 'aix'
+  | 'android'
+  | 'cygwin'
+  | 'darwin'
+  | 'freebsd'
+  | 'haiku'
+  | 'linux'
+  | 'netbsd'
+  | 'openbsd'
+  | 'sunos'
+  | 'win32';
+
 export const WORKER_PRESETS: WorkerPreset[] = [
   // Descriptions are deliberately single-line. The card UI clips
   // overflow with ellipsis but the source string sets the tone —
@@ -82,22 +102,44 @@ export function findWorkerPreset(
 /**
  * Best-guess install command for each CLI preset, surfaced by the
  * Workers tab when the user clicks a not-installed preset. We pick
- * the canonical install path from each tool's docs at the time of
- * writing; users on different stacks can adapt. The plain Terminal
- * preset is always available, so it isn't listed here.
+ * a command that works on the user's actual platform — brew is
+ * mac-only, so suggesting `brew install …` on Windows or Linux just
+ * makes the install fail confusingly. For Claude Code we ship the
+ * npm path everywhere (it's an official cross-platform distribution
+ * that also avoids requiring Homebrew on macOS, which not everyone
+ * has). The plain Terminal preset is always available, so it isn't
+ * listed here.
+ *
+ * `platform` is passed in by the caller (renderer reads it from
+ * `window.cowork.system.platform()` or similar). Defaults to the
+ * Unix command set since "best effort" is better than "no
+ * suggestion" if the caller forgets.
  */
-export function installCommandFor(id: string): string | undefined {
+export function installCommandFor(
+  id: string,
+  // Currently every command we suggest is cross-platform, so we don't
+  // branch on `platform` yet — but it's kept on the signature so the
+  // call site (and future per-OS variants like apt / scoop / winget)
+  // stay easy to add without changing the API. The `_` prefix tells
+  // both TypeScript's `noUnusedParameters` and most lint configs that
+  // the parameter is intentionally unused for now.
+  _platform: Platform = 'linux',
+): string | undefined {
   switch (id) {
     case 'aider':
       // Aider is distributed via PyPI — `aider-chat` is the package
-      // name; it installs an `aider` binary on PATH.
+      // name; it installs an `aider` binary on PATH. `pip` works on
+      // every platform that has Python; for Python 3.x the binary is
+      // sometimes `pip3` — we go with `pip` since most modern setups
+      // alias it. (Users on `pip3`-only setups can adjust.)
       return 'pip install aider-chat';
     case 'claude-code':
-      // Anthropic recommends Homebrew on macOS; their docs also
-      // point to a curl installer for other platforms.
-      return 'brew install anthropics/cli/claude';
+      // Claude Code ships to npm as @anthropic-ai/claude-code and
+      // works the same on macOS / Windows / Linux. We previously
+      // recommended brew, which failed for Windows users entirely.
+      return 'npm install -g @anthropic-ai/claude-code';
     case 'codex':
-      // OpenAI's Codex CLI is on npm.
+      // OpenAI's Codex CLI is on npm — npm works cross-platform.
       return 'npm install -g @openai/codex';
     case 'gemini':
       // Google's Gemini CLI is also on npm.

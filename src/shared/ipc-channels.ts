@@ -114,6 +114,18 @@ export const IPC = {
   PR_CHECK_LOGS: 'pr:checkLogs',
   PR_AVAILABLE: 'pr:available',
 
+  // LLM Wiki — persistent project knowledge base under
+  // <cwd>/.inzone/wiki/. Init creates the starter skeleton + schema
+  // file; the rest are CRUD over the wiki tree, with hard safety
+  // guards in src/main/wiki.ts that reject any path outside the root.
+  WIKI_STATUS: 'wiki:status',
+  WIKI_INIT: 'wiki:init',
+  WIKI_LIST_PAGES: 'wiki:listPages',
+  WIKI_READ_PAGE: 'wiki:readPage',
+  WIKI_WRITE_PAGE: 'wiki:writePage',
+  WIKI_APPEND_LOG: 'wiki:appendLog',
+  WIKI_DELETE_PAGE: 'wiki:deletePage',
+
   // Persistence
   STATE_GET: 'state:get',
   STATE_SAVE_WINDOW: 'state:saveWindow',

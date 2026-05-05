@@ -218,13 +218,40 @@ function safeFileName(name: string): string {
   return trimmed;
 }
 
-function scopeRoot(scope: 'user' | 'project', kind: 'agents' | 'skills'): string {
-  if (scope === 'project') {
-    throw new Error(
-      'Editing project-scoped definitions is not supported yet; only user scope.',
-    );
+/**
+ * Resolve the on-disk folder where a save should land. User scope is
+ * easy — always `~/.claude/<kind>/`. Project scope is location-aware:
+ *
+ *   - When editing an existing project file (`originalFilePath`
+ *     set), we write back to the same folder. Tweaks to color /
+ *     emoji / body all stay co-located with the rest of the
+ *     project's `.claude/<kind>/` files.
+ *   - When creating a new project file (no `originalFilePath`), we
+ *     need an explicit `projectCwd` so we know which project's
+ *     `.claude/<kind>/` to drop the file in. The renderer passes
+ *     this from its current `cwd` state.
+ *
+ * Throws when project scope is requested but neither hint is set —
+ * that's a renderer bug we want loud.
+ */
+function scopeRoot(
+  scope: 'user' | 'project',
+  kind: 'agents' | 'skills',
+  hints?: { originalFilePath?: string; projectCwd?: string },
+): string {
+  if (scope === 'user') {
+    return kind === 'agents' ? USER_AGENTS_DIR : USER_SKILLS_DIR;
   }
-  return kind === 'agents' ? USER_AGENTS_DIR : USER_SKILLS_DIR;
+  // Project scope.
+  if (hints?.originalFilePath) {
+    return path.dirname(hints.originalFilePath);
+  }
+  if (hints?.projectCwd) {
+    return path.join(hints.projectCwd, '.claude', kind);
+  }
+  throw new Error(
+    'Project-scoped save requires either an existing file path or the active project cwd.',
+  );
 }
 
 function serializeAgent(draft: AgentDraft): string {
@@ -243,7 +270,10 @@ function serializeAgent(draft: AgentDraft): string {
 
 export async function saveAgent(draft: AgentDraft): Promise<AgentDef> {
   const name = safeFileName(draft.name);
-  const root = scopeRoot(draft.scope, 'agents');
+  const root = scopeRoot(draft.scope, 'agents', {
+    originalFilePath: draft.originalFilePath,
+    projectCwd: draft.projectCwd,
+  });
   await fs.mkdir(root, { recursive: true });
   const targetPath = path.join(root, `${name}.md`);
 
@@ -269,11 +299,27 @@ export async function saveAgent(draft: AgentDraft): Promise<AgentDef> {
   return saved;
 }
 
+/**
+ * Delete an agent file. Allowed locations:
+ *   - `~/.claude/agents/` (user scope, any project)
+ *   - any `<project>/.claude/agents/` (project scope) — we don't
+ *     hard-restrict to a specific project root, just verify the
+ *     path's parent is named `.claude/agents` so a typo'd file path
+ *     can't reach into the user's home or system folders.
+ */
 export async function deleteAgent(filePath: string): Promise<void> {
-  // Refuse anything outside the expected roots, as a small safety net.
   const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(path.resolve(USER_AGENTS_DIR))) {
-    throw new Error('Refusing to delete outside ~/.claude/agents.');
+  if (resolved.startsWith(path.resolve(USER_AGENTS_DIR))) {
+    await fs.unlink(resolved);
+    return;
+  }
+  // Project scope check: parent dir must be `<...>/.claude/agents`.
+  const parent = path.dirname(resolved);
+  const claudeMarker = path.join('.claude', 'agents');
+  if (!parent.endsWith(claudeMarker)) {
+    throw new Error(
+      "Refusing to delete: path isn't inside ~/.claude/agents or a project's .claude/agents folder.",
+    );
   }
   await fs.unlink(resolved);
 }
@@ -286,7 +332,10 @@ function serializeSkill(draft: SkillDraft): string {
 
 export async function saveSkill(draft: SkillDraft): Promise<SkillDef> {
   const name = safeFileName(draft.name);
-  const root = scopeRoot(draft.scope, 'skills');
+  const root = scopeRoot(draft.scope, 'skills', {
+    originalFilePath: draft.originalFilePath,
+    projectCwd: draft.projectCwd,
+  });
   await fs.mkdir(root, { recursive: true });
   const targetDir = path.join(root, name);
   const targetPath = path.join(targetDir, 'SKILL.md');

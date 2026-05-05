@@ -20,6 +20,8 @@ import type {
   PrDetail,
   PrSummary,
   ReviewHunk,
+  WikiPageMeta,
+  WikiStatus,
   ReviewState,
   SessionEvent,
   SkillDef,
@@ -128,6 +130,12 @@ const api: CoworkApi = {
       args: { commands: string[] },
     ): Promise<Record<string, boolean>> =>
       ipcRenderer.invoke(IPC.SYSTEM_CHECK_COMMANDS, args),
+    /** Synchronous getter for the host platform. The renderer uses
+     *  this to pick platform-appropriate install commands (e.g.
+     *  Workers tab "not installed" hints — `brew` on mac doesn't
+     *  exist on Windows). Cheap to call repeatedly; the value is a
+     *  constant for the process lifetime. */
+    platform: (): NodeJS.Platform => process.platform,
   },
   profile: {
     /** Detect the active Claude auth path (API key vs subscription),
@@ -330,6 +338,38 @@ const api: CoworkApi = {
      *  remote? Drives the inline "install gh" hint. */
     available: (cwd: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC.PR_AVAILABLE, { cwd }),
+  },
+  wiki: {
+    /** Probe whether <cwd>/.inzone/wiki/ is set up. Returns
+     *  initialized=false when the schema file is missing. Cheap. */
+    status: (cwd: string): Promise<WikiStatus> =>
+      ipcRenderer.invoke(IPC.WIKI_STATUS, { cwd }),
+    /** Create the starter wiki structure (idempotent — safe to call
+     *  on an already-initialized wiki). Returns the new status. */
+    init: (cwd: string): Promise<WikiStatus> =>
+      ipcRenderer.invoke(IPC.WIKI_INIT, { cwd }),
+    /** List every page (excluding the cache directory) for the
+     *  sidebar tree. Sorted by path. */
+    listPages: (cwd: string): Promise<WikiPageMeta[]> =>
+      ipcRenderer.invoke(IPC.WIKI_LIST_PAGES, { cwd }),
+    /** Read one page's full markdown contents. Throws on path-escape
+     *  attempts or missing file. */
+    readPage: (cwd: string, relPath: string): Promise<string> =>
+      ipcRenderer.invoke(IPC.WIKI_READ_PAGE, { cwd, relPath }),
+    /** Create or overwrite a page. */
+    writePage: (
+      cwd: string,
+      relPath: string,
+      content: string,
+    ): Promise<{ ok: true }> =>
+      ipcRenderer.invoke(IPC.WIKI_WRITE_PAGE, { cwd, relPath, content }),
+    /** Append an entry to log.md. Convention is `## [date] type | title`. */
+    appendLog: (cwd: string, entry: string): Promise<{ ok: true }> =>
+      ipcRenderer.invoke(IPC.WIKI_APPEND_LOG, { cwd, entry }),
+    /** Remove a page (used by lint to drop orphans). Refuses to
+     *  delete the schema file. */
+    deletePage: (cwd: string, relPath: string): Promise<{ ok: true }> =>
+      ipcRenderer.invoke(IPC.WIKI_DELETE_PAGE, { cwd, relPath }),
   },
   state: {
     get: (): Promise<AppState> => ipcRenderer.invoke(IPC.STATE_GET),

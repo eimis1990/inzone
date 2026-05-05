@@ -525,9 +525,19 @@ function IconButton({
 }
 
 /**
- * Multi Agents / Lead Agent segmented control. The Multi Agents segment
- * has an embedded "Flow" chip that appears only when the project has
- * ≥2 panes — a visual hint that flows are an extension of Multi mode.
+ * Multi Agents / Lead Agent segmented control. Modern variant — the
+ * two segments share a frosted track and a sliding accent thumb that
+ * glides between them when you switch. The "Flow" sub-button lives
+ * just outside the track; it slides in from the left when you're in
+ * Multi Agents mode with ≥2 panes (and slides back out when you flip
+ * to Lead Agent), so the chrome only shows up when it's relevant.
+ *
+ * Why outside the track instead of nested in the active pill: keeping
+ * the segmented control symmetrical (two equal segments, one sliding
+ * thumb) makes the mode-toggle interaction predictable, and gives the
+ * Flow affordance its own room to breathe. The two read as related
+ * (gap stays tight, both share the same height + radius) without
+ * Flow stealing the pill's geometry mid-animation.
  */
 function ModeSwitch() {
   const mode = useStore((s) => s.windowMode);
@@ -550,35 +560,59 @@ function ModeSwitch() {
     if (s.leadPaneId) n += 1;
     return n;
   });
-  const hasFlowChip = mode === 'multi' && paneCount >= 2;
+  // Flow is only meaningful in Multi mode and when at least two panes
+  // exist. We render the chip whenever those conditions hold; CSS
+  // handles the slide-in/out so the transition is always smooth.
+  const showFlow = mode === 'multi' && paneCount >= 2;
 
   return (
-    <div
-      className="mode-switch mode-switch-large"
-      role="tablist"
-      aria-label="Window mode"
-    >
-      <button
-        role="tab"
-        aria-selected={mode === 'multi'}
-        className={'mode-btn' + (mode === 'multi' ? ' active' : '')}
-        onClick={() => setWindowMode('multi')}
-        title="Multi Agents mode — each pane runs independently"
+    <div className="mode-switch-shell" aria-label="Window mode">
+      <div
+        className={'mode-switch-track-v2 mode-' + mode}
+        role="tablist"
+        aria-label="Window mode"
       >
-        <MultiAgentsIcon size={14} stroke={2} />
-        <span>Multi Agents</span>
-        {hasFlowChip && <FlowChip />}
-      </button>
-      <button
-        role="tab"
-        aria-selected={mode === 'lead'}
-        className={'mode-btn' + (mode === 'lead' ? ' active' : '')}
-        onClick={() => setWindowMode('lead')}
-        title="Lead Agent mode — one orchestrator drives the sub-agents"
+        {/* Sliding accent thumb — its position is purely a function of
+            the parent's `mode-multi` / `mode-lead` class, so the
+            transition runs entirely in CSS without any JS measurement.
+            Note: Lead is the LEFT segment now, Multi is on the RIGHT,
+            sitting closer to the Flow slot since Flow is an extension
+            of Multi mode — visual hint that the two belong together. */}
+        <span className="mode-switch-thumb" aria-hidden />
+        <button
+          role="tab"
+          aria-selected={mode === 'lead'}
+          className={'mode-segment' + (mode === 'lead' ? ' active' : '')}
+          onClick={() => setWindowMode('lead')}
+          title="Lead Agent mode — one orchestrator drives the sub-agents"
+        >
+          <BotIcon size={14} stroke={2} />
+          <span>Lead Agent</span>
+        </button>
+        <button
+          role="tab"
+          aria-selected={mode === 'multi'}
+          className={'mode-segment' + (mode === 'multi' ? ' active' : '')}
+          onClick={() => setWindowMode('multi')}
+          title="Multi Agents mode — each pane runs independently"
+        >
+          <MultiAgentsIcon size={14} stroke={2} />
+          <span>Multi Agents</span>
+        </button>
+      </div>
+
+      {/* Flow slot — animates max-width / opacity / translateX so it
+          slides in from the left of its slot when Multi Agents mode is
+          active (with ≥2 panes), and slides back out otherwise. We
+          render the chip unconditionally and let the slot's CSS hide
+          it; that way the FlowChip's store subscriptions don't churn
+          on every mode switch. */}
+      <div
+        className={'mode-flow-slot' + (showFlow ? ' visible' : '')}
+        aria-hidden={!showFlow}
       >
-        <BotIcon size={14} stroke={2} />
-        <span>Lead Agent</span>
-      </button>
+        <FlowChip />
+      </div>
     </div>
   );
 }

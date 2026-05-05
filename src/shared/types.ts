@@ -451,6 +451,13 @@ export interface AgentDraft {
   body: string;
   scope: 'user' | 'project';
   originalFilePath?: string;
+  /** When creating a NEW project-scoped agent (no originalFilePath
+   *  to derive the folder from), the renderer must pass the active
+   *  project's cwd so the main process knows where to write
+   *  `<cwd>/.claude/agents/<name>.md`. Ignored for user-scoped saves
+   *  and for edits of existing project agents (where the location is
+   *  inferred from `originalFilePath`). */
+  projectCwd?: string;
 }
 
 /**
@@ -463,6 +470,10 @@ export interface SkillDraft {
   body: string;
   scope: 'user' | 'project';
   originalFilePath?: string;
+  /** Same as AgentDraft.projectCwd — required only when creating a
+   *  NEW project-scoped skill where there's no original path to
+   *  derive the folder from. */
+  projectCwd?: string;
 }
 
 /**
@@ -852,4 +863,91 @@ export interface PrInbox {
    *  UI uses this to render an inline "install gh" / "gh auth login"
    *  hint instead of an opaque error. */
   notAvailable?: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  LLM Wiki — Karpathy-style persistent project knowledge base
+//
+//  Lives at <project>/.inzone/wiki/ — a folder of markdown pages the
+//  LLM owns and maintains. Three layers:
+//    1. Raw sources — the codebase itself (immutable from wiki's POV).
+//    2. The wiki    — markdown pages, cross-linked with [[wikilinks]],
+//                     each page lists its provenance (cited source
+//                     files / commits) so we can detect staleness.
+//    3. The schema  — wiki-schema.md, the contract that turns the LLM
+//                     into a disciplined wiki maintainer.
+//
+//  See src/main/wiki.ts for file ops + safety guards.
+// ─────────────────────────────────────────────────────────────────────
+
+/** One page in the wiki — metadata only (no body). Returned by the
+ *  list-pages call so the UI can render a tree without loading every
+ *  page's content. */
+export interface WikiPageMeta {
+  /** Path relative to the wiki root (e.g. "decisions/api-versioning.md"
+   *  or "log.md"). Always uses forward slashes regardless of OS. */
+  path: string;
+  /** Just the filename (e.g. "api-versioning.md"). */
+  name: string;
+  /** Size in bytes, for "this page is huge" hints. */
+  bytes: number;
+  /** ISO timestamp of last filesystem mtime. */
+  modifiedAt: string;
+  /** True for the schema page itself, so the UI can show it
+   *  differently (it's not a content page; it's the contract). */
+  isSchema: boolean;
+}
+
+/** Result of initializing or probing a wiki. Always returned — the UI
+ *  decides whether to show "Welcome, set up the wiki?" or live data
+ *  based on `initialized`. */
+export interface WikiStatus {
+  initialized: boolean;
+  /** Absolute path to the wiki root, even when not yet initialized
+   *  — the UI shows it as a hint ("will be created at …"). */
+  rootPath: string;
+  /** Total page count (excluding the cache directory). */
+  pageCount: number;
+  /** ISO timestamp of the most-recent page mtime, for "last updated"
+   *  display. Undefined when there are no pages yet. */
+  lastUpdatedAt?: string;
+  /** True once log.md has at least one `ingest`-typed entry beyond
+   *  the initial bootstrap marker — i.e. an agent has actually
+   *  populated the wiki with grounded content at least once. The UI
+   *  uses this to retire the prominent "Scan project" CTA: after the
+   *  first real ingest, inline auto-update from agent turns keeps the
+   *  wiki current, so the big button becomes redundant chrome.
+   *  False before the first ingest, false when the wiki isn't
+   *  initialized at all. */
+  hasIngested: boolean;
+  /** ISO date (YYYY-MM-DD) of the most-recent `ingest` entry in
+   *  log.md, parsed from the entry header. Undefined when no ingest
+   *  has happened yet. Drives the dashboard strip's "last ingest"
+   *  field. */
+  lastIngestAt?: string;
+  /** Most-recent log entries (any type), newest first. Capped at
+   *  WIKI_RECENT_ENTRIES_MAX in the main process so the IPC payload
+   *  stays bounded as the log grows. The dashboard uses these to
+   *  render the expanded "recent activity" panel without a second
+   *  IPC round trip. */
+  recentEntries: WikiLogEntry[];
+}
+
+/** One parsed entry from log.md. The schema asks the LLM to format
+ *  entries with a header line `## [YYYY-MM-DD] <type> | <title>`;
+ *  `body` collects everything between this entry's header and the
+ *  next, with surrounding whitespace trimmed. We don't lex sub-bullets
+ *  or otherwise structure the body — the dashboard renders it as
+ *  pre-wrapped text. */
+export interface WikiLogEntry {
+  /** YYYY-MM-DD as it appeared in the header, trimmed. */
+  date: string;
+  /** init | ingest | edit | lint | query | decide | ... */
+  type: string;
+  /** Short title from after the `|` separator. */
+  title: string;
+  /** Body lines following the header (excluding sub-headers
+   *  belonging to the same entry are NOT split — body keeps the
+   *  whole block verbatim). Trimmed; may be empty. */
+  body: string;
 }

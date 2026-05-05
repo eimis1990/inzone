@@ -83,6 +83,15 @@ import {
   listPullRequests,
 } from './pr';
 import {
+  appendLogEntry,
+  deletePage as wikiDeletePage,
+  getWikiStatus,
+  initWiki,
+  listAllPages as listWikiPages,
+  readPage as readWikiPage,
+  writePage as writeWikiPage,
+} from './wiki';
+import {
   applyStoredApiKey,
   clearStoredApiKey,
   getClaudeAuthInfo,
@@ -187,9 +196,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC.SESSION_START,
     async (event, params: StartSessionParams) => {
+      // Pass `params.cwd` to both listers so project-scoped definitions
+      // (`<cwd>/.claude/agents/...`, `<cwd>/.claude/skills/...`) are
+      // visible to the lookup. Without this, the renderer can SEE a
+      // project agent in the sidebar (its lister gets cwd) but
+      // assigning the agent to a pane fails with "Agent not found"
+      // because this handler was scanning only the user-scope folder.
       const [agents, skills] = await Promise.all([
-        listAgents(),
-        listSkills(),
+        listAgents(params.cwd),
+        listSkills(params.cwd),
       ]);
       const agent = agents.find((a) => a.name === params.agentName);
       if (!agent) {
@@ -227,7 +242,10 @@ export function registerIpcHandlers(): void {
             windowId: winId,
             leadPaneId: params.paneId,
             cwd: params.cwd,
-            getAvailableAgents: () => listAgents(),
+            // Same project-scope inclusion as session start — without
+            // cwd, the Lead's spawn_agent tool would refuse to spawn
+            // any project-scoped agent ("Agent not found").
+            getAvailableAgents: () => listAgents(params.cwd),
           });
           leadPrompt = buildLeadPrompt(agents);
         }
@@ -442,6 +460,46 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle(IPC.PR_AVAILABLE, async (_e, args: { cwd: string }) =>
     isGhAvailable(args.cwd),
+  );
+
+  // -- LLM Wiki -------------------------------------------------------------
+  // Storage layer for the project's persistent knowledge base. The
+  // renderer + agents drive ingest/query/lint workflows; this layer
+  // is just safe CRUD over <cwd>/.inzone/wiki/.
+  ipcMain.handle(IPC.WIKI_STATUS, async (_e, args: { cwd: string }) =>
+    getWikiStatus(args.cwd),
+  );
+  ipcMain.handle(IPC.WIKI_INIT, async (_e, args: { cwd: string }) =>
+    initWiki(args.cwd),
+  );
+  ipcMain.handle(IPC.WIKI_LIST_PAGES, async (_e, args: { cwd: string }) =>
+    listWikiPages(args.cwd),
+  );
+  ipcMain.handle(
+    IPC.WIKI_READ_PAGE,
+    async (_e, args: { cwd: string; relPath: string }) =>
+      readWikiPage(args.cwd, args.relPath),
+  );
+  ipcMain.handle(
+    IPC.WIKI_WRITE_PAGE,
+    async (_e, args: { cwd: string; relPath: string; content: string }) => {
+      await writeWikiPage(args.cwd, args.relPath, args.content);
+      return { ok: true } as const;
+    },
+  );
+  ipcMain.handle(
+    IPC.WIKI_APPEND_LOG,
+    async (_e, args: { cwd: string; entry: string }) => {
+      await appendLogEntry(args.cwd, args.entry);
+      return { ok: true } as const;
+    },
+  );
+  ipcMain.handle(
+    IPC.WIKI_DELETE_PAGE,
+    async (_e, args: { cwd: string; relPath: string }) => {
+      await wikiDeletePage(args.cwd, args.relPath);
+      return { ok: true } as const;
+    },
   );
 
   // -- Profile (Settings → Profile) -----------------------------------------

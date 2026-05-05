@@ -12,13 +12,14 @@ import { useStore } from '../store';
 import { SessionsList } from './SessionsList';
 import { SidebarFooter } from './SidebarFooter';
 import { VoiceSection } from './VoiceSection';
+import { WikiSection } from './WikiSection';
 import {
   WORKER_PRESETS,
   WorkerPresetIcon,
 } from './worker-presets';
 import { installCommandFor } from '@shared/worker-presets';
 
-type SidebarTab = 'sessions' | 'workers' | 'voice';
+type SidebarTab = 'sessions' | 'workers' | 'voice' | 'wiki';
 
 /**
  * Three-tab sidebar: Sessions on top, Workers in the middle slot
@@ -69,23 +70,44 @@ export function AgentSidebar() {
     sessions: useRef<HTMLButtonElement>(null),
     workers: useRef<HTMLButtonElement>(null),
     voice: useRef<HTMLButtonElement>(null),
+    wiki: useRef<HTMLButtonElement>(null),
   };
 
   useLayoutEffect(() => {
     const strip = stripRef.current;
     const target = tabRefs[tab].current;
     if (!strip || !target) return;
-    const stripRect = strip.getBoundingClientRect();
-    const tabRect = target.getBoundingClientRect();
-    strip.style.setProperty(
-      '--tab-indicator-left',
-      `${tabRect.left - stripRect.left}px`,
-    );
-    strip.style.setProperty('--tab-indicator-width', `${tabRect.width}px`);
-    strip.style.setProperty('--tab-indicator-opacity', '1');
-    // The first paint happens before measurements settle, so disable the
-    // transition for that initial set; subsequent tab changes pick up
-    // the transition via CSS.
+    // Prefer the inner content wrapper so the underline width
+    // matches just the icon + label + count, not the full tab
+    // button. Fall back to the button if the wrapper isn't there
+    // (defensive, shouldn't happen in normal renders).
+    const content =
+      target.querySelector<HTMLElement>(':scope > .sidebar-tab-content') ??
+      target;
+    const measure = () => {
+      const stripRect = strip.getBoundingClientRect();
+      const tabRect = content.getBoundingClientRect();
+      // Center the indicator under the content's midpoint and let CSS
+      // pick max(measured-width, min-width). That way tabs without a
+      // count chip (Voice / Wiki) get the same visual underline length
+      // as tabs with a count chip (Projects / Workers) — the line
+      // grows symmetrically out from the content's center instead of
+      // hugging just the icon+label.
+      const centerX = tabRect.left + tabRect.width / 2 - stripRect.left;
+      strip.style.setProperty('--tab-indicator-center', `${centerX}px`);
+      strip.style.setProperty('--tab-indicator-width', `${tabRect.width}px`);
+      strip.style.setProperty('--tab-indicator-opacity', '1');
+    };
+    // Initial measurement on mount + on tab switch.
+    measure();
+    // ResizeObserver tracks the content's size as the label /
+    // count expand or collapse during their CSS transitions. Without
+    // this, the indicator would land at the icon-only width (start
+    // frame) and never re-measure as the label slides into place.
+    // Fires every animation frame the size changes; cheap.
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, sessionsCount, workersCount]);
 
@@ -115,6 +137,13 @@ export function AgentSidebar() {
           label="Voice"
           icon={<TabIconVoice />}
         />
+        <TabButton
+          ref={tabRefs.wiki}
+          active={tab === 'wiki'}
+          onClick={() => setTab('wiki')}
+          label="Wiki"
+          icon={<TabIconWiki />}
+        />
         <div className="sidebar-tabstrip-indicator" aria-hidden />
       </div>
 
@@ -122,6 +151,7 @@ export function AgentSidebar() {
         {tab === 'sessions' && <SessionsList />}
         {tab === 'workers' && <WorkersTab />}
         {tab === 'voice' && <VoiceSection />}
+        {tab === 'wiki' && <WikiSection />}
       </div>
 
       <SidebarFooter />
@@ -140,20 +170,36 @@ interface TabButtonProps {
 }
 const TabButton = forwardRef<HTMLButtonElement, TabButtonProps>(
   function TabButton({ active, onClick, label, count, icon }, ref) {
+    // We always render the label + count and let CSS show/hide them
+    // via max-width + opacity transitions. Mounting/unmounting on
+    // active change would defeat the expand animation — the element
+    // needs to be in the DOM for the transition to start from 0.
     return (
       <button
         ref={ref}
         type="button"
         className={'sidebar-tab' + (active ? ' active' : '')}
         onClick={onClick}
+        // Tooltip on inactive tabs gives label discoverability on
+        // hover. aria-label keeps screen-reader UX consistent.
+        title={active ? undefined : label}
+        aria-label={label}
       >
-        <span className="sidebar-tab-icon" aria-hidden>
-          {icon}
+        {/* Inner content wrapper — sits at content-natural-width
+            so the JS-measured underline indicator matches just the
+            icon+label+count instead of spanning the whole tab
+            button. The wrapper itself has no decoration; the active
+            class on the parent .sidebar-tab still drives all the
+            colour + transition rules. */}
+        <span className="sidebar-tab-content">
+          <span className="sidebar-tab-icon" aria-hidden>
+            {icon}
+          </span>
+          <span className="sidebar-tab-label">{label}</span>
+          {typeof count === 'number' && (
+            <span className="sidebar-tab-count">{count}</span>
+          )}
         </span>
-        <span className="sidebar-tab-label">{label}</span>
-        {typeof count === 'number' && (
-          <span className="sidebar-tab-count">{count}</span>
-        )}
       </button>
     );
   },
@@ -177,6 +223,27 @@ function WorkersTab() {
   const panes = useStore((s) => s.panes);
   const leadPaneId = useStore((s) => s.leadPaneId);
   const openAgentEditor = useStore((s) => s.openAgentEditor);
+  const refreshAgents = useStore((s) => s.refreshAgents);
+  // Tracks an in-flight manual refresh from the section header's
+  // reload button. Disables the button + shows "…" while fetching.
+  // Keeps a hard floor of ~250ms shown so the icon doesn't flicker
+  // for fast IPC calls — feels more deliberate.
+  const [refreshingAgents, setRefreshingAgents] = useState(false);
+  const handleRefreshAgents = useCallback(async () => {
+    if (refreshingAgents) return;
+    setRefreshingAgents(true);
+    const startedAt = Date.now();
+    try {
+      await refreshAgents();
+    } finally {
+      const elapsed = Date.now() - startedAt;
+      const minVisible = 250;
+      if (elapsed < minVisible) {
+        await new Promise((r) => setTimeout(r, minVisible - elapsed));
+      }
+      setRefreshingAgents(false);
+    }
+  }, [refreshAgents, refreshingAgents]);
   const activeAgent = activePaneId ? panes[activePaneId]?.agentName : undefined;
   const activePresetId =
     activePaneId && panes[activePaneId]?.workerKind === 'terminal'
@@ -342,6 +409,8 @@ function WorkersTab() {
           count={sortedAgents.length}
           collapsed={agentsCollapsed}
           onToggle={() => setAgentsCollapsed((v) => !v)}
+          onRefresh={() => void handleRefreshAgents()}
+          refreshing={refreshingAgents}
         />
         {!agentsCollapsed && (
           <>
@@ -489,7 +558,16 @@ function WorkersTab() {
                       !freshInstalled &&
                       preset.command
                     ) {
-                      const installHint = installCommandFor(preset.id);
+                      // Pass the host platform so we surface a Windows-
+                      // friendly install command when the user is on
+                      // Windows (e.g. npm-only tools instead of `brew
+                      // install …`, which would fail with "brew not
+                      // found" on every Windows machine).
+                      const platform = window.cowork.system.platform();
+                      const installHint = installCommandFor(
+                        preset.id,
+                        platform,
+                      );
                       if (!installHint) {
                         // No suggested install we know about; still
                         // tell the user what's missing so they can
@@ -587,39 +665,78 @@ interface WorkerSectionHeaderProps {
   count: number;
   collapsed: boolean;
   onToggle: () => void;
+  /** Optional inline refresh action — rendered as a small reload
+   *  glyph to the right of the count. When clicked, calls `onRefresh`
+   *  and stops propagation so the click doesn't also toggle the
+   *  section. Used on Agents to let the user manually rescan
+   *  `~/.claude/agents/` and `<cwd>/.claude/agents/` without
+   *  restarting the app. Omit for sections that don't need it. */
+  onRefresh?: () => void;
+  /** Disabled flag for the refresh action while a fetch is in flight
+   *  — keeps the user from spamming clicks. */
+  refreshing?: boolean;
 }
 function WorkerSectionHeader({
   title,
   count,
   collapsed,
   onToggle,
+  onRefresh,
+  refreshing,
 }: WorkerSectionHeaderProps) {
   return (
-    <button
-      type="button"
+    <div
       className={
-        'workers-section-header' + (collapsed ? ' collapsed' : '')
+        'workers-section-header' +
+        (collapsed ? ' collapsed' : '') +
+        (onRefresh ? ' has-action' : '')
       }
-      onClick={onToggle}
-      aria-expanded={!collapsed}
     >
-      <span className="workers-section-chevron" aria-hidden>
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+      {/* The toggle is the main click target — we keep it as a real
+          button so keyboard navigation still works. The optional
+          refresh action is a sibling button so it can stop event
+          propagation independently. */}
+      <button
+        type="button"
+        className="workers-section-toggle"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+      >
+        <span className="workers-section-chevron" aria-hidden>
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+        <span className="workers-section-title">{title}</span>
+        <span className="workers-section-count">{count}</span>
+      </button>
+      {onRefresh && (
+        <button
+          type="button"
+          className={
+            'workers-section-refresh' + (refreshing ? ' is-refreshing' : '')
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            onRefresh();
+          }}
+          disabled={refreshing}
+          title="Reload agents from ~/.claude/agents and the project's .claude/agents folder"
+          aria-label="Reload agents"
         >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </span>
-      <span className="workers-section-title">{title}</span>
-      <span className="workers-section-count">{count}</span>
-    </button>
+          {refreshing ? '…' : '⟳'}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -675,6 +792,17 @@ function TabIconVoice() {
       <rect x="9" y="2" width="6" height="12" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0" />
       <line x1="12" y1="18" x2="12" y2="22" />
+    </svg>
+  );
+}
+
+function TabIconWiki() {
+  // Open-book glyph — reads as "knowledge base" without being too
+  // visually busy at 16px. Same stroke weight as the other tab icons.
+  return (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2 6.5C5 5.5 8 5.5 12 6.5C16 5.5 19 5.5 22 6.5V19C19 18 16 18 12 19C8 18 5 18 2 19V6.5Z" />
+      <path d="M12 6.5V19" />
     </svg>
   );
 }
