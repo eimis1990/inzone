@@ -383,6 +383,39 @@ export interface CoworkApi {
     checkLogs(cwd: string, runId: string, lines?: number): Promise<string>;
     /** Boolean: is gh installed AND authenticated for this repo? */
     available(cwd: string): Promise<boolean>;
+    /** v1.5 — Send a PR comment to Haiku for a sanity check before
+     *  the user hands it off to a coding agent. Returns a verdict
+     *  (good / caution / bad) plus a 1-2 sentence reasoning. */
+    validateComment(args: {
+      commentBody: string;
+      location: string;
+      diffHunk?: string;
+    }): Promise<{
+      verdict: 'good' | 'caution' | 'bad';
+      reasoning: string;
+    }>;
+    /** v1.5 — Draft a friendly summary reply for a PR comment after
+     *  the agent made the requested change. Caller passes a snippet
+     *  of the agent's recent transcript so the model can describe
+     *  what was actually done. Returns suggested reply text the user
+     *  can edit before posting. */
+    suggestReply(args: {
+      commentBody: string;
+      location: string;
+      agentSummary: string;
+    }): Promise<string>;
+    /** v1.5 — Post a reply to a PR comment via gh. For review
+     *  comments (inline diff), threads under the original via
+     *  `/pulls/{n}/comments/{id}/replies`. For issue comments, posts
+     *  a new top-level comment via `/issues/{n}/comments`. Returns
+     *  the new comment's GitHub URL. */
+    postReply(args: {
+      cwd: string;
+      prNumber: number;
+      body: string;
+      kind: 'review' | 'issue';
+      reviewCommentId?: string;
+    }): Promise<{ url: string }>;
   };
   wiki: {
     /** Probe whether <cwd>/.inzone/wiki/ is set up. */

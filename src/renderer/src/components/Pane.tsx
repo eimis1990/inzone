@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { PaneId, SessionStatus } from '@shared/types';
 import { getAgentColor } from '@shared/palette';
 import {
@@ -17,6 +18,7 @@ import {
 } from '../attachments';
 import {
   CloseIcon,
+  ExpandIcon,
   MicIcon,
   PaperclipIcon,
   SendIcon,
@@ -318,6 +320,12 @@ export function Pane({ id }: PaneProps) {
   }, [pendingSeed, id, consumePaneSeed]);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | undefined>();
+  // When true, the composer pops out into a fullscreen-ish modal so
+  // the user has real room to write a long message. The modal is
+  // portaled to document.body and shares all state (input,
+  // attachments, submit, attach handlers) with the inline composer
+  // so opening / closing doesn't clobber the draft.
+  const [composerExpanded, setComposerExpanded] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -757,8 +765,203 @@ export function Pane({ id }: PaneProps) {
             <span className="composer-send-label">Send</span>
             <SendIcon size={14} stroke={2} />
           </button>
+          <button
+            type="button"
+            className="composer-expand"
+            onClick={() => setComposerExpanded(true)}
+            disabled={!pane.agentName || flowBlocked}
+            title="Open a larger composer for long messages"
+            aria-label="Expand composer"
+          >
+            <ExpandIcon size={14} stroke={1.75} />
+          </button>
         </div>
       </form>
+      {composerExpanded &&
+        createPortal(
+          <ComposerExpandModal
+            input={input}
+            setInput={setInput}
+            attachments={attachments}
+            removeAttachment={removeAttachment}
+            onPickFile={() => fileInputRef.current?.click()}
+            onPaste={onPaste}
+            placeholder={
+              flowBlocked
+                ? 'Flow is ON — use the Flow board'
+                : pane.agentName
+                  ? 'Message the agent… (⌘⏎ to send)'
+                  : 'Pick an agent first'
+            }
+            disabled={!pane.agentName || flowBlocked}
+            canSend={!!canSend}
+            onSubmit={async () => {
+              await submit();
+              // Auto-close after a successful submit so the user
+              // doesn't have to dismiss the modal manually.
+              if (input.trim() === '' && attachments.length === 0) {
+                setComposerExpanded(false);
+              }
+            }}
+            onClose={() => setComposerExpanded(false)}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+/**
+ * Fullscreen-ish composer popup. Lives in document.body via portal so
+ * it overlays everything (workspace bar, terminal dock, sidebar).
+ *
+ * State sync — input, attachments, and every action handler are
+ * passed in from the parent Pane. Opening the modal doesn't
+ * duplicate state; closing it doesn't lose anything; submitting hits
+ * the same `submit()` that the inline composer uses. The user can
+ * freely toggle between inline + expanded mid-draft.
+ *
+ * Keyboard:
+ *   - Esc closes (without submitting)
+ *   - ⌘/Ctrl + Enter submits (matches the inline composer)
+ */
+function ComposerExpandModal(props: {
+  input: string;
+  setInput: (v: string) => void;
+  attachments: PendingAttachment[];
+  removeAttachment: (id: string) => void;
+  onPickFile: () => void;
+  onPaste: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  placeholder: string;
+  disabled: boolean;
+  canSend: boolean;
+  onSubmit: () => void | Promise<void>;
+  onClose: () => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Esc closes; ⌘⏎ submits. We attach to window so a click-outside
+  // event hasn't moved focus off the textarea before the user hits
+  // the shortcut. preventDefault on Esc to keep it from interfering
+  // with anything else listening (the modal is the topmost layer
+  // when open).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        props.onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [props]);
+
+  // Focus the textarea on open, with the caret at the end so the user
+  // can immediately keep typing where they left off.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
+
+  return (
+    <div
+      className="composer-expand-overlay"
+      role="dialog"
+      aria-modal
+      aria-label="Compose message"
+    >
+      <div
+        className="composer-expand-backdrop"
+        onClick={props.onClose}
+        aria-hidden
+      />
+      <div className="composer-expand-card">
+        <div className="composer-expand-head">
+          <span className="composer-expand-title">Compose message</span>
+          <span className="composer-expand-hint">
+            ⌘⏎ to send · Esc to close
+          </span>
+          <button
+            type="button"
+            className="composer-expand-close"
+            onClick={props.onClose}
+            title="Close (Esc)"
+            aria-label="Close"
+          >
+            <CloseIcon size={14} stroke={2} />
+          </button>
+        </div>
+        <textarea
+          ref={textareaRef}
+          className="composer-expand-textarea"
+          value={props.input}
+          onChange={(e) => props.setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void props.onSubmit();
+            }
+          }}
+          onPaste={props.onPaste}
+          placeholder={props.placeholder}
+          disabled={props.disabled}
+          spellCheck
+        />
+        {props.attachments.length > 0 && (
+          <div className="composer-expand-attachments">
+            {props.attachments.map((a) => (
+              <div
+                key={a.id}
+                className="attachment-chip"
+                title={a.filename}
+              >
+                <img src={a.dataUrl} alt={a.filename} />
+                <button
+                  type="button"
+                  className="attachment-remove"
+                  onClick={() => props.removeAttachment(a.id)}
+                  title="Remove"
+                  aria-label="Remove attachment"
+                >
+                  <CloseIcon size={10} stroke={2.5} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="composer-expand-actions">
+          <button
+            type="button"
+            className="composer-expand-attach"
+            onClick={props.onPickFile}
+            disabled={props.disabled}
+            title="Attach image"
+          >
+            <PaperclipIcon size={14} />
+            <span>Attach</span>
+          </button>
+          <span className="composer-expand-spacer" />
+          <button
+            type="button"
+            className="composer-expand-cancel"
+            onClick={props.onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="composer-expand-send"
+            onClick={() => void props.onSubmit()}
+            disabled={!props.canSend}
+            title="Send (⌘⏎)"
+          >
+            <span>Send</span>
+            <SendIcon size={14} stroke={2} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,105 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — 2026-05-06
+
+### Added
+
+- **Validate a PR comment before sending to an agent.** New "Validate"
+  button on every comment card. One click sends the comment text and
+  the cited diff hunk to Haiku, which returns a verdict — *Looks
+  good* / *Worth checking* / *Likely incorrect* — plus a 1–2 sentence
+  reason. Catches the noisy / wrong / pointless suggestions that
+  automated reviewers like Copilot sometimes generate, before you
+  burn agent tokens implementing them. Verdict is rendered as a
+  tinted inline pill below the comment.
+- **Reply to a PR comment from inside INZONE.** New "Reply" button
+  next to the validate + send-to-agent actions. INZONE remembers
+  which pane received which comment and when (persisted to
+  localStorage so it survives app restart, e.g. after a usage-limit
+  pause), and the composer summarises the *correct* pane's
+  transcript-since-dispatch — not a guess at the active pane's
+  recent work. Two-tier summary lookup with auto-draft: (1)
+  dispatched pane's response since dispatch, (2) file-path
+  heuristic across all panes when the dispatch record is missing.
+  When neither matches, the composer opens with an empty draft so
+  you can type the reply yourself — we don't waste a Haiku call
+  generating a meaningless "Done!". Edit the text, click Post, and
+  we route through `gh` to post a threaded reply for review
+  comments (`/pulls/{n}/comments/{id}/replies`) or a top-level
+  comment for PR conversation comments. After posting we
+  auto-refresh the PR detail so the new reply shows up in the
+  thread immediately, plus a "View on GitHub" link to the new
+  comment.
+- **Threaded review-comment conversations.** Review comments now
+  group into threads in the PR drawer — replies (yours or anyone
+  else's) render indented under their parent with an accent rail,
+  so you can see the full back-and-forth at a glance instead of
+  just the original comment.
+
+### Fixed
+
+- **Terminal pane PTY died when an unrelated pane was closed.**
+  Critical: closing a sibling pane in a 2-way split caused React to
+  unmount + remount the surviving pane (because the tree collapses
+  from `split` to `leaf` and the parent component changes). The
+  TerminalPane's unmount cleanup then killed the PTY — taking the
+  running CLI (Codex / Claude Code / a long shell job) with it,
+  along with all in-flight work. Fix: hoist the PTY + xterm into a
+  module-level session pool keyed by pane id; the pool survives
+  React remounts and is only torn down by explicit `closePane` or
+  `Reset`. The pane's xterm DOM is parked in `document.body` while
+  detached and re-attached to the new container on remount.
+- **Lead orchestrator routed to wrong workspace's agents.** Critical
+  cross-workspace bug: `pool.findByAgentName` and `listActiveAgents`
+  walked the global SessionPool with no session filter, so a Lead in
+  workspace B asking `message_agent("frontend-developer")` could
+  route the message to a long-lived pane from workspace A — wrong
+  cwd, wrong project, with no visible indication. INZONE keeps panes
+  alive across workspace switches by design (so they're warm when you
+  switch back), which made this latent. Both pool methods now accept
+  an optional `sessionId` filter; the Lead always passes its own
+  session id so lookups stay scoped to the active workspace.
+  Spawn-agent also stamps newly-created panes with the Lead's
+  session id (not the Electron BrowserWindow id, which it had been
+  stamping by mistake), so future lookups continue to scope right
+  across the pane's lifetime.
+- **Preview dropdown showed dead URLs that couldn't be killed.** A
+  localhost URL detected in terminal output (e.g. `:3001/kainos`)
+  would linger in the Preview pill's dropdown after the dev server
+  exited; clicking the X to "kill" it returned "Nothing was listening
+  on that port", which read as a bug — the URL was visible but
+  unkillable. Now the X button does a liveness pre-check: if nothing
+  is listening, the URL is silently pruned from the list (the user
+  clicked it to make it go away — it goes away). When something IS
+  listening and the kill succeeds, ALL URLs sharing that port are
+  dropped, not just the one clicked, since `:3001` and
+  `:3001/kainos` are served by a single PID and should clear
+  together. The dropdown also runs an immediate liveness sweep when
+  it opens, so users see fresh state instead of waiting up to 12s
+  for the periodic sweep.
+
+### Changed
+
+- **Composer follows the active-pane tint.** The pane chat area got
+  a darker background on the active pane, but the message field
+  below kept the same colour regardless of which pane was selected —
+  so when several panes were visible it was ambiguous which one your
+  next keystroke would land in. The composer (and the inner pill)
+  now darken together with the chat scroller when a pane is active,
+  with a 160ms transition.
+- **Expand button on the composer.** Next to Send is a new ⤡ icon
+  that pops the message field into a 60×60% modal with a tall
+  textarea, attach button, and Send. The modal shares state with the
+  inline composer (input, attachments, submit) so toggling between
+  the two doesn't lose your draft. ⌘⏎ to send, Esc to close.
+- **PR comment action row** now wraps to multiple lines as needed.
+  Previously each card only had a single Send-to-agent button on
+  the right; with three actions per comment (Validate, Send,
+  Reply) the row needed flex-wrap and tighter spacing.
+
+[1.5.0]: https://github.com/eimis1990/inzone/compare/v1.4.0...v1.5.0
+
 ## [1.4.0] — 2026-05-05
 
 ### Added

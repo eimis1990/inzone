@@ -4213,6 +4213,15 @@ code.voice-tool-card-value {
   padding: 10px 12px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   background: var(--bg-elev);
+  transition: background 160ms ease;
+}
+/* Active pane gets a deeper composer background to match the body
+   tint shift on `.pane.active`. Without this, the chat area gets
+   darker when you click into a pane but the message field below
+   stays the same — making it ambiguous which pane you're typing
+   into when several are visible. */
+.pane.active .pane-composer {
+  background: var(--bg);
 }
 .composer-row {
   display: flex;
@@ -4225,7 +4234,12 @@ code.voice-tool-card-value {
      soft-rounded rect when the textarea auto-grows past one line. */
   border-radius: 22px;
   transition: border-color 160ms ease, box-shadow 160ms ease,
-    border-radius 160ms ease;
+    border-radius 160ms ease, background 160ms ease;
+}
+/* Active pane: tint the composer row down so the active state feels
+   continuous from the chat scroller through to the message field. */
+.pane.active .composer-row {
+  background: var(--bg-elev);
 }
 .composer-row:focus-within {
   border-color: rgba(228, 217, 71, 0.55);
@@ -4298,6 +4312,204 @@ code.voice-tool-card-value {
 .composer-send:active:not(:disabled) {
   transform: translateY(1px);
 }
+/* Expand button next to Send — opens the composer in a larger
+   modal for long messages. Same square-ish footprint as the attach
+   icon so the pill keeps its symmetry. */
+.composer-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-dim);
+  background: transparent;
+  transition: color 120ms, background 120ms;
+  flex-shrink: 0;
+}
+.composer-expand:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+.composer-expand:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Composer expand modal — 60×60% of viewport, centered over the app.
+   Backdrop is the standard frosted dim used by other modals. */
+.composer-expand-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.composer-expand-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.composer-expand-card {
+  position: relative;
+  width: 60vw;
+  height: 60vh;
+  min-width: 480px;
+  min-height: 320px;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  animation: composer-expand-pop 160ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+@keyframes composer-expand-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.composer-expand-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.composer-expand-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.composer-expand-hint {
+  flex: 1;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+.composer-expand-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  background: transparent;
+}
+.composer-expand-close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+.composer-expand-textarea {
+  flex: 1;
+  width: 100%;
+  padding: 18px 20px;
+  background: var(--bg);
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  resize: none;
+  outline: none;
+}
+.composer-expand-textarea::placeholder {
+  color: var(--muted);
+}
+.composer-expand-textarea:focus {
+  /* Subtle focus ring around just the textarea so the user knows
+     they're typing into the right field. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.composer-expand-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px 0;
+  background: var(--bg);
+}
+.composer-expand-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.composer-expand-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+.composer-expand-attach:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+.composer-expand-attach:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.composer-expand-spacer {
+  flex: 1;
+}
+.composer-expand-cancel {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+.composer-expand-cancel:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+.composer-expand-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-on);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  transition: filter 120ms;
+}
+.composer-expand-send:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.composer-expand-send:disabled {
+  background: rgba(228, 217, 71, 0.22);
+  color: rgba(6, 42, 24, 0.55);
+  cursor: default;
+}
+
 .composer-send:disabled {
   background: rgba(228, 217, 71, 0.22);
   color: rgba(6, 42, 24, 0.55);
@@ -11126,15 +11338,18 @@ select:focus {
    visually distinct; flex so they bottom-align cleanly. */
 .pr-comment-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 8px;
   align-items: center;
 }
-/* When there's only the send button (issue comments — no
-   diff context to toggle), push it right. */
-.pr-comment:not(.pr-comment-review) .pr-comment-actions {
-  justify-content: flex-end;
+/* The validate result + reply composer should occupy the full row
+   when present. Setting flex-basis: 100% pushes them onto their own
+   line in the wrapping flex layout. */
+.pr-comment-actions .pr-validate-result,
+.pr-comment-actions .pr-reply-composer,
+.pr-comment-actions .pr-reply-posted {
+  flex: 0 0 100%;
 }
 .pr-context-toggle {
   font-size: 11px;
@@ -11142,6 +11357,195 @@ select:focus {
 }
 .pr-context-toggle:hover {
   color: var(--text);
+}
+
+/* ── v1.5: Validate + Reply add-ons ────────────────────────────── */
+
+/* Validate result badge — verdict glyph + label + reasoning, in a
+   tinted pill that flexes to fill the row width below the actions. */
+.pr-validate-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+.pr-validate-glyph {
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+.pr-validate-label {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.pr-validate-reasoning {
+  color: var(--text-dim);
+  flex: 1;
+  min-width: 0;
+}
+.pr-validate-good {
+  background: color-mix(in srgb, rgba(94, 210, 123, 0.18) 100%, transparent);
+  border-color: color-mix(in srgb, rgba(94, 210, 123, 0.4) 100%, transparent);
+}
+.pr-validate-good .pr-validate-glyph,
+.pr-validate-good .pr-validate-label {
+  color: rgba(94, 210, 123, 0.95);
+}
+.pr-validate-caution {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.pr-validate-caution .pr-validate-glyph,
+.pr-validate-caution .pr-validate-label {
+  color: var(--accent);
+}
+.pr-validate-bad {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.pr-validate-bad .pr-validate-glyph,
+.pr-validate-bad .pr-validate-label {
+  color: color-mix(in srgb, var(--danger) 90%, white);
+}
+.pr-validate-error {
+  color: color-mix(in srgb, var(--danger) 90%, white);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+}
+
+/* Reply composer — inline panel under the comment with a textarea
+   for the LLM-drafted suggestion + Cancel/Post buttons. */
+.pr-reply-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  border-radius: 8px;
+}
+.pr-reply-composer-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pr-reply-composer-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+.pr-reply-composer-hint {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+.pr-reply-composer-textarea {
+  resize: vertical;
+  min-height: 80px;
+  max-height: 280px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  outline: none;
+}
+.pr-reply-composer-textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.pr-reply-composer-textarea:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+.pr-reply-composer-error {
+  font-size: 11.5px;
+  color: color-mix(in srgb, var(--danger) 90%, white);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border));
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.pr-reply-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+/* Threaded review-comment replies. Indented under the parent with
+   a vertical accent rail so the conversation reads top-down at a
+   glance. Each reply is its own card with a tinted background to
+   distinguish it from the parent. */
+.pr-comment-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-left: 14px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.pr-comment-reply {
+  background: color-mix(in srgb, var(--bg-elev) 60%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.pr-comment-reply .pr-comment-head {
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+.pr-comment-reply .pr-comment-body {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.pr-comment-reply-link {
+  margin-left: auto;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 11px;
+}
+.pr-comment-reply-link:hover {
+  color: var(--accent);
+}
+
+/* Compact "posted on GitHub" confirmation that replaces the button
+   row after a successful post. Includes a clickable link to the
+   new comment. */
+.pr-reply-posted {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, rgba(94, 210, 123, 0.14) 100%, transparent);
+  border: 1px solid rgba(94, 210, 123, 0.32);
+  border-radius: 6px;
+  font-size: 12px;
+  color: rgba(94, 210, 123, 0.95);
+}
+.pr-reply-posted-glyph {
+  font-weight: 700;
+}
+.pr-reply-posted-link {
+  margin-left: auto;
+  color: rgba(94, 210, 123, 0.95);
+  text-decoration: none;
+  font-weight: 600;
+}
+.pr-reply-posted-link:hover {
+  text-decoration: underline;
 }
 
 /* Failed-step log viewer — full-width monospace, dark. */

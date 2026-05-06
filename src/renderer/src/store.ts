@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import { playErrorTone, playSuccessChime } from './chime';
+import { destroyTerminalSession } from './components/terminal-sessions';
 import type {
   AgentDef,
   AgentDraft,
@@ -39,6 +40,54 @@ function cleanIpcError(err: unknown): string {
     /^Error invoking remote method '[^']+':\s*(?:\w+Error:\s*)?(.+)$/s,
   );
   return (m ? m[1] : raw).trim();
+}
+
+// ── PR comment dispatch persistence ─────────────────────────────────
+// We store the "I sent this comment to that pane at this timestamp"
+// records in localStorage so they survive an app restart. The map is
+// small (capped at MAX_PR_COMMENT_DISPATCHES) and deserialising on
+// boot is microsecond-cheap. Without this, hitting a usage-limit pause
+// + restarting the app cleared the dispatch in memory and the Reply
+// button stayed disabled even though the agent had finished its work.
+
+const PR_COMMENT_DISPATCHES_KEY = 'inzone.prCommentDispatches.v1';
+const MAX_PR_COMMENT_DISPATCHES = 100;
+
+function loadPrCommentDispatches(): Record<
+  string,
+  { paneId: PaneId; sentAt: number }
+> {
+  try {
+    const raw = localStorage.getItem(PR_COMMENT_DISPATCHES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return {};
+    const out: Record<string, { paneId: PaneId; sentAt: number }> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const entry = v as { paneId?: unknown; sentAt?: unknown };
+      if (
+        typeof entry?.paneId === 'string' &&
+        typeof entry?.sentAt === 'number'
+      ) {
+        out[k] = { paneId: entry.paneId, sentAt: entry.sentAt };
+      }
+    }
+    return out;
+  } catch {
+    // Corrupt JSON, quota exceeded, or storage disabled — start fresh.
+    return {};
+  }
+}
+
+function savePrCommentDispatches(
+  map: Record<string, { paneId: PaneId; sentAt: number }>,
+): void {
+  try {
+    localStorage.setItem(PR_COMMENT_DISPATCHES_KEY, JSON.stringify(map));
+  } catch {
+    // Storage full or unavailable — best-effort. The in-memory copy
+    // still works for the rest of the session.
+  }
 }
 
 export type EditorDraft =
@@ -231,6 +280,22 @@ interface StoreState {
   prCheckLogs: Record<string, string>;
 
   /**
+   * v1.5 — Records each PR comment that's been dispatched via
+   * "Send to agent": which pane received the prompt, and the
+   * timestamp of dispatch. The Reply composer reads this map to
+   * decide which pane's transcript to summarise (and from which
+   * point in time) when drafting a reply, instead of guessing
+   * based on the currently focused pane (which often points at
+   * unrelated work). Keyed by GitHub comment id (string). Items
+   * stay around until the PR drawer is closed and re-opened — the
+   * user might want to re-reply if the agent keeps iterating.
+   */
+  prCommentDispatches: Record<
+    string,
+    { paneId: PaneId; sentAt: number }
+  >;
+
+  /**
    * One-shot "seed text" delivery to a specific pane's composer.
    * The Send-to-agent flow drops a prepared prompt here; the
    * targeted Pane component watches this field and copies the text
@@ -406,6 +471,12 @@ interface StoreActions {
   noteTerminalOutput: (chunk: string) => void;
   /** Drop a URL from the auto-detected list (e.g. after killing it). */
   forgetLocalhostUrl: (url: string) => void;
+  /** Drop EVERY auto-detected URL whose port matches `port`. Used by
+   *  the preview kill flow because killing a port takes down all the
+   *  URLs serving from it (e.g. `:3001` and `:3001/kainos` are both
+   *  served by the same listener — the X button on either should
+   *  clear both). */
+  forgetLocalhostPort: (port: number) => void;
 
   // -- Sessions (multiple workspace tabs) ---------------------------------
   /** Spawn a new empty session and switch to it. Opens folder picker first. */
@@ -470,6 +541,10 @@ interface StoreActions {
   refreshPrs: () => Promise<void>;
   /** Lazy-load full detail for one PR (body, all checks, comments). */
   openPrDetail: (number: number) => Promise<void>;
+  /** Force-refresh a PR's full detail, bypassing the cache. Used
+   *  after posting a reply so the new comment shows up in the
+   *  thread without the user having to close + reopen the PR. */
+  refreshPrDetail: (number: number) => Promise<void>;
   /** Clear the PR detail view (used when going back to the list). */
   closePrDetail: () => void;
   /** Fetch the failed-step output for a check's run id. */
@@ -482,6 +557,10 @@ interface StoreActions {
   /** Called by a Pane after it has consumed the seed, to clear
    *  it and prevent re-application on subsequent renders. */
   consumePaneSeed: () => void;
+  /** v1.5 — Record that a PR comment was just dispatched to an
+   *  agent pane. The Reply composer reads this to summarise the
+   *  RIGHT pane's transcript-since-dispatch when drafting a reply. */
+  recordPrCommentDispatch: (commentId: string, paneId: PaneId) => void;
   /** Refresh the review state for the active worktree project. Sets
    *  reviewLoading while in flight, populates reviewState on success,
    *  reviewError on failure. */
@@ -1188,6 +1267,7 @@ export const useStore = create<Store>((set, get) => ({
   prCheckLogError: null,
   prDetails: {},
   prCheckLogs: {},
+  prCommentDispatches: loadPrCommentDispatches(),
   pendingPaneSeed: null,
   pipelineView: 'panes' as 'panes' | 'board' | 'review',
   pipeline: undefined as Pipeline | undefined,
@@ -1606,6 +1686,30 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
+  forgetLocalhostPort: (port) => {
+    if (!Number.isInteger(port) || port <= 0) return;
+    const portFromUrl = (u: string): number | null => {
+      try {
+        const parsed = new URL(u);
+        return parsed.port ? Number(parsed.port) : null;
+      } catch {
+        return null;
+      }
+    };
+    const filtered = get().terminalLocalhostUrls.filter(
+      (u) => portFromUrl(u) !== port,
+    );
+    const updates: Partial<Store> = { terminalLocalhostUrls: filtered };
+    const cur = get().previewUrl;
+    if (cur && portFromUrl(cur) === port) {
+      updates.previewUrl = null;
+    }
+    set(updates);
+    if (updates.previewUrl !== undefined) {
+      void get().saveWindow();
+    }
+  },
+
   setPaneName: (id, name) => {
     const trimmed = name.trim();
     // The Lead pane lives outside the tree — store its name on the
@@ -1690,12 +1794,14 @@ export const useStore = create<Store>((set, get) => ({
     // overwrite below; this just ensures the leaf doesn't lie.
     const previous = get().panes[id];
     if (previous?.workerKind === 'terminal') {
-      if (previous.ptyId) {
-        try {
-          await window.cowork.terminal.kill(previous.ptyId);
-        } catch {
-          // PTY may already be dead — fine.
-        }
+      // Terminal-to-agent swap: tear down the pooled session so the
+      // PTY + xterm don't linger after the pane re-binds. Same fn
+      // closePane uses; both are safe if the session was already
+      // gone.
+      try {
+        await destroyTerminalSession(id);
+      } catch {
+        // already gone — fine.
       }
       const stripTerminalMarkers = (node: PaneNode): PaneNode => {
         if (node.kind === 'leaf') {
@@ -1832,13 +1938,20 @@ export const useStore = create<Store>((set, get) => ({
       }
     }
     // Stop whatever was driving this pane. Agent panes have an SDK
-    // session in main; terminal panes have a PTY. Either way we want
-    // a clean shutdown so we don't leak processes on close.
-    if (closing?.workerKind === 'terminal' && closing.ptyId) {
+    // session in main; terminal panes have a pooled session that
+    // owns the PTY + xterm. Either way we want a clean shutdown so
+    // we don't leak processes on close.
+    //
+    // For terminals we route through `destroyTerminalSession` (which
+    // kills the PTY AND drops the pool entry + disposes xterm).
+    // We can't just `terminal.kill(ptyId)` directly any more — the
+    // pool would leave a dangling session reference around, and on
+    // a future pane bind to the same id it'd reuse the dead PTY.
+    if (closing?.workerKind === 'terminal') {
       try {
-        await window.cowork.terminal.kill(closing.ptyId);
+        await destroyTerminalSession(id);
       } catch {
-        // already dead — ignore
+        // already gone — ignore
       }
     } else {
       try {
@@ -1904,11 +2017,14 @@ export const useStore = create<Store>((set, get) => ({
       return;
     }
     // Tear down whatever was previously running in this pane.
-    if (previous?.workerKind === 'terminal' && previous.ptyId) {
+    // Terminal preset swap (codex → claude-code, say) goes through
+    // destroyTerminalSession so the renderer-side xterm pool stays
+    // in sync with main's PTY teardown.
+    if (previous?.workerKind === 'terminal') {
       try {
-        await window.cowork.terminal.kill(previous.ptyId);
+        await destroyTerminalSession(id);
       } catch {
-        // already dead
+        // already gone
       }
     } else if (previous?.agentName) {
       try {
@@ -2457,6 +2573,25 @@ export const useStore = create<Store>((set, get) => ({
   closePrDetail: () =>
     set({ prDetail: null, prDetailError: null, prDetailLoading: false }),
 
+  refreshPrDetail: async (number) => {
+    const { cwd } = get();
+    if (!cwd) return;
+    try {
+      const detail = await window.cowork.pr.detail(cwd, number);
+      set((s) => ({
+        // Only swap the active prDetail if it's still pointing at
+        // this PR — the user might have navigated away during the
+        // fetch. The cache update is unconditional.
+        prDetail:
+          s.prDetail?.number === number ? detail : s.prDetail,
+        prDetails: { ...s.prDetails, [number]: detail },
+      }));
+    } catch {
+      // Best-effort. If the refetch fails (network blip, gh auth
+      // expired), the user can hit the manual refresh button.
+    }
+  },
+
   openCheckLog: async (runId) => {
     const { cwd, prCheckLogs } = get();
     if (!cwd) return;
@@ -2509,6 +2644,28 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   consumePaneSeed: () => set({ pendingPaneSeed: null }),
+
+  recordPrCommentDispatch: (commentId, paneId) => {
+    set((s) => {
+      // Cap to the most-recent N entries so the map doesn't grow
+      // unbounded across months of use. Drop the oldest by sentAt.
+      const next: typeof s.prCommentDispatches = {
+        ...s.prCommentDispatches,
+        [commentId]: { paneId, sentAt: Date.now() },
+      };
+      const entries = Object.entries(next);
+      if (entries.length > MAX_PR_COMMENT_DISPATCHES) {
+        entries.sort((a, b) => b[1].sentAt - a[1].sentAt);
+        const trimmed = Object.fromEntries(
+          entries.slice(0, MAX_PR_COMMENT_DISPATCHES),
+        );
+        savePrCommentDispatches(trimmed);
+        return { prCommentDispatches: trimmed };
+      }
+      savePrCommentDispatches(next);
+      return { prCommentDispatches: next };
+    });
+  },
 
   setMemoryScope: (scope) => {
     set({ memoryScope: scope });

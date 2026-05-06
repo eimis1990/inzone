@@ -734,9 +734,25 @@ export class SessionPool {
     return out;
   }
 
-  findByAgentName(name: string, excludePaneId?: PaneId): IAgentSession | undefined {
+  /**
+   * Find a live controller by agent name. The `sessionId` filter is
+   * critical for correctness: SessionPool is global to the app, so
+   * controllers from every workspace/project the user has visited
+   * stay alive in `controllers`. Without filtering by session, a
+   * Lead in workspace B asking `message_agent("frontend-developer")`
+   * could route the message to a long-lived pane in workspace A —
+   * which is a different project, different cwd, different repo.
+   * Always pass `sessionId` from the Lead orchestrator (it's the
+   * Lead's own `windowId`).
+   */
+  findByAgentName(
+    name: string,
+    excludePaneId?: PaneId,
+    sessionId?: string,
+  ): IAgentSession | undefined {
     for (const ctrl of this.controllers.values()) {
       if (ctrl.paneId === excludePaneId) continue;
+      if (sessionId && ctrl.windowId !== sessionId) continue;
       if (ctrl.agentName === name) return ctrl;
     }
     return undefined;
@@ -744,10 +760,12 @@ export class SessionPool {
 
   listActiveAgents(
     excludePaneId?: PaneId,
+    sessionId?: string,
   ): Array<{ paneId: PaneId; agentName: string }> {
     const out: Array<{ paneId: PaneId; agentName: string }> = [];
     for (const ctrl of this.controllers.values()) {
       if (ctrl.paneId === excludePaneId) continue;
+      if (sessionId && ctrl.windowId !== sessionId) continue;
       if (ctrl.agentName) {
         out.push({ paneId: ctrl.paneId, agentName: ctrl.agentName });
       }

@@ -19,20 +19,42 @@ import { SessionPool } from './sessions';
  *  - awaiting the sub-agent's next-turn reply
  *  - returning that reply as a text-content tool result
  *
- * The Lead's window id is baked in so we can route spawn events to the
- * right BrowserWindow and only touch sub-agents from that window.
+ * Two distinct ids are baked in:
+ *
+ *   - `browserWindowId` (number) — the Electron BrowserWindow id.
+ *     Used only for `BrowserWindow.fromId(...)` so we can dispatch
+ *     pane-spawn IPC events to the right renderer window.
+ *
+ *   - `leadSessionId` (string) — INZONE's per-project session id
+ *     (a.k.a. `windowId` on `StartSessionParams` / SessionController).
+ *     Used to scope every pool lookup to THIS workspace's session,
+ *     so the Lead can't accidentally route a message to a stale
+ *     pane left over from another workspace. SessionPool is global
+ *     to the app and keeps panes alive across workspace switches —
+ *     filtering by session id is the only thing standing between a
+ *     Lead in workspace B and a frontend-developer pane from
+ *     workspace A. New panes spawned by `spawn_agent` inherit this
+ *     same session id so future lookups continue to scope correctly.
  */
 export function createLeadToolServer(args: {
   pool: SessionPool;
-  windowId: number;
+  browserWindowId: number;
+  leadSessionId: string;
   leadPaneId: PaneId;
   cwd: string;
   getAvailableAgents: () => Promise<AgentDef[]>;
 }) {
-  const { pool, windowId, leadPaneId, cwd, getAvailableAgents } = args;
+  const {
+    pool,
+    browserWindowId,
+    leadSessionId,
+    leadPaneId,
+    cwd,
+    getAvailableAgents,
+  } = args;
 
   function mainWindow(): BrowserWindow | null {
-    const w = BrowserWindow.fromId(windowId);
+    const w = BrowserWindow.fromId(browserWindowId);
     return w && !w.isDestroyed() ? w : null;
   }
 
@@ -45,7 +67,7 @@ export function createLeadToolServer(args: {
         'List sub-agents currently running in this window, by their names. Use before picking who to message.',
         {},
         async () => {
-          const entries = pool.listActiveAgents(leadPaneId);
+          const entries = pool.listActiveAgents(leadPaneId, leadSessionId);
           if (entries.length === 0) {
             return {
               content: [
@@ -110,7 +132,11 @@ export function createLeadToolServer(args: {
             .describe('Max seconds to wait for a reply (default 600).'),
         },
         async ({ agent_name, message, timeout_seconds }) => {
-          const ctrl = pool.findByAgentName(agent_name, leadPaneId);
+          const ctrl = pool.findByAgentName(
+            agent_name,
+            leadPaneId,
+            leadSessionId,
+          );
           if (!ctrl) {
             return {
               content: [
@@ -179,8 +205,15 @@ export function createLeadToolServer(args: {
             };
           }
 
-          // Only allow one live pane per agent name — reuse if present.
-          const existing = pool.findByAgentName(agent_name, leadPaneId);
+          // Only allow one live pane per agent name within THIS
+          // session — reuse if present. Workspace A and workspace B
+          // can each have their own frontend-developer; we never
+          // cross-route between them.
+          const existing = pool.findByAgentName(
+            agent_name,
+            leadPaneId,
+            leadSessionId,
+          );
           if (existing) {
             try {
               const reply = await existing.sendAndWait(
@@ -203,11 +236,19 @@ export function createLeadToolServer(args: {
 
           const newPaneId = nanoid(8);
           const others = pool
-            .listActiveAgents(leadPaneId)
+            .listActiveAgents(leadPaneId, leadSessionId)
             .map((e) => e.agentName);
+          // Critical: stamp the new pane's `windowId` with the
+          // Lead's session id (NOT the Electron BrowserWindow id).
+          // Without this, when the user later switches workspaces
+          // and a new Lead asks `message_agent` for the same name,
+          // our session-scoped filter wouldn't find this pane —
+          // but worse, a stale pane from a previous workspace
+          // could match instead. Inheriting `leadSessionId` keeps
+          // the filter correct across the whole pane lifecycle.
           const params: StartSessionParams = {
             paneId: newPaneId,
-            windowId: String(windowId),
+            windowId: leadSessionId,
             agentName: agent_name,
             cwd,
             otherAgentNames: others,

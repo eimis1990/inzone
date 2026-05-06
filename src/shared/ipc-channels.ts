@@ -113,6 +113,16 @@ export const IPC = {
   PR_DETAIL: 'pr:detail',
   PR_CHECK_LOGS: 'pr:checkLogs',
   PR_AVAILABLE: 'pr:available',
+  /** v1.5 — Validate a PR comment with Haiku before handing it to an
+   *  agent. Returns a verdict (good / caution / bad) + reasoning. */
+  PR_VALIDATE_COMMENT: 'pr:validateComment',
+  /** v1.5 — Draft a friendly summary reply based on the agent's
+   *  recent transcript. Returns suggested reply text the user can
+   *  edit before posting. */
+  PR_SUGGEST_REPLY: 'pr:suggestReply',
+  /** v1.5 — Post a reply to a PR comment via gh. Threaded for review
+   *  comments, top-level for issue comments. */
+  PR_POST_REPLY: 'pr:postReply',
 
   // LLM Wiki — persistent project knowledge base under
   // <cwd>/.inzone/wiki/. Init creates the starter skeleton + schema

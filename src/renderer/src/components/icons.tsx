@@ -218,6 +218,20 @@ export function StopIcon(props: IconProps) {
   );
 }
 
+/** Diagonal four-arrow "expand" / "open in larger view" glyph.
+ *  Used on the composer to pop the message field into a fullscreen-ish
+ *  modal for long messages. */
+export function ExpandIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <polyline points="15 3 21 3 21 9" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+    </Svg>
+  );
+}
+
 export function SparkleIcon(props: IconProps) {
   return (
     <Svg {...props}>

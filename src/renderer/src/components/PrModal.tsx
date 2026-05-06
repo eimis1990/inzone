@@ -280,6 +280,9 @@ function DetailView() {
   const openCheckLog = useStore((s) => s.openCheckLog);
   const seedPaneInput = useStore((s) => s.seedPaneInput);
   const setPrModalOpen = useStore((s) => s.setPrModalOpen);
+  const recordPrCommentDispatch = useStore(
+    (s) => s.recordPrCommentDispatch,
+  );
   const cwd = useStore((s) => s.cwd);
 
   // Tracks which row is currently fetching its log + dispatching to
@@ -328,12 +331,19 @@ function DetailView() {
   ) => {
     if (!detail) return;
     seedPaneInput(paneId, buildReviewCommentPrompt({ pr: detail, comment }));
+    // Remember which pane got this comment + when, so Reply can
+    // summarise that exact pane's transcript-since-dispatch later
+    // (instead of the previous heuristic, which read the active
+    // pane's last 2 assistant texts and was wrong whenever the user
+    // had switched panes between dispatch and reply).
+    recordPrCommentDispatch(comment.id, paneId);
     setPrModalOpen(false);
   };
 
   const sendIssueCommentToAgent = (comment: PrComment, paneId: PaneId) => {
     if (!detail) return;
     seedPaneInput(paneId, buildIssueCommentPrompt({ pr: detail, comment }));
+    recordPrCommentDispatch(comment.id, paneId);
     setPrModalOpen(false);
   };
 
@@ -433,19 +443,47 @@ function DetailView() {
                   </div>
                   <div className="pr-comment-body">{c.body}</div>
                   <div className="pr-comment-actions">
+                    <CommentValidate
+                      commentBody={c.body}
+                      location={`PR #${detail.number} — ${detail.title}`}
+                    />
                     <SendToAgentMenu
                       onPick={(paneId) => sendIssueCommentToAgent(c, paneId)}
                     />
+                    {cwd && (
+                      <CommentReply
+                        commentBody={c.body}
+                        commentId={c.id}
+                        location={`PR #${detail.number} — ${detail.title}`}
+                        prNumber={detail.number}
+                        cwd={cwd}
+                        kind="issue"
+                      />
+                    )}
                   </div>
                 </div>
               ))}
-              {detail.reviewComments.map((c) => (
-                <ReviewCommentCard
-                  key={c.id}
-                  comment={c}
-                  onSend={(paneId) => sendReviewCommentToAgent(c, paneId)}
-                />
-              ))}
+              {/* Group review comments into threads. GitHub stores
+                  each reply with `in_reply_to_id` pointing at the
+                  parent; we display parent first with its replies
+                  indented below so the user sees the full
+                  conversation (including their own previously-
+                  posted replies, since v1.5 added the Reply
+                  composer). */}
+              {groupReviewThreads(detail.reviewComments).map(
+                ({ parent, replies }) => (
+                  <ReviewCommentCard
+                    key={parent.id}
+                    comment={parent}
+                    replies={replies}
+                    prNumber={detail.number}
+                    cwd={cwd}
+                    onSend={(paneId) =>
+                      sendReviewCommentToAgent(parent, paneId)
+                    }
+                  />
+                ),
+              )}
             </div>
           )}
         </Section>
@@ -507,12 +545,21 @@ function CheckRow({
  */
 function ReviewCommentCard({
   comment,
+  replies,
+  prNumber,
+  cwd,
   onSend,
 }: {
   comment: PrReviewComment;
+  /** Threaded replies to this comment, oldest-first. May be empty. */
+  replies: PrReviewComment[];
+  prNumber: number;
+  cwd: string | null;
   onSend: (paneId: PaneId) => void;
 }) {
   const [showContext, setShowContext] = useState(false);
+  const location =
+    comment.path + (comment.line ? `:${comment.line}` : '');
   return (
     <div className="pr-comment pr-comment-review">
       <div className="pr-comment-head">
@@ -537,13 +584,101 @@ function ReviewCommentCard({
             {showContext ? 'Hide context' : 'Show context'}
           </button>
         )}
+        <CommentValidate
+          commentBody={comment.body}
+          location={location}
+          diffHunk={comment.diffHunk}
+        />
         <SendToAgentMenu onPick={onSend} />
+        {cwd && (
+          <CommentReply
+            commentBody={comment.body}
+            commentId={comment.id}
+            location={location}
+            prNumber={prNumber}
+            cwd={cwd}
+            kind="review"
+          />
+        )}
       </div>
       {showContext && comment.diffHunk && (
         <pre className="pr-comment-hunk">{comment.diffHunk}</pre>
       )}
+      {/* Threaded replies — rendered below the parent + actions so
+          the conversation reads top-down. Indented + tinted so
+          they're visually distinct from the original comment. */}
+      {replies.length > 0 && (
+        <div className="pr-comment-replies">
+          {replies.map((r) => (
+            <div key={r.id} className="pr-comment-reply">
+              <div className="pr-comment-head">
+                <span className="pr-comment-author">@{r.author}</span>
+                <span className="pr-comment-date">
+                  {formatRelative(Date.parse(r.createdAt))}
+                </span>
+                {r.url && (
+                  <a
+                    className="pr-comment-reply-link"
+                    href={r.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title="Open this reply on GitHub"
+                  >
+                    ↗
+                  </a>
+                )}
+              </div>
+              <div className="pr-comment-body">{r.body}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Group a flat list of review comments into thread parents and their
+ * replies. GitHub's `pulls/{n}/comments` endpoint returns every
+ * comment (parents + replies) in one stream; the `in_reply_to_id`
+ * field tells us which is which.
+ *
+ * Returns one entry per parent (any comment without `inReplyTo`),
+ * each carrying its replies sorted oldest → newest. Orphaned
+ * replies (parent missing — rare, can happen if the parent was
+ * deleted) are promoted to top-level entries with an empty replies
+ * array so they still render.
+ */
+function groupReviewThreads(
+  comments: PrReviewComment[],
+): Array<{ parent: PrReviewComment; replies: PrReviewComment[] }> {
+  const byId = new Map<string, PrReviewComment>();
+  for (const c of comments) byId.set(c.id, c);
+  const repliesByParent: Record<string, PrReviewComment[]> = {};
+  const parents: PrReviewComment[] = [];
+  for (const c of comments) {
+    if (c.inReplyTo && byId.has(c.inReplyTo)) {
+      const list = repliesByParent[c.inReplyTo] ?? [];
+      list.push(c);
+      repliesByParent[c.inReplyTo] = list;
+    } else {
+      // No inReplyTo, OR the parent isn't in this list (deleted /
+      // hidden / outside the page). Either way, surface it as a
+      // top-level entry so the user still sees the comment.
+      parents.push(c);
+    }
+  }
+  for (const list of Object.values(repliesByParent)) {
+    list.sort(
+      (a, b) =>
+        Date.parse(a.createdAt || '0') -
+        Date.parse(b.createdAt || '0'),
+    );
+  }
+  return parents.map((parent) => ({
+    parent,
+    replies: repliesByParent[parent.id] ?? [],
+  }));
 }
 
 // ── Check log view ─────────────────────────────────────────────────
@@ -873,6 +1008,381 @@ function SendToAgentMenu({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── v1.5: Validate + Reply add-ons ────────────────────────────────
+
+/**
+ * "Validate" button for a comment. Clicks send the comment + cited
+ * code to Haiku via main, render a verdict badge inline. The badge
+ * stays visible until the user clicks Validate again (which
+ * re-runs the check). Useful for vetting noisy automated reviewer
+ * comments before kicking off agent work on them.
+ */
+function CommentValidate({
+  commentBody,
+  location,
+  diffHunk,
+}: {
+  commentBody: string;
+  location: string;
+  diffHunk?: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{
+    verdict: 'good' | 'caution' | 'bad';
+    reasoning: string;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const onClick = async () => {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await window.cowork.pr.validateComment({
+        commentBody,
+        location,
+        diffHunk,
+      });
+      setResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className="pr-btn pr-btn-sm pr-btn-ghost"
+        onClick={() => void onClick()}
+        disabled={loading}
+        title="Send the comment to Haiku for a sanity check before handing it to an agent. Catches noisy / wrong / pointless suggestions."
+      >
+        {loading ? 'Validating…' : result ? 'Re-validate' : 'Validate'}
+      </button>
+      {result && (
+        <div
+          className={
+            'pr-validate-result pr-validate-' + result.verdict
+          }
+          role="status"
+        >
+          <span className="pr-validate-glyph" aria-hidden>
+            {result.verdict === 'good'
+              ? '✓'
+              : result.verdict === 'bad'
+                ? '✕'
+                : '!'}
+          </span>
+          <span className="pr-validate-label">
+            {result.verdict === 'good'
+              ? 'Looks good'
+              : result.verdict === 'bad'
+                ? 'Likely incorrect'
+                : 'Worth checking'}
+          </span>
+          <span className="pr-validate-reasoning">{result.reasoning}</span>
+        </div>
+      )}
+      {error && (
+        <div className="pr-validate-result pr-validate-error">
+          Validate failed: {error}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * "Reply" button + inline composer for a PR comment. On open, kicks
+ * off a Haiku draft from the active agent pane's recent transcript
+ * (so the suggested reply describes what was actually done, not a
+ * generic "thanks!"). User edits the textarea, clicks Post → we
+ * route through gh, and on success show a "View on GitHub" link.
+ *
+ * `kind === 'review'` threads the reply under the original comment
+ * via `/pulls/{n}/comments/{id}/replies`. `kind === 'issue'` posts
+ * a top-level comment.
+ */
+function CommentReply({
+  commentBody,
+  commentId,
+  location,
+  prNumber,
+  cwd,
+  kind,
+}: {
+  commentBody: string;
+  commentId: string;
+  location: string;
+  prNumber: number;
+  cwd: string;
+  kind: 'review' | 'issue';
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [drafting, setDrafting] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [postedUrl, setPostedUrl] = useState<string | null>(null);
+
+  // Look up the dispatch record for THIS comment. Set when the user
+  // clicked "Send to agent" on it earlier; tells us which pane took
+  // the prompt + when. Persisted to localStorage so it survives app
+  // restart (otherwise a usage-limit pause + restart would lose the
+  // record and leave Reply permanently disabled).
+  const dispatch = useStore((s) => s.prCommentDispatches[commentId]);
+
+  // Pull the panes map (Zustand state). We do NOT compute the summary
+  // inside a useStore selector — returning a fresh object literal
+  // there would trigger an infinite re-render loop because the
+  // default Zustand equality is `Object.is`, and a new {text, tier}
+  // object is never === to the previous one. Instead we pull the
+  // primitives we need and derive the summary in a useMemo.
+  const panes = useStore((s) => s.panes);
+  const refreshPrDetail = useStore((s) => s.refreshPrDetail);
+
+  // Compute the agent's summary in three escalating tiers — we
+  // should never be a dead end:
+  //
+  //   Tier 1 (best): we have a dispatch record AND the dispatched
+  //     pane has assistant_text items added after dispatch. That's
+  //     "exactly what this agent did for this comment".
+  //   Tier 2 (good): no dispatch (or pane gone) — for review
+  //     comments we know the file path, so scan ALL panes for
+  //     recent assistant_text items mentioning that path. Catches
+  //     "app restart cleared the dispatch but the work is still in
+  //     a pane's transcript".
+  //   Tier 3 (generic): nothing matched. Empty summary; Haiku is
+  //     instructed to draft a polite generic acknowledgement
+  //     rather than invent details.
+  //
+  // useMemo with stable primitive deps keeps this cheap and
+  // crash-safe — it only recomputes when `panes`, `dispatch`,
+  // `commentId`, or `location` actually change identity.
+  const { agentSummary, summaryTier } = useMemo(() => {
+    // Tier 1 — dispatched pane, items since dispatch.
+    if (dispatch) {
+      const pane = panes[dispatch.paneId];
+      if (pane) {
+        const texts: string[] = [];
+        for (const item of pane.items) {
+          if (
+            item.kind === 'assistant_text' &&
+            item.text &&
+            item.ts >= dispatch.sentAt
+          ) {
+            texts.push(item.text);
+          }
+        }
+        const joined = texts.join('\n\n');
+        if (joined.trim().length > 0) {
+          return {
+            agentSummary:
+              joined.length > 3000 ? joined.slice(-3000) : joined,
+            summaryTier: 'dispatch' as const,
+          };
+        }
+      }
+    }
+    // Tier 2 — file path heuristic. Only useful for review comments
+    // where `location` is `path:line`; for issue comments we'd be
+    // matching on a PR title which is too noisy to be useful.
+    const filePath = location.includes(':') ? location.split(':')[0] : '';
+    const fileBaseName = filePath ? filePath.split('/').pop() ?? '' : '';
+    if (filePath || fileBaseName) {
+      const matches: Array<{ text: string; ts: number }> = [];
+      for (const pane of Object.values(panes)) {
+        for (const item of pane.items) {
+          if (item.kind !== 'assistant_text' || !item.text) continue;
+          const text = item.text;
+          if (
+            (filePath && text.includes(filePath)) ||
+            (fileBaseName && text.includes(fileBaseName))
+          ) {
+            matches.push({ text, ts: item.ts });
+          }
+        }
+      }
+      if (matches.length > 0) {
+        matches.sort((a, b) => b.ts - a.ts);
+        const top = matches.slice(0, 2).map((m) => m.text);
+        const joined = top.reverse().join('\n\n');
+        return {
+          agentSummary:
+            joined.length > 3000 ? joined.slice(-3000) : joined,
+          summaryTier: 'heuristic' as const,
+        };
+      }
+    }
+    return { agentSummary: '', summaryTier: 'generic' as const };
+  }, [panes, dispatch, location]);
+  const agentHasResponded = summaryTier !== 'generic';
+
+  const handleOpen = async () => {
+    setOpen(true);
+    setError(null);
+    setPostedUrl(null);
+    // Skip the LLM round trip when we have no agent context to
+    // summarise — Haiku would just produce a generic "Done!" which
+    // isn't worth the latency or the API hit. Instead let the user
+    // type their own reply from a clean composer. This also avoids
+    // the "auto-draft surprise" the user flagged: replying without
+    // any actual changes shouldn't pre-fill words you didn't write.
+    if (summaryTier === 'generic') {
+      setDraft('');
+      return;
+    }
+    setDrafting(true);
+    try {
+      const draft = await window.cowork.pr.suggestReply({
+        commentBody,
+        location,
+        agentSummary,
+      });
+      setDraft(draft);
+    } catch (err) {
+      setError(
+        'Couldn\'t draft a reply: ' +
+          (err instanceof Error ? err.message : String(err)) +
+          '. You can still type one yourself below.',
+      );
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const handlePost = async () => {
+    if (posting || !draft.trim()) return;
+    setPosting(true);
+    setError(null);
+    try {
+      const result = await window.cowork.pr.postReply({
+        cwd,
+        prNumber,
+        body: draft.trim(),
+        kind,
+        reviewCommentId: kind === 'review' ? commentId : undefined,
+      });
+      setPostedUrl(result.url);
+      // Re-fetch the PR's full detail so the new reply appears in
+      // the thread immediately. We don't await — the post is the
+      // user-visible success; the refresh is a background polish so
+      // they don't have to manually close + reopen the drawer.
+      void refreshPrDetail(prNumber);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  if (postedUrl) {
+    return (
+      <div className="pr-reply-posted">
+        <span className="pr-reply-posted-glyph" aria-hidden>
+          ✓
+        </span>
+        <span>Posted on GitHub.</span>
+        <a
+          className="pr-reply-posted-link"
+          href={postedUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          View ↗
+        </a>
+      </div>
+    );
+  }
+
+  if (!open) {
+    // Reply is always available — even if we lost the dispatch
+    // record (app restart, cleared storage, etc.) we still try to
+    // find related agent work via the file-path heuristic, and as
+    // a last resort fall back to a polite generic reply that the
+    // user can edit. Tooltip reflects which tier of summary we'll
+    // be working from so expectations match reality.
+    const tooltip =
+      summaryTier === 'dispatch'
+        ? 'Draft a reply summarising what the agent did for this comment. You can edit before posting.'
+        : summaryTier === 'heuristic'
+          ? 'Draft a reply based on agent work that mentions this comment’s file. Best-effort match — review the draft carefully before posting.'
+          : 'Couldn’t find related agent work. Clicking Reply will draft a generic acknowledgement you can edit.';
+    return (
+      <button
+        type="button"
+        className="pr-btn pr-btn-sm pr-btn-ghost"
+        onClick={() => void handleOpen()}
+        title={tooltip}
+      >
+        Reply
+      </button>
+    );
+  }
+
+  return (
+    <div className="pr-reply-composer">
+      <div className="pr-reply-composer-head">
+        <span className="pr-reply-composer-title">
+          Reply on GitHub
+        </span>
+        <span className="pr-reply-composer-hint">
+          {drafting
+            ? summaryTier === 'dispatch'
+              ? 'Summarising the agent’s response…'
+              : summaryTier === 'heuristic'
+                ? 'Drafting from related agent work…'
+                : 'Drafting a generic reply (no agent response found)…'
+            : summaryTier === 'dispatch'
+              ? 'Draft based on the agent’s response — edit before posting'
+              : summaryTier === 'heuristic'
+                ? 'Draft based on related agent work — review carefully before posting'
+                : 'Generic draft — couldn’t find related agent work'}
+        </span>
+      </div>
+      <textarea
+        className="pr-reply-composer-textarea"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder={
+          drafting
+            ? 'Drafting…'
+            : 'Type your reply (or wait for the suggestion to load)…'
+        }
+        disabled={drafting || posting}
+        rows={4}
+        spellCheck
+      />
+      {error && <div className="pr-reply-composer-error">{error}</div>}
+      <div className="pr-reply-composer-actions">
+        <button
+          type="button"
+          className="pr-btn pr-btn-sm pr-btn-ghost"
+          onClick={() => {
+            setOpen(false);
+            setDraft('');
+            setError(null);
+          }}
+          disabled={posting}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="pr-btn pr-btn-sm pr-btn-primary"
+          onClick={() => void handlePost()}
+          disabled={drafting || posting || !draft.trim()}
+        >
+          {posting ? 'Posting…' : 'Post'}
+        </button>
+      </div>
     </div>
   );
 }

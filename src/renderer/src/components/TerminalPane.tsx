@@ -26,14 +26,19 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import type { PaneId } from '@shared/types';
 import { findWorkerPreset } from '@shared/worker-presets';
 import { useStore } from '../store';
 import { CloseIcon } from './icons';
 import { WorkerPresetIcon } from './worker-presets';
+import {
+  attachTerminalSession,
+  createTerminalSession,
+  destroyTerminalSession,
+  detachTerminalSession,
+  getTerminalSession,
+} from './terminal-sessions';
 
 interface Props {
   id: PaneId;
@@ -56,136 +61,83 @@ export function TerminalPane({ id }: Props) {
   const headerTitle = preset?.name ?? 'Terminal';
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const xtermRef = useRef<Terminal | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
-  const ptyIdRef = useRef<string | null>(null);
-  const detachOutputRef = useRef<(() => void) | null>(null);
-  const detachExitRef = useRef<(() => void) | null>(null);
-  // Strict-mode guards: in dev React mounts → unmounts → mounts again
-  // and we don't want the first mount's effect to spawn a PTY only
-  // for the cleanup of the *second* mount to kill it. Track whether
-  // we've actually spawned one for THIS mount.
-  const spawnedRef = useRef(false);
 
   const [error, setError] = useState<string | undefined>();
   // Bumped by the Reset action to force the spawn effect to re-run
-  // with a fresh PTY + xterm. Cleaner than yanking refs imperatively
-  // and lets the cleanup function in the effect handle teardown
-  // exactly as it does on unmount.
+  // with a fresh PTY + xterm. We destroy the existing pooled session
+  // imperatively in the reset handler, then this counter triggers
+  // the layout effect to recreate.
   const [resetCounter, setResetCounter] = useState(0);
 
-  // Spawn + wire xterm on mount. We re-spawn whenever the preset id
-  // changes (user dropped a different CLI on the pane) — that's
-  // signalled via the dependency array so the effect re-runs.
+  // Mount: attach (or create) a pooled terminal session, move its
+  // host DOM into our container. Unmount: ONLY detach the host —
+  // never destroy the session. The PTY + xterm live in the pool
+  // across React unmount/remount cycles, which is what protects a
+  // running CLI (Codex, Claude Code, long shell job) from getting
+  // killed when the surrounding pane tree restructures (e.g. a
+  // sibling closing, collapsing the split). The pool's
+  // `destroyTerminalSession` is called only on explicit close
+  // (store.closePane) or on Reset.
   useLayoutEffect(() => {
-    const host = containerRef.current;
-    if (!host || !cwd || !preset) return;
-    if (spawnedRef.current) return;
-    spawnedRef.current = true;
+    const container = containerRef.current;
+    if (!container || !cwd || !preset) return;
 
-    const term = new Terminal({
-      fontFamily:
-        'Menlo, Monaco, "SF Mono", "JetBrains Mono", Consolas, monospace',
-      fontSize: 12.5,
-      lineHeight: 1.2,
-      cursorBlink: true,
-      allowProposedApi: true,
-      theme: {
-        background: '#0c0e12',
-        foreground: '#e6e8ee',
-        cursor: '#e4d947',
-        cursorAccent: '#0c0e12',
-        selectionBackground: 'rgba(228, 217, 71, 0.28)',
-      },
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(host);
-    try {
-      fit.fit();
-    } catch {
-      // Host may not have measured yet; the resize observer below
-      // will fit again once layout settles.
+    // If a pooled session exists for a DIFFERENT preset/cwd, it's
+    // stale (user dropped a different CLI on this pane, or the
+    // project changed). Tear it down before recreating.
+    const existing = getTerminalSession(id);
+    if (
+      existing &&
+      (existing.presetId !== preset.id || existing.cwd !== cwd)
+    ) {
+      void destroyTerminalSession(id);
     }
-    xtermRef.current = term;
-    fitRef.current = fit;
 
     let cancelled = false;
-    void window.cowork.terminal
-      .spawn({
+    const noteTerminalOutput = useStore.getState().noteTerminalOutput;
+
+    const pooled = getTerminalSession(id);
+    if (pooled && pooled.presetId === preset.id && pooled.cwd === cwd) {
+      // Reuse — no PTY spawn, no listener churn. Just reattach the
+      // host DOM into our container and refit.
+      attachTerminalSession(id, container);
+      setPanePtyId(id, pooled.ptyId);
+    } else {
+      void createTerminalSession({
+        paneId: id,
         cwd,
-        cols: term.cols,
-        rows: term.rows,
+        presetId: preset.id,
         // Empty command = plain shell (the 'Terminal' preset).
         // Anything else gets typed into the shell after rc files
         // load, so users keep a working shell behind the CLI.
-        initialCommand: preset.command || undefined,
+        command: preset.command,
+        onOutput: (data) => noteTerminalOutput(data),
       })
-      .then(({ id: ptyId }) => {
-        if (cancelled) {
-          // Component already unmounted before main responded; kill
-          // the orphan immediately.
-          void window.cowork.terminal.kill(ptyId);
-          return;
-        }
-        ptyIdRef.current = ptyId;
-        setPanePtyId(id, ptyId);
-
-        // Pipe shell stdout → xterm. Tee through the localhost-URL
-        // detector so `npm run dev` etc. populate the Preview button
-        // even when no agent is active in the project.
-        const noteTerminalOutput = useStore.getState().noteTerminalOutput;
-        detachOutputRef.current = window.cowork.terminal.onOutput(
-          (payload) => {
-            if (payload.id !== ptyId) return;
-            term.write(payload.data);
-            noteTerminalOutput(payload.data);
-          },
-        );
-        detachExitRef.current = window.cowork.terminal.onExit((payload) => {
-          if (payload.id !== ptyId) return;
-          term.write(
-            `\r\n\x1b[2m[exit ${payload.exitCode}${
-              payload.signal ? ` signal ${payload.signal}` : ''
-            }]\x1b[0m\r\n`,
-          );
+        .then((session) => {
+          if (cancelled) {
+            // Component unmounted before spawn completed. Tear down
+            // the orphan immediately rather than leaving a runaway
+            // PTY in the pool.
+            void destroyTerminalSession(id);
+            return;
+          }
+          attachTerminalSession(id, container);
+          setPanePtyId(id, session.ptyId);
+        })
+        .catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : String(err));
         });
-        // Pipe xterm keystrokes → shell stdin.
-        term.onData((data) => {
-          void window.cowork.terminal.input({ id: ptyId, data });
-        });
-        // Notify main when xterm resizes (font / window changes).
-        term.onResize(({ cols, rows }) => {
-          void window.cowork.terminal.resize({ id: ptyId, cols, rows });
-        });
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
+    }
 
     return () => {
       cancelled = true;
-      detachOutputRef.current?.();
-      detachOutputRef.current = null;
-      detachExitRef.current?.();
-      detachExitRef.current = null;
-      const ptyId = ptyIdRef.current;
-      if (ptyId) {
-        void window.cowork.terminal.kill(ptyId);
-        ptyIdRef.current = null;
-        setPanePtyId(id, null);
-      }
-      try {
-        term.dispose();
-      } catch {
-        // ignore — DOM may already be torn down
-      }
-      xtermRef.current = null;
-      fitRef.current = null;
-      spawnedRef.current = false;
+      // Move the host out of our container (back to body, hidden) so
+      // React can safely unmount the component tree without yanking
+      // xterm's DOM. The session itself stays alive.
+      detachTerminalSession(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cwd, preset?.id, resetCounter]);
+  }, [id, cwd, preset?.id, resetCounter]);
 
   /**
    * Reset action — kill the current PTY + xterm and spawn fresh.
@@ -200,18 +152,26 @@ export function TerminalPane({ id }: Props) {
     );
     if (!ok) return;
     setError(undefined);
+    // Tear down the pooled session imperatively. The layout effect
+    // (depending on resetCounter) will then create a fresh one.
+    void destroyTerminalSession(id);
     setResetCounter((n) => n + 1);
-  }, [preset?.name]);
+  }, [preset?.name, id]);
 
   // Refit on container resize. Pane resize comes from the
   // react-resizable-panels splitter, which doesn't fire window
-  // resize. ResizeObserver on the host is the right tool.
+  // resize. ResizeObserver on the host is the right tool. The
+  // pooled session's `fit` addon is what we drive — it walks
+  // xterm's DOM (which is already attached to our container) and
+  // sizes columns/rows.
   useEffect(() => {
     const host = containerRef.current;
     if (!host) return;
     const refit = () => {
+      const s = getTerminalSession(id);
+      if (!s) return;
       try {
-        fitRef.current?.fit();
+        s.fit.fit();
       } catch {
         // host may be hidden during transitions
       }
@@ -224,7 +184,7 @@ export function TerminalPane({ id }: Props) {
       ro.disconnect();
       window.removeEventListener('resize', refit);
     };
-  }, []);
+  }, [id]);
 
   // Focus xterm when the pane becomes active so keystrokes flow into
   // the shell without an extra click. We refocus on every active
@@ -234,12 +194,12 @@ export function TerminalPane({ id }: Props) {
     if (!isActive) return;
     requestAnimationFrame(() => {
       try {
-        xtermRef.current?.focus();
+        getTerminalSession(id)?.term.focus();
       } catch {
         // ignore
       }
     });
-  }, [isActive]);
+  }, [isActive, id]);
 
   if (!pane) {
     return <div className="pane empty">No pane.</div>;

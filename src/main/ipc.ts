@@ -83,6 +83,14 @@ import {
   listPullRequests,
 } from './pr';
 import {
+  validateComment,
+  suggestReply,
+  postReply,
+  type ValidateCommentArgs,
+  type SuggestReplyArgs,
+  type PostReplyArgs,
+} from './pr-llm';
+import {
   appendLogEntry,
   deletePage as wikiDeletePage,
   getWikiStatus,
@@ -239,7 +247,13 @@ export function registerIpcHandlers(): void {
         if (params.isLead) {
           mcpServers['lead-orchestrator'] = createLeadToolServer({
             pool: sessionPool,
-            windowId: winId,
+            // Two distinct ids on purpose — see lead-tools.ts:
+            //   browserWindowId: Electron window for IPC routing.
+            //   leadSessionId: per-project session id used to scope
+            //     pool lookups so a Lead in workspace B can never
+            //     route a message to a stale pane in workspace A.
+            browserWindowId: winId,
+            leadSessionId: params.windowId,
             leadPaneId: params.paneId,
             cwd: params.cwd,
             // Same project-scope inclusion as session start — without
@@ -460,6 +474,22 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle(IPC.PR_AVAILABLE, async (_e, args: { cwd: string }) =>
     isGhAvailable(args.cwd),
+  );
+
+  // v1.5 — Validate / suggest reply / post reply for PR comments.
+  // Validate + suggest call Haiku via the Agent SDK; post hits gh.
+  // The renderer wraps each in its own busy state per comment row.
+  ipcMain.handle(
+    IPC.PR_VALIDATE_COMMENT,
+    async (_e, args: ValidateCommentArgs) => validateComment(args),
+  );
+  ipcMain.handle(
+    IPC.PR_SUGGEST_REPLY,
+    async (_e, args: SuggestReplyArgs) => suggestReply(args),
+  );
+  ipcMain.handle(
+    IPC.PR_POST_REPLY,
+    async (_e, args: PostReplyArgs) => postReply(args),
   );
 
   // -- LLM Wiki -------------------------------------------------------------

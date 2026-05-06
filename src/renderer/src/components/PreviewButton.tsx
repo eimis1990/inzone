@@ -25,6 +25,7 @@ export function PreviewButton() {
   const panes = useStore((s) => s.panes);
   const terminalLocalhostUrls = useStore((s) => s.terminalLocalhostUrls);
   const forgetLocalhostUrl = useStore((s) => s.forgetLocalhostUrl);
+  const forgetLocalhostPort = useStore((s) => s.forgetLocalhostPort);
   const [killing, setKilling] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -87,29 +88,70 @@ export function PreviewButton() {
   };
 
   /**
-   * Kill the process listening on this URL's port. Confirms first
-   * because dev servers often hold unsaved state. Drops the URL from
-   * the detected list optimistically — if the kill fails (e.g. system
-   * lsof hiccup) the URL will reappear next time it prints anything.
+   * Kill the process listening on this URL's port. Confirms only when
+   * something IS still listening (to protect unsaved dev-server
+   * state). Then prunes EVERY URL on that port from the list — not
+   * just the one the user clicked — because all URLs sharing a port
+   * (`:3001` + `:3001/kainos`) are served by a single listener and
+   * should clear together.
+   *
+   * If the port wasn't listening to begin with (stale entry the
+   * liveness sweep hadn't caught yet), we silently prune the URL
+   * instead of showing a confusing "nothing was listening" alert —
+   * the user clicked X to make it go away, and it goes away.
    */
   const killOne = async (url: string) => {
-    const ok = confirm(
-      `Kill the process listening on ${url}?\n\nINZONE will SIGTERM the listener (then SIGKILL after a moment if it doesn't exit). Make sure unsaved work is committed.`,
-    );
-    if (!ok) return;
     setKilling(url);
     try {
+      // Pre-check: is there actually a listener? If not, we're in
+      // the stale-URL case — just drop the entry without asking the
+      // user to confirm a kill that has nothing to do.
+      let hasListener = false;
+      try {
+        const listeners = await window.cowork.system.portListeners({ url });
+        hasListener = listeners.length > 0;
+      } catch {
+        // Probe failed — assume there's a listener so we don't
+        // silently drop a healthy server because lsof had a hiccup.
+        hasListener = true;
+      }
+      if (!hasListener) {
+        // Stale URL. Drop everything on this port and exit quietly.
+        const port = portFromUrl(url);
+        if (port != null) forgetLocalhostPort(port);
+        else forgetLocalhostUrl(url);
+        if (urls.length <= 1) setShowMenu(false);
+        return;
+      }
+
+      const ok = confirm(
+        `Kill the process listening on ${url}?\n\nINZONE will SIGTERM the listener (then SIGKILL after a moment if it doesn't exit). Make sure unsaved work is committed.`,
+      );
+      if (!ok) return;
       const result = await window.cowork.system.killPort({ url });
-      if (result.killed.length === 0 && result.errors.length === 0) {
-        alert(`Nothing was listening on that port.`);
-      } else if (result.errors.length > 0) {
+      if (result.errors.length > 0 && result.killed.length > 0) {
         alert(
           `Killed ${result.killed.length} process(es), but had errors:\n` +
             result.errors.map((e) => `  PID ${e.pid}: ${e.message}`).join('\n'),
         );
+      } else if (
+        result.errors.length > 0 &&
+        result.killed.length === 0
+      ) {
+        alert(
+          `Couldn't kill the listener:\n` +
+            result.errors
+              .map((e) => `  PID ${e.pid || '?'}: ${e.message}`)
+              .join('\n'),
+        );
+        // Don't prune on outright failure — let the user retry.
+        return;
       }
-      forgetLocalhostUrl(url);
-      // Close the menu if there's nothing left to show.
+      // Drop ALL URLs sharing this port (e.g. `:3001/kainos` should
+      // disappear when the user kills `:3001`).
+      const port = portFromUrl(url);
+      if (port != null) forgetLocalhostPort(port);
+      else forgetLocalhostUrl(url);
       if (urls.length <= 1) setShowMenu(false);
     } catch (err) {
       alert(
@@ -118,6 +160,37 @@ export function PreviewButton() {
     } finally {
       setKilling(null);
     }
+  };
+
+  /** Liveness sweep — same logic as the periodic version below, but
+   *  callable on demand (e.g. when the dropdown opens, so the user
+   *  always sees fresh state instead of a list that's up to 12s
+   *  stale). Drops dead URLs by port to keep the multi-URL-per-port
+   *  case clean. */
+  const sweepNow = async () => {
+    const list = useStore.getState().terminalLocalhostUrls;
+    if (list.length === 0) return;
+    const checks = await Promise.all(
+      list.map(async (u) => {
+        try {
+          const listeners = await window.cowork.system.portListeners({
+            url: u,
+          });
+          return { url: u, alive: listeners.length > 0 };
+        } catch {
+          return { url: u, alive: true };
+        }
+      }),
+    );
+    const deadPorts = new Set<number>();
+    for (const { url: u, alive } of checks) {
+      if (!alive) {
+        const p = portFromUrl(u);
+        if (p != null) deadPorts.add(p);
+      }
+    }
+    const forgetPort = useStore.getState().forgetLocalhostPort;
+    for (const p of deadPorts) forgetPort(p);
   };
 
   // ⌘P / Ctrl+P opens the preview (or the picker when multiple URLs).
@@ -159,6 +232,14 @@ export function PreviewButton() {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, [showMenu]);
+
+  // Refresh the list whenever the dropdown opens so dead URLs disappear
+  // immediately instead of lingering until the next 12s periodic sweep.
+  useEffect(() => {
+    if (!showMenu) return;
+    void sweepNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMenu]);
 
   /**
@@ -305,6 +386,19 @@ function shortPort(url: string): string {
     return u.port ? `:${u.port}` : u.hostname;
   } catch {
     return url;
+  }
+}
+
+/** Parse the port number out of a URL, or null if no explicit port. We
+ *  use this to group URLs by listener: `http://localhost:3001` and
+ *  `http://localhost:3001/kainos` share port 3001 and a single PID, so
+ *  killing one should clear both. */
+function portFromUrl(url: string): number | null {
+  try {
+    const u = new URL(url);
+    return u.port ? Number(u.port) : null;
+  } catch {
+    return null;
   }
 }
 

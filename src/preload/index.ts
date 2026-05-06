@@ -338,6 +338,33 @@ const api: CoworkApi = {
      *  remote? Drives the inline "install gh" hint. */
     available: (cwd: string): Promise<boolean> =>
       ipcRenderer.invoke(IPC.PR_AVAILABLE, { cwd }),
+    /** v1.5 — Validate a PR comment. Returns verdict + reasoning. */
+    validateComment: (args: {
+      commentBody: string;
+      location: string;
+      diffHunk?: string;
+    }): Promise<{
+      verdict: 'good' | 'caution' | 'bad';
+      reasoning: string;
+    }> => ipcRenderer.invoke(IPC.PR_VALIDATE_COMMENT, args),
+    /** v1.5 — Draft a reply to a PR comment based on the agent's
+     *  recent transcript snippet. Returns a string the user can edit. */
+    suggestReply: (args: {
+      commentBody: string;
+      location: string;
+      agentSummary: string;
+    }): Promise<string> =>
+      ipcRenderer.invoke(IPC.PR_SUGGEST_REPLY, args),
+    /** v1.5 — Post a reply to a PR comment via gh. Returns the URL of
+     *  the new comment for a "View on GitHub" link. */
+    postReply: (args: {
+      cwd: string;
+      prNumber: number;
+      body: string;
+      kind: 'review' | 'issue';
+      reviewCommentId?: string;
+    }): Promise<{ url: string }> =>
+      ipcRenderer.invoke(IPC.PR_POST_REPLY, args),
   },
   wiki: {
     /** Probe whether <cwd>/.inzone/wiki/ is set up. Returns
