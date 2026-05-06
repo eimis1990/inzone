@@ -56,6 +56,12 @@ export interface CoworkApi {
     save(draft: AgentDraft): Promise<AgentDef>;
     delete(filePath: string): Promise<{ ok: true }>;
     generate(args: { name: string; description: string }): Promise<string>;
+    /** Rewrite a short agent description into a richer, role-grounded one
+     *  using Haiku. Returns the original input if the model returns nothing. */
+    enhanceDescription(args: {
+      name: string;
+      description: string;
+    }): Promise<string>;
     onWatch(listener: () => void): () => void;
   };
   skills: {

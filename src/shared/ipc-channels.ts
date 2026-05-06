@@ -7,6 +7,7 @@ export const IPC = {
   AGENTS_SAVE: 'agents:save',
   AGENTS_DELETE: 'agents:delete',
   AGENTS_GENERATE: 'agents:generate',
+  AGENTS_ENHANCE_DESCRIPTION: 'agents:enhance-description',
   SKILLS_LIST: 'skills:list',
   SKILLS_SAVE: 'skills:save',
   SKILLS_DELETE: 'skills:delete',

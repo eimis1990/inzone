@@ -24,7 +24,7 @@ import {
   resolveAnswer,
   type AskUserQuestionAnswer,
 } from './ask-user-question-tool';
-import { generateAgentBody } from './agent-generator';
+import { generateAgentBody, enhanceAgentDescription } from './agent-generator';
 import {
   composeMemoryForScope,
   ensureProjectMemory,
@@ -187,6 +187,12 @@ export function registerIpcHandlers(): void {
     IPC.AGENTS_GENERATE,
     async (_e, args: { name: string; description: string }) => {
       return generateAgentBody(args);
+    },
+  );
+  ipcMain.handle(
+    IPC.AGENTS_ENHANCE_DESCRIPTION,
+    async (_e, args: { name: string; description: string }) => {
+      return enhanceAgentDescription(args);
     },
   );
   ipcMain.handle(IPC.SKILLS_LIST, async (_e, projectDir?: string) => {

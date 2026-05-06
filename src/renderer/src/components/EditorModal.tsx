@@ -25,6 +25,8 @@ export function EditorModal() {
   const [allMcps, setAllMcps] = useState<McpServerEntry[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | undefined>();
+  const [enhancingDescription, setEnhancingDescription] = useState(false);
+  const [enhanceError, setEnhanceError] = useState<string | undefined>();
 
   // Load configured MCP servers when the editor opens so the agent can
   // opt into them. Refresh whenever cwd changes (different project file).
@@ -155,14 +157,75 @@ export function EditorModal() {
             </div>
 
             <label className="field">
-              <span className="field-label">Description</span>
+              <span className="field-label-row">
+                <span className="field-label">Description</span>
+                {isAgent && (
+                  <button
+                    type="button"
+                    className="enhance-btn"
+                    onClick={async () => {
+                      const current = (draft.description ?? '').trim();
+                      if (!current) {
+                        setEnhanceError(
+                          'Type a short description first, then Enhance.',
+                        );
+                        return;
+                      }
+                      setEnhanceError(undefined);
+                      setEnhancingDescription(true);
+                      try {
+                        const next =
+                          await window.cowork.agents.enhanceDescription({
+                            name: draft.name,
+                            description: current,
+                          });
+                        const cleaned = next.trim();
+                        if (cleaned && cleaned !== current) {
+                          update({ description: cleaned });
+                        }
+                      } catch (err) {
+                        setEnhanceError(
+                          err instanceof Error
+                            ? err.message
+                            : 'Enhancement failed. Try again.',
+                        );
+                      } finally {
+                        setEnhancingDescription(false);
+                      }
+                    }}
+                    disabled={
+                      enhancingDescription ||
+                      !(draft.description ?? '').trim()
+                    }
+                    title="Rewrite as 3 short paragraphs (role · knowledge · how it works)"
+                  >
+                    {enhancingDescription ? (
+                      <>
+                        <span className="btn-spinner" aria-hidden />
+                        Enhancing…
+                      </>
+                    ) : (
+                      <>
+                        <SparkleIcon />
+                        Enhance
+                      </>
+                    )}
+                  </button>
+                )}
+              </span>
               <textarea
                 value={draft.description ?? ''}
                 onChange={(e) => update({ description: e.target.value })}
-                placeholder="Short description shown in the sidebar and hovertip"
+                placeholder="Short description shown in the sidebar and hovertip — type a 1-line role and click Enhance"
                 rows={3}
                 className="field-textarea"
+                disabled={enhancingDescription}
               />
+              {enhanceError && (
+                <span className="field-hint field-hint-error">
+                  {enhanceError}
+                </span>
+              )}
             </label>
           </section>
 
@@ -468,40 +531,15 @@ export function EditorModal() {
           )}
 
           <section className="editor-section editor-section-prompt">
-            <div className="editor-section-title">System prompt</div>
-          <div className="field field-grow">
-            <span className="field-label">
-              System prompt / body
-              <span className="field-hint-inline">
-                {' '}(markdown — syntax highlighted below)
-              </span>
-            </span>
-            {generateError && (
-              <div className="modal-error">{generateError}</div>
-            )}
-            <div className="codemirror-wrap">
-              <CodeMirror
-                value={draft.body}
-                onChange={(value) => update({ body: value })}
-                theme={oneDark}
-                extensions={[
-                  markdown({
-                    base: markdownLanguage,
-                    codeLanguages: languages,
-                  }),
-                ]}
-                basicSetup={{
-                  lineNumbers: true,
-                  highlightActiveLine: true,
-                  foldGutter: true,
-                  bracketMatching: true,
-                }}
-                minHeight="1280px"
-                maxHeight="2000px"
-              />
-            </div>
-            {isAgent && (
-              <div className="generate-row">
+            <div className="editor-section-header editor-section-header-tight">
+              <div className="editor-section-title">
+                <span>System prompt</span>
+                <span className="field-hint-inline">
+                  markdown — syntax highlighted
+                </span>
+              </div>
+              {isAgent && (
+              <div className="generate-cluster">
                 <button
                   type="button"
                   className="generate-btn"
@@ -534,16 +572,50 @@ export function EditorModal() {
                       setGenerating(false);
                     }
                   }}
-                  title="Generate a system prompt from name + description"
                 >
-                  {generating ? 'Generating…' : '✨ Generate prompt'}
+                  {generating ? (
+                    <>
+                      <span className="btn-spinner" aria-hidden />
+                      Generating…
+                    </>
+                  ) : (
+                    <>
+                      <SparkleIcon />
+                      Generate prompt
+                    </>
+                  )}
                 </button>
-                <span className="generate-hint">
-                  Generated from the agent's name and description above —
-                  fill those in first for better results.
+                <span className="generate-hint-mini">
+                  Generate uses title + description above
                 </span>
               </div>
+              )}
+            </div>
+          <div className="field field-grow field-prompt-body">
+            {generateError && (
+              <div className="modal-error">{generateError}</div>
             )}
+            <div className="codemirror-wrap">
+              <CodeMirror
+                value={draft.body}
+                onChange={(value) => update({ body: value })}
+                theme={oneDark}
+                extensions={[
+                  markdown({
+                    base: markdownLanguage,
+                    codeLanguages: languages,
+                  }),
+                ]}
+                basicSetup={{
+                  lineNumbers: true,
+                  highlightActiveLine: true,
+                  foldGutter: true,
+                  bracketMatching: true,
+                }}
+                minHeight="1280px"
+                maxHeight="2000px"
+              />
+            </div>
           </div>
           </section>
 
@@ -690,5 +762,25 @@ function EmojiPicker({
         </div>
       )}
     </div>
+  );
+}
+
+/** Four-point sparkle used inside the Enhance + Generate AI buttons.
+ *  Rendered as inline SVG so it inherits color via `currentColor` and stays
+ *  crisp at any DPI. Sized via CSS rather than width/height props. */
+function SparkleIcon() {
+  return (
+    <svg
+      className="ai-sparkle"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M8 0.5l1.4 4.4 4.4 1.4-4.4 1.4L8 12.1 6.6 7.7 2.2 6.3l4.4-1.4L8 0.5z" />
+      <path
+        d="M13 10l0.6 1.9 1.9 0.6-1.9 0.6L13 15l-0.6-1.9-1.9-0.6 1.9-0.6L13 10z"
+        opacity="0.7"
+      />
+    </svg>
   );
 }

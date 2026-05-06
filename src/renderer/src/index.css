@@ -4924,6 +4924,66 @@ select:focus {
   text-transform: uppercase;
   color: var(--text-dim);
 }
+/* Section header row — keeps the section title flush-left and lets us
+   anchor an action button (e.g. "Generate prompt") on the right edge,
+   so the action is visible without scrolling to the bottom of a tall
+   editor like the system-prompt CodeMirror. */
+.editor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.editor-section-header .generate-btn {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 11.5px;
+}
+/* Tight variant used for the System prompt section: the section title +
+   Generate-prompt cluster sits *directly above* the CodeMirror editor
+   with no redundant inner field-label between them, so the action is
+   visually attached to the field it operates on.
+   Bottom-aligned so the title sits next to the button (not floating
+   high above its hint) and both groups land ~10px above the field. */
+.editor-section-header-tight {
+  margin-bottom: 5px;
+  align-items: flex-end;
+}
+.editor-section-header-tight .editor-section-title {
+  /* Title group: tag (SYSTEM PROMPT) + tiny inline hint underneath. */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.2;
+}
+.editor-section-header-tight .editor-section-title .field-hint-inline {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted, var(--text-dim));
+  font-weight: normal;
+  font-size: 10.5px;
+}
+.field-prompt-body {
+  margin-top: 0;
+}
+/* Stacks the Generate prompt button on top of its small explanatory
+   hint, both right-aligned to sit cleanly under each other in the
+   section header. The hint sits below the button so the action reads
+   first; copy here intentionally tiny so it doesn't compete with the
+   uppercase section title across the row. */
+.generate-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.generate-hint-mini {
+  font-size: 10.5px;
+  color: var(--muted, var(--text-dim));
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
 /* The system-prompt section holds a very tall CodeMirror editor and
    doesn't need an extra background tint — the editor's own background
    already reads as a card. Keep just the title spacing. */
@@ -4993,24 +5053,157 @@ select:focus {
 }
 .generate-btn {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 34px;
   padding: 0 16px;
   border-radius: 999px;
-  background: rgba(228, 217, 71, 0.14);
-  border: 1px solid rgba(228, 217, 71, 0.35);
+  background: linear-gradient(
+    180deg,
+    rgba(228, 217, 71, 0.22) 0%,
+    rgba(228, 217, 71, 0.10) 100%
+  );
+  border: 1px solid rgba(228, 217, 71, 0.40);
   color: var(--accent);
   font-size: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 0 1px rgba(228, 217, 71, 0.05),
+    0 4px 14px -6px rgba(228, 217, 71, 0.32);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 80ms ease;
   font-weight: 700;
   letter-spacing: 0.01em;
-  transition: background 120ms, border-color 120ms;
+  cursor: pointer;
 }
 .generate-btn:hover:not(:disabled) {
-  background: rgba(228, 217, 71, 0.24);
-  border-color: rgba(228, 217, 71, 0.5);
+  background: linear-gradient(
+    180deg,
+    rgba(228, 217, 71, 0.32) 0%,
+    rgba(228, 217, 71, 0.16) 100%
+  );
+  border-color: rgba(228, 217, 71, 0.6);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.10) inset,
+    0 0 0 1px rgba(228, 217, 71, 0.10),
+    0 8px 22px -8px rgba(228, 217, 71, 0.55);
+}
+.generate-btn:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 .generate-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Description field gets a sparkle "Enhance" button on the right side of
+   its label so users can expand a one-liner into a structured 3-paragraph
+   description (which then makes the system-prompt generator below much
+   stronger). Smaller sibling of .generate-btn — shares the gradient and
+   the soft accent halo so the two AI buttons read as a family. */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.enhance-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(228, 217, 71, 0.18) 0%,
+    rgba(228, 217, 71, 0.08) 100%
+  );
+  border: 1px solid rgba(228, 217, 71, 0.32);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-transform: none;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 3px 10px -6px rgba(228, 217, 71, 0.28);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 80ms ease,
+    opacity 120ms ease;
+}
+.enhance-btn:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    rgba(228, 217, 71, 0.28) 0%,
+    rgba(228, 217, 71, 0.14) 100%
+  );
+  border-color: rgba(228, 217, 71, 0.5);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 6px 16px -8px rgba(228, 217, 71, 0.45);
+}
+.enhance-btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.enhance-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.field-hint-error {
+  color: var(--danger, #ff6e6e);
+}
+
+/* Sparkle SVG inside .enhance-btn / .generate-btn — sized via CSS so
+   we don't need width/height props on every usage. Drops a soft glow
+   when its parent button is hovered (keeps the AI feel without going
+   full disco). */
+.ai-sparkle {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(228, 217, 71, 0.35));
+  transition: filter 140ms ease, transform 200ms ease;
+}
+.generate-btn .ai-sparkle {
+  width: 13px;
+  height: 13px;
+}
+.generate-btn:hover:not(:disabled) .ai-sparkle,
+.enhance-btn:hover:not(:disabled) .ai-sparkle {
+  filter: drop-shadow(0 0 6px rgba(228, 217, 71, 0.65));
+  transform: rotate(15deg);
+}
+
+/* Tiny inline spinner used while a button is busy ("Generating…",
+   "Enhancing…"). Matches the button's text colour so it works on any
+   tinted button without extra colour overrides. */
+.btn-spinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  display: inline-block;
+  flex-shrink: 0;
+  animation: btn-spinner-rot 0.7s linear infinite;
+}
+@keyframes btn-spinner-rot {
+  to {
+    transform: rotate(360deg);
+  }
 }
 /* Row that pairs the Generate button with its inline explanatory hint
    underneath the system-prompt editor. Hint sits to the right of the

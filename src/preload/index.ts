@@ -45,6 +45,11 @@ const api: CoworkApi = {
       ipcRenderer.invoke(IPC.AGENTS_DELETE, filePath),
     generate: (args: { name: string; description: string }): Promise<string> =>
       ipcRenderer.invoke(IPC.AGENTS_GENERATE, args),
+    enhanceDescription: (args: {
+      name: string;
+      description: string;
+    }): Promise<string> =>
+      ipcRenderer.invoke(IPC.AGENTS_ENHANCE_DESCRIPTION, args),
     onWatch: (listener: () => void): (() => void) => {
       const handler = () => listener();
       ipcRenderer.on(IPC.AGENTS_WATCH, handler);

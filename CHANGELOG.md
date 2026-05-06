@@ -4,6 +4,50 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] — 2026-05-06
+
+### Added
+
+- **Enhance description button.** New ✨ Enhance pill next to the
+  Description label in the agent editor. Type a one-line role,
+  click Enhance, and Sonnet rewrites it as 3 short paragraphs
+  (role · domain knowledge · how it works in a repo) — 80–160
+  words, plain prose, no markdown. Works as the natural setup
+  step for the existing Generate prompt button: a richer
+  description makes the system prompt that follows much more
+  grounded.
+
+### Changed
+
+- **Stronger agent system-prompt generator.** Rewrote the
+  meta-prompt with 9 mandatory sections (Core Responsibilities,
+  Workspace, Context Discovery, Workflow, Domain Best Practices,
+  Validation, Guardrails, Collaboration & Handoff) and role-aware
+  hints — the prompt teaches the new agent to inspect different
+  files for frontend vs. mobile vs. backend vs. reviewer vs.
+  extractor work, rather than emitting generic advice. Length
+  target raised from 50–130 to 90–180 lines, output cleanup is
+  more aggressive (strips fences + "Here's the system prompt…"
+  preambles), and a hardcoded fallback prompt ships in the file
+  so the editor never lands on an empty body if the SDK errors.
+- **Generate prompt button moved.** Was at the bottom of the
+  editor below a 1280px CodeMirror; now sits at the top-right of
+  the System prompt section header with a small "Generate uses
+  title + description above" hint underneath it. No more scrolling
+  to find the action.
+- **AI buttons (Enhance + Generate) redesigned.** Custom inline
+  SparkleIcon (rotates 15° on hover with a soft accent glow), a
+  proper top-to-bottom gradient fill, an inset highlight, and a
+  colored shadow that intensifies on hover. The two buttons share
+  the same look so they read as a family. Loading state swaps the
+  sparkle for a CSS-only spinner that inherits text color.
+- **Editor section layout tighter.** Dropped the redundant
+  "SYSTEM PROMPT / BODY (markdown — syntax highlighted below)"
+  label between the section header and the editor. The header
+  now stacks the title + markdown hint on the left and the
+  Generate cluster on the right, bottom-aligned, sitting 5px
+  above the CodeMirror.
+
 ## [1.5.0] — 2026-05-06
 
 ### Added
@@ -101,6 +145,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the right; with three actions per comment (Validate, Send,
   Reply) the row needed flex-wrap and tighter spacing.
 
+[1.5.1]: https://github.com/eimis1990/inzone/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/eimis1990/inzone/compare/v1.4.0...v1.5.0
 
 ## [1.4.0] — 2026-05-05
