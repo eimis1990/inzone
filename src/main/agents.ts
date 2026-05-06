@@ -19,7 +19,12 @@ async function parseAgentFile(
   scope: 'user' | 'project',
 ): Promise<AgentDef | null> {
   try {
-    const raw = await fs.readFile(filePath, 'utf8');
+    // Read + stat in parallel — stat gives us mtime for the Agents
+    // table's "Modified" column sort.
+    const [raw, stat] = await Promise.all([
+      fs.readFile(filePath, 'utf8'),
+      fs.stat(filePath).catch(() => null),
+    ]);
     const parsed = matter(raw);
     const data = parsed.data as Record<string, unknown>;
     const baseName = path.basename(filePath, path.extname(filePath));
@@ -88,6 +93,7 @@ async function parseAgentFile(
       body: parsed.content.trim(),
       filePath,
       scope,
+      modifiedAt: stat ? stat.mtimeMs : undefined,
     };
   } catch (err) {
     console.warn(`[agents] failed to parse ${filePath}:`, err);

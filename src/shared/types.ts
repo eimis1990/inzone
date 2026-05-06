@@ -47,6 +47,11 @@ export interface AgentDef {
   filePath: string;
   /** 'user' (~/.claude) or 'project' (./.claude). */
   scope: 'user' | 'project';
+  /** Last-modified time of the source file, in epoch milliseconds.
+   *  Captured via fs.stat at parse time so the Agents table can sort
+   *  by recency without each row hitting the disk. Optional because
+   *  legacy persisted entries may not carry it. */
+  modifiedAt?: number;
 }
 
 /**

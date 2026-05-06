@@ -55,7 +55,11 @@ function ChildSlot({
 }) {
   return (
     <>
-      <Panel defaultSize={defaultSize} minSize={15} id={getKey(child)} order={i}>
+      {/* `minSize` is a percentage — the absolute pixel floor for
+          splits is enforced in store.splitPane via DOM measurement.
+          20% here just keeps manual drag-resize from collapsing a
+          pane below half its sibling's space. */}
+      <Panel defaultSize={defaultSize} minSize={20} id={getKey(child)} order={i}>
         <NodeView node={child} path={path} />
       </Panel>
       {i < total - 1 && <PanelResizeHandle className="resize-handle" />}

@@ -459,6 +459,7 @@ export function Pane({ id }: PaneProps) {
     <div
       className={'pane' + (isActive ? ' active' : '') + (dragging ? ' dragging' : '')}
       style={paneStyle}
+      data-pane-id={id}
       onMouseDown={() => setActivePane(id)}
       onDragOver={(e) => {
         if (!pane.agentName) return;
@@ -484,9 +485,12 @@ export function Pane({ id }: PaneProps) {
         }
       >
         {isLead && <span className="lead-badge">Lead</span>}
-        {agent?.emoji && (
+        {pane.agentName && (
+          // Always render the avatar slot once an agent is assigned —
+          // falls back to 🤖 when the agent definition omits an emoji
+          // so panes don't visually drop the avatar mid-row.
           <div className="pane-emoji" aria-hidden>
-            {agent.emoji}
+            {agent?.emoji ?? '🤖'}
           </div>
         )}
         <div className="pane-titles">
@@ -558,21 +562,25 @@ export function Pane({ id }: PaneProps) {
               0,
             );
             const variant = statusVariant(pane.status, pane.items);
+            // Two-line stack mirroring the title block on the left:
+            // status dot + label up top (no pill — just inline text in
+            // the variant's tint colour), cost chip underneath using
+            // the same .pane-meta-chip pill as the agent slug + model
+            // chips so the right side matches the left visually.
             return (
               <div
-                className={`pane-status-badge variant-${variant}`}
+                className={`pane-status-stack variant-${variant}`}
                 title={pane.error ? `Error: ${pane.error}` : undefined}
               >
-                <StatusDot status={pane.status} />
-                <span className="pane-status-label">
-                  {statusLabel(pane.status, pane.items)}
-                </span>
-                <span className="pane-status-sep" aria-hidden>
-                  ·
-                </span>
-                <span className="pane-status-cost">
+                <div className="pane-status-line">
+                  <StatusDot status={pane.status} />
+                  <span className="pane-status-label">
+                    {statusLabel(pane.status, pane.items)}
+                  </span>
+                </div>
+                <code className="pane-meta-chip pane-cost-chip">
                   {formatPaneCost(total)}
-                </span>
+                </code>
               </div>
             );
           })()}
@@ -795,6 +803,15 @@ export function Pane({ id }: PaneProps) {
             }
             disabled={!pane.agentName || flowBlocked}
             canSend={!!canSend}
+            // Identity props — surface the agent the message is going
+            // to so the user can confirm at a glance which pane this
+            // expanded composer belongs to. The accentColor drives the
+            // textarea border + the meta-chip tint inside the modal.
+            agentDisplayName={titleName}
+            agentSlug={pane.agentName ?? null}
+            agentModel={agent?.model ?? null}
+            agentEmoji={pane.agentName ? (agent?.emoji ?? '🤖') : null}
+            accentColor={color?.vivid ?? null}
             onSubmit={async () => {
               await submit();
               // Auto-close after a successful submit so the user
@@ -835,6 +852,21 @@ function ComposerExpandModal(props: {
   placeholder: string;
   disabled: boolean;
   canSend: boolean;
+  /** Display name of the agent — shown top-left of the modal head so
+   *  the user can identify which pane this expanded composer is
+   *  bound to without dismissing it. */
+  agentDisplayName: string;
+  /** Raw agent slug (e.g. "frontend-developer"). Renders as a meta
+   *  chip on the right of the head. Null when no agent is assigned. */
+  agentSlug: string | null;
+  /** Optional model hint. Renders next to the slug as a second chip. */
+  agentModel: string | null;
+  /** Avatar emoji — defaults to 🤖 when the agent has none set. */
+  agentEmoji: string | null;
+  /** Hex/CSS colour of the bound agent. Drives the textarea border
+   *  and the meta-chip accent so the modal carries the same visual
+   *  identity as the inline pane header. */
+  accentColor: string | null;
   onSubmit: () => void | Promise<void>;
   onClose: () => void;
 }) {
@@ -877,12 +909,45 @@ function ComposerExpandModal(props: {
         onClick={props.onClose}
         aria-hidden
       />
-      <div className="composer-expand-card">
+      <div
+        className="composer-expand-card"
+        // Drive the textarea border + chip accents off the agent's
+        // colour. Falls through to the default theme accent when no
+        // agent is assigned (rare — the modal is gated on having one).
+        style={
+          props.accentColor
+            ? ({
+                ['--composer-accent' as string]: props.accentColor,
+              } as React.CSSProperties)
+            : undefined
+        }
+      >
         <div className="composer-expand-head">
-          <span className="composer-expand-title">Compose message</span>
-          <span className="composer-expand-hint">
-            ⌘⏎ to send · Esc to close
-          </span>
+          <div className="composer-expand-identity">
+            {props.agentEmoji && (
+              <span className="composer-expand-avatar" aria-hidden>
+                {props.agentEmoji}
+              </span>
+            )}
+            <div className="composer-expand-titles">
+              <span className="composer-expand-title">
+                {props.agentDisplayName}
+              </span>
+              <span className="composer-expand-hint">
+                ⌘⏎ to send · Esc to close
+              </span>
+            </div>
+          </div>
+          {(props.agentSlug || props.agentModel) && (
+            <div className="composer-expand-meta">
+              {props.agentSlug && (
+                <code className="pane-meta-chip">{props.agentSlug}</code>
+              )}
+              {props.agentModel && (
+                <code className="pane-meta-chip">{props.agentModel}</code>
+              )}
+            </div>
+          )}
           <button
             type="button"
             className="composer-expand-close"

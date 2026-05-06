@@ -1901,6 +1901,43 @@ export const useStore = create<Store>((set, get) => ({
     if (!path) return;
     const leaf = nodeAt(tree, path);
     if (!leaf || leaf.kind !== 'leaf') return;
+
+    // Refuse to split when the resulting children would render too
+    // narrow / short to be usable. The pane header alone needs ~280px
+    // for the avatar + title + chips + status stack + ⋮ button to lay
+    // out without overlapping; the empty state needs ~220px tall.
+    // Without this guard, repeated splits collapse panes to ~150px
+    // wide and the UI breaks (see the "Pick an agent" empty state
+    // wrapping awkwardly across 4-5 lines).
+    //
+    // We measure the pane's current rendered rect via its DOM marker
+    // and abort with a friendly alert if half of the relevant axis
+    // would land below the threshold. Fractional split sizes mean
+    // the new child gets half the parent's space minus the resize
+    // handle (~5px), so we round down to be safe.
+    const MIN_PANE_WIDTH = 320;
+    const MIN_PANE_HEIGHT = 220;
+    if (typeof document !== 'undefined') {
+      const el = document.querySelector(`[data-pane-id="${id}"]`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const halfWidth = Math.floor(rect.width / 2) - 4;
+        const halfHeight = Math.floor(rect.height / 2) - 4;
+        if (direction === 'horizontal' && halfWidth < MIN_PANE_WIDTH) {
+          alert(
+            `Pane is too narrow to split side-by-side. Each side needs at least ${MIN_PANE_WIDTH}px to stay usable. Try a vertical split or close another pane first.`,
+          );
+          return;
+        }
+        if (direction === 'vertical' && halfHeight < MIN_PANE_HEIGHT) {
+          alert(
+            `Pane is too short to split top/bottom. Each half needs at least ${MIN_PANE_HEIGHT}px. Try a horizontal split or close another pane first.`,
+          );
+          return;
+        }
+      }
+    }
+
     const newLeaf: PaneNode = { kind: 'leaf', id: nanoid(8) };
     const splitNode: PaneNode = {
       kind: 'split',

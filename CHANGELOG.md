@@ -4,6 +4,129 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] — 2026-05-06
+
+### Added
+
+- **Settings → About page.** New entry at the bottom of the
+  Settings drawer. Shows the running app version, a manual "Check
+  for updates" button that delegates to electron-updater (so a
+  found update lands at the same Restart now / Later prompt as
+  the background poll), and the last 5 release notes parsed from
+  CHANGELOG.md. Releases render as collapsible cards with tinted
+  Added / Changed / Fixed headings (green / accent / orange) and
+  bold-title + dimmed-body bullets so you can scan them quickly.
+  The current version is highlighted with an accent badge, and
+  CHANGELOG.md ships in the packaged app via `extraResources` so
+  the notes work offline.
+- **Settings → Agents table.** Replaced the two-column card grid
+  with a sortable table — # · Agent (humanized name + emoji
+  avatar) · Description · Model · Capabilities (skills/MCP
+  counts) · Scope. Click any column header to sort; first click
+  sets the key (asc), second flips to desc. Whole row is a click
+  target that opens the editor. Single-line description with the
+  full text in a tooltip — much easier to scan once your library
+  passes ~6 agents than the old card grid was.
+- **Settings → Skills table.** Same tabular treatment — # · Skill
+  (📚 + humanized name) · Description · Scope, sortable by name.
+  Skills page now reads as a sibling of the Agents page.
+- **Expanded composer carries agent identity.** When you click the
+  ⤡ button to pop the composer into a 60×60% modal, the modal
+  head shows the agent's avatar + name on the left, the slug +
+  model chips on the right, and the textarea border + chip
+  borders are tinted with the agent's colour. No more guessing
+  which pane the long message will land in.
+
+### Changed
+
+- **Settings opens Profile by default.** The gear-icon Settings
+  button used to land on Agents — buried under the top entry.
+  Now opens Profile, matching the nav order so the user lands
+  where their eye goes first.
+- **Pane header redesigned.** Header is ~20% taller (62px vs.
+  52px) so the avatar + name + chips have room to breathe.
+  Active-pane bottom stripe replaced with a soft vertical
+  gradient bloom in the agent's colour that fills the lower 50%
+  of the header, with a 1.5px hard line at the bottom edge as a
+  focus anchor. Reads as a presence cue rather than a UI rule.
+- **Pane chips tint with the agent's colour when active.** The
+  agent slug + model + cost chips on an active pane now get a
+  soft tint of the agent's colour (~22% blend into the dark
+  base, ~55% on the border). At rest they keep the muted look —
+  so the active pane reads as the foreground at a glance.
+- **Pane status restructured.** The right-hand status badge is no
+  longer a single pill. Top row: status dot + label as plain
+  inline text in the variant's tint colour (green for completed,
+  accent for working, red for error). Bottom row: cost as a
+  meta-chip pill matching the agent slug + model chips on the
+  left. Right side now mirrors the title block on the left
+  visually.
+- **Default 🤖 emoji on panes.** When the bound agent has no
+  custom emoji, the pane's avatar slot now falls back to 🤖
+  instead of disappearing entirely.
+- **Worker cards (sidebar) restyled.** Dropped the 4px left
+  pillar + tinted icon column. Cards now have a 12px corner
+  radius and the same gradient-bloom treatment as the active
+  pane header — solid dark base, full 1px agent-coloured border,
+  bottom-half gradient in the agent's colour, matching badge
+  tints. Terminal preset cards use the same recipe but driven by
+  the purple `--accent-2` colour family so the two worker types
+  stay visually distinct.
+- **Lead/Multi switch + Flow chip resized.** Mode track went
+  from 38→30px outer height to match the `.wb-pill` family
+  (Preview / Workspaces / Usage); Flow chip went to 26px so it
+  visually matches the highlighted segment thumb. Workspace bar
+  now reads as one row of equal-height pills.
+- **Stronger agent system-prompt generator.** Rewrote the
+  meta-prompt with 9 mandatory sections (Core Responsibilities,
+  Workspace, Context Discovery, Workflow, Domain Best Practices,
+  Validation, Guardrails, Collaboration & Handoff) and role-aware
+  hints — the prompt teaches the new agent to inspect different
+  files for frontend vs. mobile vs. backend vs. reviewer vs.
+  extractor work, rather than emitting generic advice. Length
+  target raised from 50–130 to 90–180 lines, output cleanup is
+  more aggressive, and a hardcoded fallback prompt ships in the
+  file so the editor never lands on an empty body if the SDK
+  errors.
+- **Enhance description button.** New ✨ Enhance pill next to
+  the agent description label. Type a one-line role, click
+  Enhance, and Sonnet rewrites it as 3 short paragraphs (role ·
+  domain knowledge · how it works in a repo). Works as the
+  natural setup step before the existing Generate prompt button.
+- **AI buttons (Enhance + Generate) redesigned.** Custom inline
+  SparkleIcon (rotates 15° on hover with a soft accent glow), a
+  proper top-to-bottom gradient fill, an inset highlight, and a
+  colored shadow that intensifies on hover. The two buttons
+  share the same look so they read as a family.
+- **Generate prompt button moved.** Was at the bottom of the
+  editor below a 1280px CodeMirror; now sits at the top-right of
+  the System prompt section header with a small explanatory
+  hint underneath. No more scrolling to find the action.
+
+### Fixed
+
+- **Minimum pane size enforced.** Splitting a pane is now blocked
+  when the resulting children would render below 320px wide
+  (horizontal split) or 220px tall (vertical split). On fail
+  the user sees a friendly alert suggesting they try the other
+  axis or close another pane first. Prevents the layout from
+  collapsing into a wall of unreadable 150px columns.
+- **Manual drag-resize floor raised.** The react-resizable-panels
+  per-panel `minSize` bumped from 15% to 20% so dragging the
+  resize handle can't crush a sibling pane below a fifth of its
+  parent's space.
+- **Active pane chips no longer get the gradient bleed.** Header
+  children now sit at z-index 2 above the gradient bloom layer,
+  so chip backgrounds + text render cleanly instead of getting
+  tinted by the bloom underneath.
+- **Active card background opaque.** The sidebar's yellow brand
+  pattern was bleeding through the active worker card's
+  semi-transparent base. Active state now forces `var(--bg)` so
+  the only colour present is the explicit gradient bloom + the
+  agent-coloured border.
+
+[1.6.0]: https://github.com/eimis1990/inzone/compare/v1.5.2...v1.6.0
+
 ## [1.5.2] — 2026-05-06
 
 ### Added
