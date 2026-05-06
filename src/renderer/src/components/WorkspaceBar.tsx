@@ -465,7 +465,7 @@ export function WorkspaceBar() {
 
         <IconButton
           label="Settings"
-          onClick={() => setDrawerSection('agents')}
+          onClick={() => setDrawerSection('profile')}
           // Keep the same subtle background as the collapse button's
           // active state — gives the gear a quiet but present chrome
           // so it doesn't read as a stray ghost icon.

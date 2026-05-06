@@ -16,6 +16,8 @@ import type {
   PRDraft,
   PrDetail,
   PrSummary,
+  ReleaseEntry,
+  UpdateCheckResult,
   WikiPageMeta,
   WikiStatus,
   ReviewHunk,
@@ -183,6 +185,18 @@ export interface CoworkApi {
      * need `@types/node`.
      */
     platform(): Platform;
+  };
+  /**
+   * Settings → About page. Surfaces the running app version, a manual
+   * "check for updates" trigger that delegates to electron-updater
+   * (so a found update lands at the same Restart-now/Later dialog as
+   * the background poll), and a parsed view of CHANGELOG.md so the
+   * About page can double as in-app release notes.
+   */
+  about: {
+    version(): Promise<string>;
+    checkForUpdates(): Promise<UpdateCheckResult>;
+    releaseNotes(args?: { limit?: number }): Promise<ReleaseEntry[]>;
   };
   /**
    * Diff Review + PR Workflow APIs. Surfaces git diff inspection plus

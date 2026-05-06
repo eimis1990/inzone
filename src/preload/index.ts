@@ -142,6 +142,12 @@ const api: CoworkApi = {
      *  constant for the process lifetime. */
     platform: (): NodeJS.Platform => process.platform,
   },
+  about: {
+    version: (): Promise<string> => ipcRenderer.invoke(IPC.ABOUT_VERSION),
+    checkForUpdates: () => ipcRenderer.invoke(IPC.ABOUT_CHECK_UPDATES),
+    releaseNotes: (args?: { limit?: number }) =>
+      ipcRenderer.invoke(IPC.ABOUT_RELEASE_NOTES, args),
+  },
   profile: {
     /** Detect the active Claude auth path (API key vs subscription),
      *  plus email/plan when discoverable via `claude auth status`. */

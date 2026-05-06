@@ -951,3 +951,60 @@ export interface WikiLogEntry {
    *  whole block verbatim). Trimmed; may be empty. */
   body: string;
 }
+
+/* ------------------------------------------------------------------- */
+/* Settings → About                                                    */
+/* ------------------------------------------------------------------- */
+
+/** One bullet from a parsed CHANGELOG.md release section. The first
+ *  sentence (terminated by `.`, `?`, `!`, or `:`) becomes `title` so
+ *  the renderer can display it as a clickable summary; remaining
+ *  prose lands in `body`. Empty `body` means the bullet was a single
+ *  sentence. */
+export interface ReleaseItem {
+  title: string;
+  body: string;
+}
+
+/** Group of bullets under one `### Heading` (Added | Changed | Fixed |
+ *  Removed | Deprecated | Security) inside a release entry. The
+ *  heading is preserved verbatim so the renderer can colour or icon
+ *  by type. */
+export interface ReleaseSection {
+  heading: string;
+  items: ReleaseItem[];
+}
+
+/** One CHANGELOG release entry, e.g. `## [1.5.1] — 2026-05-06`. The
+ *  About page renders these as collapsible cards. */
+export interface ReleaseEntry {
+  version: string;
+  /** ISO `YYYY-MM-DD` when supplied in the CHANGELOG header; empty
+   *  string when the header was version-only. */
+  date: string;
+  sections: ReleaseSection[];
+}
+
+/** Result of a manual "Check for updates" tap in the About page.
+ *  electron-updater drives the actual download + restart dialog so
+ *  this object only needs to express *whether* a newer version was
+ *  found, not the bytes-transferred state.
+ *
+ *  status values:
+ *   - 'current' — running the latest available
+ *   - 'available' — a newer version exists; auto-update.ts handles
+ *     download progress + the Restart now / Later prompt
+ *   - 'downloading' — currently fetching (rare in this flow)
+ *   - 'ready' — download finished, awaiting restart
+ *   - 'error' — the check itself failed (network etc.)
+ *
+ *  `devMode: true` means the app is unpackaged and the updater is
+ *  intentionally inert — the renderer should show a "Updates disabled
+ *  in dev" affordance instead of a check button. */
+export interface UpdateCheckResult {
+  status: 'current' | 'available' | 'downloading' | 'ready' | 'error';
+  currentVersion: string;
+  latestVersion?: string;
+  error?: string;
+  devMode?: boolean;
+}

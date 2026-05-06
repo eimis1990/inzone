@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AboutSection } from './settings/AboutSection';
 import { AgentsSection } from './settings/AgentsSection';
 import { McpServersSection } from './settings/McpServersSection';
 import { MemorySection } from './settings/MemorySection';
@@ -77,6 +78,12 @@ const SECTIONS: SectionEntry[] = [
     label: 'Workspaces',
     icon: () => <WorkspacesIcon size={16} />,
   },
+  {
+    id: 'about',
+    label: 'About',
+    hint: 'Version & updates',
+    icon: () => <InfoIcon />,
+  },
 ];
 
 export function SettingsDrawer({
@@ -84,8 +91,11 @@ export function SettingsDrawer({
   initialSection,
   onClose,
 }: SettingsDrawerProps) {
+  // Default landing tab is Profile — it's the top entry in the nav
+  // and is what the user mostly looks for first (account / API key
+  // status). Previously defaulted to Agents which felt buried.
   const [section, setSection] = useState<SettingsSection>(
-    initialSection ?? 'agents',
+    initialSection ?? 'profile',
   );
 
   // Bring focus to whichever section the caller asked for when opened.
@@ -167,6 +177,7 @@ export function SettingsDrawer({
           {section === 'memory' && <MemorySection />}
           {section === 'usage' && <UsageSection />}
           {section === 'workspaces' && <WorkspacesSection />}
+          {section === 'about' && <AboutSection />}
         </main>
       </aside>
     </div>
@@ -331,6 +342,26 @@ function ChartIcon() {
       <rect x="6" y="10" width="3" height="10" />
       <rect x="11" y="6" width="3" height="14" />
       <rect x="16" y="13" width="3" height="7" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <line x1="12" y1="11" x2="12" y2="16.5" />
+      <circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none" />
     </svg>
   );
 }

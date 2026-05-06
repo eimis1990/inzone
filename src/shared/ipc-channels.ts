@@ -152,6 +152,11 @@ export const IPC = {
   // Window mgmt
   WINDOW_NEW: 'window:new',
   WINDOW_CLOSE: 'window:close',
+
+  // Settings → About — version, manual update check, release notes
+  ABOUT_VERSION: 'about:version',
+  ABOUT_CHECK_UPDATES: 'about:checkUpdates',
+  ABOUT_RELEASE_NOTES: 'about:releaseNotes',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

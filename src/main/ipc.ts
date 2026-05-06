@@ -26,6 +26,11 @@ import {
 } from './ask-user-question-tool';
 import { generateAgentBody, enhanceAgentDescription } from './agent-generator';
 import {
+  getAppVersion,
+  getReleaseNotes,
+  manualCheckForUpdates,
+} from './about';
+import {
   composeMemoryForScope,
   ensureProjectMemory,
   globalMemoryPath,
@@ -838,6 +843,17 @@ export function registerIpcHandlers(): void {
       broadcastShortcuts(next);
       return next;
     },
+  );
+
+  // -- About / updates --------------------------------------------------
+  ipcMain.handle(IPC.ABOUT_VERSION, async () => getAppVersion());
+  ipcMain.handle(IPC.ABOUT_CHECK_UPDATES, async () =>
+    manualCheckForUpdates(),
+  );
+  ipcMain.handle(
+    IPC.ABOUT_RELEASE_NOTES,
+    async (_e, args?: { limit?: number }) =>
+      getReleaseNotes(args?.limit ?? 5),
   );
 }
 

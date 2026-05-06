@@ -8,4 +8,5 @@ export type SettingsSection =
   | 'terminal'
   | 'memory'
   | 'usage'
-  | 'workspaces';
+  | 'workspaces'
+  | 'about';

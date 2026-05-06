@@ -4,6 +4,50 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] — 2026-05-06
+
+### Added
+
+- **About page in Settings.** New "About" entry at the bottom of the
+  Settings drawer. Shows the running app version, a manual "Check
+  for updates" button that delegates to electron-updater (so a found
+  update lands at the same Restart now / Later prompt as the
+  background poll), and the last 5 release notes parsed straight
+  from CHANGELOG.md. Each release renders as a collapsible card —
+  Added / Changed / Fixed sections get tinted headings (green /
+  accent / orange) and bullets show as bold-title + dimmed-body for
+  scannable reading. The current version is highlighted with an
+  accent badge so you can see at a glance whether you're on the
+  latest. CHANGELOG.md ships with the packaged app via
+  `extraResources` so the release notes are available offline.
+
+### Changed
+
+- **Settings opens Profile by default.** The gear-icon Settings
+  button used to land on Agents — buried under the top entry. Now
+  it opens Profile, matching the nav order so the user lands where
+  their eye naturally goes first (account / API key status). The
+  drawer's internal default also updated for callers that don't
+  pass an explicit section.
+- **Active pane header has a gradient bloom.** The 2px hard accent
+  stripe at the bottom of the active pane's header is now a soft
+  vertical gradient that fills the lower 40% of the header — fully
+  transparent at the top, ramping up to the agent's colour at the
+  bottom edge with a 22% peak alpha. A 1.5px hard line still sits
+  at the very bottom as a focus anchor. Reads as a presence cue
+  rather than a UI rule, and works with every agent colour because
+  the gradient stop pulls from `--pane-active-stripe`.
+- **Pane header chips are now opaque over the gradient.** The agent
+  badge, model chip, and idle status pill used to render at default
+  z-index (so the absolutely-positioned gradient bloom underneath
+  bled through) and the idle status pill was using a translucent
+  white-on-black fill. Header children now lift to z-index 2 above
+  the gradient layers, and the idle badge uses `var(--bg-elev-2)`
+  for an opaque base, so the chips read crisply regardless of
+  which agent colour the active pane stripe is using.
+
+[1.5.2]: https://github.com/eimis1990/inzone/compare/v1.5.1...v1.5.2
+
 ## [1.5.1] — 2026-05-06
 
 ### Added
