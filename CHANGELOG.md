@@ -4,6 +4,96 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] — 2026-05-07
+
+### Added
+
+- **Tasks feature.** New Tasks button next to Layout templates in
+  the workspace bar. Opens a modal of one-click recipes that
+  configure the workspace for a specific kind of work — pick a
+  template and INZONE switches to the right mode, optionally binds
+  the Lead agent, and creates one pane per agent the template
+  needs, all pre-assigned. Saves you 5–10 clicks per task setup.
+- **Built-in task templates.** Nine recipes that ship with the app:
+  - 🎨 **Website Redesign** (Lead) — extract spec → redesign UI →
+    implement → review.
+  - 📱 **Mobile Feature** (Lead) — design + developer + code
+    reviewer in the loop.
+  - 🚀 **Greenfield Project** (Lead) — frontend + backend +
+    fullstack + reviewer.
+  - 🐛 **Bug Fix** (Lead) — fullstack dev + reviewer.
+  - 🔍 **Code Review** (Multi) — reviewer paired with a developer.
+  - 🌐 **Browser Automation** (Multi) — browser agent + reviewer.
+  - 🎯 **Frontend Sprint** / 🛠️ **Backend Sprint** (Multi) —
+    focused dev + reviewer pairs.
+  - 🦄 **Solo Builder** (Multi) — single-pane talk-it-out flow.
+  Templates are filtered at render time — only ones whose required
+  agents you have installed appear, so adding new specialised
+  agents progressively unlocks more recipes.
+- **Save current setup as a task template.** The Tasks modal's top
+  "Current session" card shows your live pane configuration with
+  editable Title (defaults to "Unnamed Task"), description, emoji,
+  and a Save action. Saved templates persist across app restarts
+  and live in the "My templates" section. If your current setup
+  already matches a saved or built-in template, the card surfaces
+  that with a green ✓ instead of offering to save again.
+- **Six new bundled starter agents.** `code-reviewer`,
+  `website-data-extractor`, `frontend-website-redesign`,
+  `mobile-developer`, `mobile-code-reviewer`, and `mobile-design`
+  all ship with INZONE so the task templates work out of the box on
+  a fresh install. Each follows the Claude-Code-style agent
+  structure (Workspace, Context Discovery, Workflow, Domain Best
+  Practices, Validation, Guardrails, Collaboration & Handoff) and
+  is designed to be safe-by-default — inspect before acting,
+  refuse to fabricate, never run destructive commands without
+  explicit approval.
+
+### Changed
+
+- **Bundled-resources install is progressive.** Used to be gated
+  by a single sentinel file (`.inzone-starters-installed`) — once
+  the sentinel was created on first run, subsequent boots returned
+  early without copying anything, so any new bundled agents we
+  added in later releases never reached existing users. Switched
+  to per-file existence checks on every boot: copy missing files,
+  never overwrite. Cleans up the legacy sentinel along the way.
+  Means future bundled agents will always reach existing users.
+- **Layout templates modal restyled.** Same visual language as the
+  Tasks modal — 12px corner radius, gradient bloom on hover (lower
+  50% of the card), accent border + soft drop shadow on hover.
+  Preview cells use `color-mix` of the accent colour with the dark
+  base so they read as soft tints rather than bright yellow blocks.
+  Each card now has both a label and a one-line hint ("Quad —
+  small team", "Maximum spread") so the layout's purpose is more
+  than just a count.
+- **Layouts apply has an agent-loss confirmation.** Picking a
+  layout while at least one pane has an agent bound (or the Lead
+  pane is live) now prompts with the list of sessions that'll be
+  stopped before applying. When every pane is idle, applies
+  directly with no extra click.
+- **Workspace-bar launcher buttons share chrome.** Split H, Split
+  V, Layout templates, and Tasks now all carry the same dark
+  rounded background as the Settings gear via a new `framed` prop
+  on `IconButton`. The cluster reads as one row of identical
+  chips. (`framed` is separate from `active` so toggle-state
+  semantics on the sidebar collapse stay correct.)
+
+### Fixed
+
+- **Tasks card layout consistency.** Cards now stack one per row at
+  full modal width and size to their content — short single-agent
+  templates stay compact, longer ones stretch as needed. No more
+  empty space on cards with fewer chips than their neighbours.
+- **Agent badges across the app match.** Task-card agent chips now
+  use the exact same `.pane-meta-chip` styling as the chips in the
+  pane header (mono font, 4px corner radius, 3×6 padding, agent
+  slug rather than humanized label). On card hover, chips pick up
+  the same accent-tinted background + white text the pane header
+  uses for the active pane — so the visual language is consistent
+  whether you're looking at a card or a pane.
+
+[1.7.0]: https://github.com/eimis1990/inzone/compare/v1.6.0...v1.7.0
+
 ## [1.6.0] — 2026-05-06
 
 ### Added

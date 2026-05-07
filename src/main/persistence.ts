@@ -75,7 +75,18 @@ export function getState(): AppState {
     activeSessionId: looseStore.get('activeSessionId') as string | undefined,
     activeWorkspaceId:
       (looseStore.get('activeWorkspaceId') as string | undefined) ?? undefined,
+    customTaskTemplates: looseStore.get('customTaskTemplates') as
+      | AppState['customTaskTemplates']
+      | undefined,
   };
+}
+
+/* ─── Custom task templates ──────────────────────────────────────── */
+
+export function setCustomTaskTemplates(
+  list: NonNullable<AppState['customTaskTemplates']>,
+): void {
+  looseStore.set('customTaskTemplates', list);
 }
 
 export function saveWindowState(win: WindowState): void {

@@ -401,6 +401,47 @@ export interface AppState {
    * it and the on-load migration removes it from disk.
    */
   presets?: WorkspacePreset[];
+  /**
+   * User-saved task templates. Built-in templates ship in code via
+   * `shared/task-templates.ts`; this list holds whatever the user
+   * snapshots from their current pane layout via "Save current setup
+   * as a task template". Persisted across sessions.
+   */
+  customTaskTemplates?: TaskTemplate[];
+}
+
+/**
+ * One entry in the Tasks modal — a one-click recipe to configure the
+ * window for a specific kind of work (e.g. "Website Redesign" sets
+ * Lead mode, picks the Lead agent, and creates panes for the
+ * extractor / designer / frontend / reviewer agents).
+ *
+ * Built-in templates ship in `shared/task-templates.ts`. Custom
+ * templates the user has saved live in `AppState.customTaskTemplates`.
+ * The runtime filter hides any template referencing an agent the
+ * user doesn't have installed — so adding new specialised agents
+ * progressively lights up more templates.
+ */
+export interface TaskTemplate {
+  id: string;
+  emoji: string;
+  name: string;
+  description: string;
+  mode: 'lead' | 'multi';
+  /** Required when mode === 'lead'. Name of the agent to fill the
+   *  Lead pane with. Custom templates set this from the live state
+   *  at save time. */
+  leadAgent?: string;
+  /** Pane agent slugs in the order the panes should be created.
+   *  Each entry becomes one sub-agent pane. */
+  agents: string[];
+  /** Where this template came from. Built-ins are hidden (only
+   *  filtered at render time); customs render the same way but get
+   *  a delete affordance. */
+  source: 'builtin' | 'custom';
+  /** Epoch ms when the user saved a custom template. Unused for
+   *  built-ins. Used to sort customs newest-first in the modal. */
+  savedAt?: number;
 }
 
 /** A single entry in a pane's transcript JSONL file. */

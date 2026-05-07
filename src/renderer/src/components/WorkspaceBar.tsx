@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { primeAudio } from '../chime';
 import { LayoutsModal } from './LayoutsModal';
+import { TasksModal } from './TasksModal';
 import { fmt } from './UsageModal';
 import { SettingsDrawer } from './SettingsDrawer';
 import type { SettingsSection } from './settings/types';
@@ -50,6 +51,7 @@ export function WorkspaceBar() {
   );
   const [renameDraft, setRenameDraft] = useState('');
   const [showLayouts, setShowLayouts] = useState(false);
+  const [showTasks, setShowTasks] = useState(false);
   const [drawerSection, setDrawerSection] = useState<SettingsSection | null>(
     null,
   );
@@ -377,12 +379,16 @@ export function WorkspaceBar() {
 
       <div className="wb-divider" aria-hidden />
 
-      {/* Middle cluster: pane-layout actions */}
+      {/* Middle cluster: pane-layout actions. All four buttons get
+          `framed` so they share the Settings button's chrome —
+          turns the cluster into one row of identically-styled chips
+          rather than a mix of ghost + filled buttons. */}
       <div className="wb-group">
         <IconButton
           label="Split horizontally"
           onClick={() => activePaneId && splitPane(activePaneId, 'horizontal')}
           disabled={!canSplit}
+          framed
         >
           <SplitHIcon />
         </IconButton>
@@ -390,11 +396,23 @@ export function WorkspaceBar() {
           label="Split vertically"
           onClick={() => activePaneId && splitPane(activePaneId, 'vertical')}
           disabled={!canSplit}
+          framed
         >
           <SplitVIcon />
         </IconButton>
-        <IconButton label="Layout templates" onClick={() => setShowLayouts(true)}>
+        <IconButton
+          label="Layout templates"
+          onClick={() => setShowLayouts(true)}
+          framed
+        >
           <LayoutsIcon />
+        </IconButton>
+        <IconButton
+          label="Tasks"
+          onClick={() => setShowTasks(true)}
+          framed
+        >
+          <TasksIcon />
         </IconButton>
       </div>
 
@@ -483,6 +501,7 @@ export function WorkspaceBar() {
       </div>
 
       <LayoutsModal open={showLayouts} onClose={() => setShowLayouts(false)} />
+      <TasksModal open={showTasks} onClose={() => setShowTasks(false)} />
       <SettingsDrawer
         open={drawerSection !== null}
         initialSection={drawerSection ?? undefined}
@@ -496,7 +515,16 @@ interface IconButtonProps {
   label: string;
   onClick: () => void;
   children: React.ReactNode;
+  /** True toggle state — sets aria-pressed and applies the active
+   *  visual treatment. Use this for buttons where on/off matters
+   *  (e.g. sidebar collapse). */
   active?: boolean;
+  /** Pure-visual sibling of `active` — applies the same chrome
+   *  background as the active state without claiming toggle state.
+   *  Used for utility buttons (split H, split V, Layouts, Tasks,
+   *  Settings) so they read as a row of identically-styled chips,
+   *  even though none of them are actually toggles. */
+  framed?: boolean;
   disabled?: boolean;
 }
 
@@ -505,13 +533,16 @@ function IconButton({
   onClick,
   children,
   active,
+  framed,
   disabled,
 }: IconButtonProps) {
   return (
     <button
       type="button"
       className={
-        'wb-icon-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '')
+        'wb-icon-btn' +
+        (active || framed ? ' active' : '') +
+        (disabled ? ' disabled' : '')
       }
       onClick={onClick}
       title={label}
@@ -818,6 +849,32 @@ function PencilIcon() {
     >
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+/** Checklist-style icon for the Tasks button — sits next to the
+ *  Layouts grid icon. Three short ticked rows so the eye reads it as
+ *  "things to do" rather than another grid. */
+function TasksIcon() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polyline points="4 6 6 8 9 5" />
+      <polyline points="4 12 6 14 9 11" />
+      <polyline points="4 18 6 20 9 17" />
+      <line x1="12" y1="6.5" x2="20" y2="6.5" />
+      <line x1="12" y1="12.5" x2="20" y2="12.5" />
+      <line x1="12" y1="18.5" x2="20" y2="18.5" />
     </svg>
   );
 }

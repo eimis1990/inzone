@@ -18,6 +18,7 @@ import type {
   SessionStatus,
   SkillDef,
   SkillDraft,
+  TaskTemplate,
   UsageSummary,
   WindowId,
   WindowMode,
@@ -204,6 +205,14 @@ interface StoreState {
   workspaces: Workspace[];
   /** The currently-active workspace id; null only on first launch. */
   activeWorkspaceId: string | null;
+  /**
+   * User-saved task templates ("Save current setup as a task
+   * template" in the Tasks modal). Built-in templates are imported
+   * from `shared/task-templates.ts`; this list is what the user has
+   * snapshotted from their own pane configurations. Persisted to
+   * disk via `saveCustomTaskTemplates`.
+   */
+  customTaskTemplates: TaskTemplate[];
   /**
    * Every session known to the app (the persisted `windows[]` array).
    * Top-level fields (cwd/tree/windowMode/etc.) mirror whichever entry
@@ -452,6 +461,27 @@ interface StoreActions {
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebarCollapsed: () => void;
   applyLayoutTemplate: (cols: number, rows: number) => void;
+  /**
+   * Apply a Tasks template — switch to the right mode, (optionally)
+   * pick the Lead agent, and create one pane per entry in
+   * `template.agents` with that agent pre-assigned. Returns once the
+   * panes have been created and the agents bound; bindings happen
+   * asynchronously so each pane's session start is fired-and-forget.
+   */
+  applyTaskTemplate: (template: TaskTemplate) => Promise<void>;
+  /**
+   * Snapshot the current pane setup (mode + lead agent + ordered
+   * sub-pane agents) as a custom task template. Persists to
+   * `customTaskTemplates` so it survives app restart.
+   */
+  saveCurrentAsTaskTemplate: (args: {
+    name: string;
+    description?: string;
+    emoji?: string;
+  }) => Promise<TaskTemplate | null>;
+  /** Remove a custom task template by id. Built-ins can't be deleted
+   *  (they're not in the persisted list). */
+  deleteCustomTaskTemplate: (id: string) => Promise<void>;
   toggleSound: () => void;
   setWindowMode: (mode: WindowMode) => void;
   setLeadAgent: (agentName: string) => Promise<void>;
@@ -1211,6 +1241,42 @@ function buildGridTree(cols: number, rows: number): PaneNode {
   };
 }
 
+/**
+ * Pick a sensible cols×rows grid for a given pane count. Used by
+ * task-template apply: count comes from `template.agents.length`.
+ *
+ * Layouts favour rows of columns (wide over tall) since the
+ * workspace is typically wider than it is tall. Lookup table for the
+ * common cases; falls back to a √n-balanced grid above 8.
+ */
+function pickGridForCount(count: number): { cols: number; rows: number } {
+  switch (count) {
+    case 1:
+      return { cols: 1, rows: 1 };
+    case 2:
+      return { cols: 2, rows: 1 };
+    case 3:
+      return { cols: 3, rows: 1 };
+    case 4:
+      return { cols: 2, rows: 2 };
+    case 5:
+    case 6:
+      return { cols: 3, rows: 2 };
+    case 7:
+    case 8:
+      return { cols: 4, rows: 2 };
+    case 9:
+      return { cols: 3, rows: 3 };
+    case 10:
+      return { cols: 5, rows: 2 };
+    default: {
+      const cols = Math.ceil(Math.sqrt(count));
+      const rows = Math.ceil(count / cols);
+      return { cols, rows };
+    }
+  }
+}
+
 /** Remove a leaf by id, collapsing singleton splits. Returns [newTree, removed]. */
 function removeLeaf(
   root: PaneNode,
@@ -1242,6 +1308,7 @@ export const useStore = create<Store>((set, get) => ({
   skills: [],
   workspaces: [],
   activeWorkspaceId: null,
+  customTaskTemplates: [],
   sessions: [],
   editor: null,
   editorError: undefined,
@@ -1417,6 +1484,7 @@ export const useStore = create<Store>((set, get) => ({
       skills,
       workspaces,
       activeWorkspaceId: restoredWorkspaceId,
+      customTaskTemplates: state.customTaskTemplates ?? [],
       sessions,
       tree,
       panes,
@@ -2829,6 +2897,132 @@ export const useStore = create<Store>((set, get) => ({
       activePaneId: collectLeaves(tree)[0] ?? leadPaneId ?? null,
     });
     void get().saveWindow();
+  },
+
+  applyTaskTemplate: async (template) => {
+    // 1. Stop existing sub-agent sessions (Lead pane preserved).
+    const { panes, leadPaneId } = get();
+    for (const p of Object.values(panes)) {
+      if (p.id === leadPaneId) continue;
+      void window.cowork.session.stop(p.id);
+    }
+
+    // 2. Build a fresh pane tree sized to the template's agent
+    //    count. We use the same buildGridTree as Layouts: 1→single,
+    //    2→1×2, 3→3×1, 4→2×2, 5/6→3×2, etc. Always favour rows of
+    //    columns over deep stacks so each pane keeps reasonable
+    //    width.
+    const count = Math.max(1, template.agents.length);
+    const { cols, rows } = pickGridForCount(count);
+    const tree = buildGridTree(cols, rows);
+    const nextPanes: Record<PaneId, PaneRuntime> = {};
+    if (leadPaneId && panes[leadPaneId]) {
+      nextPanes[leadPaneId] = panes[leadPaneId];
+    }
+    const leafIds = collectLeaves(tree);
+    for (const id of leafIds) {
+      nextPanes[id] = { id, status: 'idle', items: [] };
+    }
+
+    // 3. Switch mode + tree atomically. We do this BEFORE binding
+    //    agents so the Lead-pane runtime entry exists when
+    //    setLeadAgent goes to use it.
+    set({
+      tree,
+      panes: nextPanes,
+      activePaneId: leafIds[0] ?? leadPaneId ?? null,
+      windowMode: template.mode,
+    });
+
+    // 4. Set the Lead agent if the template uses Lead mode and
+    //    declares one. setLeadAgent handles spawning the lead pane
+    //    and binding the agent.
+    if (template.mode === 'lead' && template.leadAgent) {
+      try {
+        await get().setLeadAgent(template.leadAgent);
+      } catch (err) {
+        console.warn(
+          '[tasks] failed to set lead agent for template:',
+          template.id,
+          err,
+        );
+      }
+    }
+
+    // 5. Assign agents to sub-panes in template order. Fire-and-
+    //    forget — setPaneAgent kicks off an SDK session per pane,
+    //    we don't await each one (they'd serialise unnecessarily).
+    for (let i = 0; i < leafIds.length && i < template.agents.length; i++) {
+      const paneId = leafIds[i];
+      const agentName = template.agents[i];
+      // Verify the agent exists before binding — the modal filter
+      // should already have hidden templates with missing agents,
+      // but a stale custom template might reference an agent the
+      // user has since deleted.
+      const exists = get().agents.some((a) => a.name === agentName);
+      if (!exists) {
+        console.warn(
+          '[tasks] template agent missing, skipping bind:',
+          agentName,
+        );
+        continue;
+      }
+      void get().setPaneAgent(paneId, agentName);
+    }
+
+    void get().saveWindow();
+  },
+
+  saveCurrentAsTaskTemplate: async ({ name, description, emoji }) => {
+    const { tree, panes, leadPaneId, leadPaneName, windowMode } = get();
+    const trimmedName = name.trim();
+    if (!trimmedName) return null;
+
+    // Snapshot the current pane setup. Walk the tree in
+    // left-to-right / top-to-bottom order so the template recreates
+    // the same visual arrangement.
+    const orderedAgents = collectLeaves(tree)
+      .map((id) => panes[id]?.agentName)
+      .filter((a): a is string => !!a && a.trim().length > 0);
+
+    const tpl: TaskTemplate = {
+      id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      emoji: emoji?.trim() || '📌',
+      name: trimmedName,
+      description: description?.trim() ?? '',
+      mode: windowMode,
+      // Lead agent name comes from the renamed lead pane label OR
+      // the bound agent on the lead pane. Prefer the bound agent —
+      // that's what we'll re-bind on apply.
+      leadAgent:
+        windowMode === 'lead' && leadPaneId && panes[leadPaneId]?.agentName
+          ? panes[leadPaneId].agentName
+          : windowMode === 'lead'
+            ? (leadPaneName ?? undefined)
+            : undefined,
+      agents: orderedAgents,
+      source: 'custom',
+      savedAt: Date.now(),
+    };
+
+    const next = [tpl, ...get().customTaskTemplates];
+    set({ customTaskTemplates: next });
+    try {
+      await window.cowork.state.saveCustomTaskTemplates(next);
+    } catch (err) {
+      console.warn('[tasks] failed to persist custom template:', err);
+    }
+    return tpl;
+  },
+
+  deleteCustomTaskTemplate: async (id) => {
+    const next = get().customTaskTemplates.filter((t) => t.id !== id);
+    set({ customTaskTemplates: next });
+    try {
+      await window.cowork.state.saveCustomTaskTemplates(next);
+    } catch (err) {
+      console.warn('[tasks] failed to persist custom template list:', err);
+    }
   },
 
   toggleSound: () => set((s) => ({ soundEnabled: !s.soundEnabled })),

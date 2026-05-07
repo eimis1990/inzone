@@ -26,6 +26,7 @@ import type {
   SkillDef,
   SkillDraft,
   StartSessionParams,
+  TaskTemplate,
   TerminalShortcut,
   TranscriptEntry,
   UsageSummary,
@@ -464,6 +465,10 @@ export interface CoworkApi {
     deleteWindow(id: string): Promise<{ ok: true }>;
     setActiveSession(id: string | undefined): Promise<{ ok: true }>;
     saveWorkspace(ws: Workspace): Promise<{ ok: true }>;
+    /** Persist the user's custom task templates list. We replace the
+     *  whole list rather than incremental ops because the renderer
+     *  is the source of truth and there are typically only a few. */
+    saveCustomTaskTemplates(list: TaskTemplate[]): Promise<{ ok: true }>;
     deleteWorkspace(id: string): Promise<{ ok: true }>;
     setActiveWorkspace(id: string | undefined): Promise<{ ok: true }>;
     loadTranscript(paneId: PaneId): Promise<TranscriptEntry[]>;

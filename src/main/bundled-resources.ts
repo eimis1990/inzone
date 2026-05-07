@@ -96,29 +96,37 @@ async function copyRecursive(src: string, dst: string): Promise<void> {
 }
 
 /**
- * Run the first-launch copy. Idempotent — uses a sentinel file
- * inside the agents directory to record completion. Safe to call
- * on every boot; quick no-op once done.
+ * Run the bundled-library copy on every boot. Idempotent and
+ * progressive — for each bundled file, copy it only if the user
+ * doesn't already have a file with that name. This means:
+ *
+ *  - First run: every bundled file lands in `~/.claude/`.
+ *  - Subsequent runs: skipped per-file (no-op for unchanged files).
+ *  - When INZONE adds new bundled agents in a future release:
+ *    those new files are copied automatically without disturbing
+ *    anything the user customised.
+ *
+ * The previous version of this function used a single sentinel
+ * file (`.inzone-starters-installed`) to decide whether to run AT
+ * ALL — which meant existing users never received any agents we
+ * added in later versions. We now ignore the sentinel (and clean
+ * it up if it's there from an older install) since per-file
+ * existence checks give us the same idempotency without blocking
+ * later additions.
  */
 export async function installStarterLibraryIfNeeded(): Promise<void> {
   try {
     await fs.mkdir(HOME_AGENTS_DIR, { recursive: true });
-    const sentinel = path.join(HOME_AGENTS_DIR, SENTINEL_NAME);
-    try {
-      await fs.access(sentinel);
-      // Already installed — done.
-      return;
-    } catch {
-      // No sentinel yet, proceed.
-    }
 
     const root = await resolveBundledRoot();
     if (!root) {
       console.warn(
-        '[bundled-resources] starter library not found; skipping first-run copy',
+        '[bundled-resources] starter library not found; skipping copy',
       );
       return;
     }
+
+    let copied = 0;
 
     // Copy agents — flat list of .md files. Skip any that already
     // exist (filename collision = user has their own).
@@ -134,6 +142,7 @@ export async function installStarterLibraryIfNeeded(): Promise<void> {
           // Already there — don't overwrite.
         } catch {
           await fs.copyFile(srcPath, dstPath);
+          copied++;
         }
       }
     } catch (err) {
@@ -159,19 +168,28 @@ export async function installStarterLibraryIfNeeded(): Promise<void> {
           // skill folder.
         } catch {
           await copyRecursive(srcDir, dstDir);
+          copied++;
         }
       }
     } catch (err) {
       console.warn('[bundled-resources] skills copy partial failure:', err);
     }
 
-    // Drop the sentinel so we don't re-run.
-    await fs.writeFile(
-      sentinel,
-      `Installed by INZONE on ${new Date().toISOString()}\n`,
-      'utf8',
-    );
-    console.log('[bundled-resources] starter library installed');
+    // Tidy up the legacy sentinel from older installs. It's no
+    // longer meaningful (we per-file check), and removing it makes
+    // the agents folder cleaner. Failure here is fine — best effort.
+    const legacySentinel = path.join(HOME_AGENTS_DIR, SENTINEL_NAME);
+    try {
+      await fs.unlink(legacySentinel);
+    } catch {
+      /* didn't exist or wasn't ours; ignore */
+    }
+
+    if (copied > 0) {
+      console.log(
+        `[bundled-resources] starter library: ${copied} new file(s) installed`,
+      );
+    }
   } catch (err) {
     // Never fail boot over this.
     console.warn('[bundled-resources] install failed:', err);

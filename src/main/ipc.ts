@@ -140,6 +140,7 @@ import type {
   McpScope,
   McpServerConfig,
   McpServerDraft,
+  TaskTemplate,
   VoiceSettings,
 } from '@shared/types';
 import { SessionPool } from './sessions';
@@ -153,6 +154,7 @@ import {
   saveWorkspace,
   setActiveSessionId,
   setActiveWorkspaceId,
+  setCustomTaskTemplates,
 } from './persistence';
 
 /**
@@ -633,6 +635,14 @@ export function registerIpcHandlers(): void {
     saveWorkspace(ws);
     return { ok: true };
   });
+
+  ipcMain.handle(
+    IPC.STATE_SAVE_CUSTOM_TASK_TEMPLATES,
+    async (_e, list: TaskTemplate[]) => {
+      setCustomTaskTemplates(list);
+      return { ok: true };
+    },
+  );
 
   ipcMain.handle(IPC.STATE_DELETE_WORKSPACE, async (_e, id: string) => {
     deleteWorkspace(id);

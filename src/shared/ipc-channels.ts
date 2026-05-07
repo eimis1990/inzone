@@ -157,6 +157,9 @@ export const IPC = {
   ABOUT_VERSION: 'about:version',
   ABOUT_CHECK_UPDATES: 'about:checkUpdates',
   ABOUT_RELEASE_NOTES: 'about:releaseNotes',
+
+  // Tasks — custom task templates persistence (built-ins ship in code)
+  STATE_SAVE_CUSTOM_TASK_TEMPLATES: 'state:saveCustomTaskTemplates',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

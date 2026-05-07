@@ -27,6 +27,7 @@ import type {
   SkillDef,
   SkillDraft,
   StartSessionParams,
+  TaskTemplate,
   TerminalShortcut,
   TranscriptEntry,
   UsageSummary,
@@ -419,6 +420,10 @@ const api: CoworkApi = {
       ipcRenderer.invoke(IPC.STATE_SET_ACTIVE_SESSION, id),
     saveWorkspace: (ws: Workspace): Promise<{ ok: true }> =>
       ipcRenderer.invoke(IPC.STATE_SAVE_WORKSPACE, ws),
+    saveCustomTaskTemplates: (
+      list: TaskTemplate[],
+    ): Promise<{ ok: true }> =>
+      ipcRenderer.invoke(IPC.STATE_SAVE_CUSTOM_TASK_TEMPLATES, list),
     deleteWorkspace: (id: string): Promise<{ ok: true }> =>
       ipcRenderer.invoke(IPC.STATE_DELETE_WORKSPACE, id),
     setActiveWorkspace: (id: string | undefined): Promise<{ ok: true }> =>
