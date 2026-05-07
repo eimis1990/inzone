@@ -21,7 +21,7 @@ import {
   ExpandIcon,
   MicIcon,
   PaperclipIcon,
-  SendIcon,
+  SendFilledIcon,
   StopIcon,
 } from './icons';
 import placemarkUrl from '../assets/in-zone-placeholder.png';
@@ -629,11 +629,6 @@ export function Pane({ id }: PaneProps) {
                 alt=""
               />
             </div>
-            <div className="pane-empty-title">
-              {pane.agentName
-                ? `Talk to ${pane.agentName}`
-                : 'Pick an agent'}
-            </div>
             <div className="pane-empty-sub">
               {pane.agentName
                 ? 'Type a message below to start the conversation.'
@@ -771,7 +766,7 @@ export function Pane({ id }: PaneProps) {
             aria-label="Send"
           >
             <span className="composer-send-label">Send</span>
-            <SendIcon size={14} stroke={2} />
+            <SendFilledIcon size={14} />
           </button>
           <button
             type="button"
@@ -1023,7 +1018,7 @@ function ComposerExpandModal(props: {
             title="Send (⌘⏎)"
           >
             <span>Send</span>
-            <SendIcon size={14} stroke={2} />
+            <SendFilledIcon size={14} />
           </button>
         </div>
       </div>

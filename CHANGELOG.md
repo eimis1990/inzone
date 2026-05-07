@@ -4,6 +4,66 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] — 2026-05-07
+
+### Added
+
+- **Composer takes the agent's colour.** When a pane is active, the
+  message-field border now tints with the bound agent's colour, and
+  the Send button fills with the agent's colour with a high-contrast
+  black icon. Inactive panes keep a neutral grey Send button. Reads
+  as "this pane is alive, and it belongs to <agent>" at a glance.
+  Same treatment carries through to the expanded compose modal.
+- **Layout templates modal restyled.** Same visual language as the
+  Tasks modal — gradient hover bloom, accent border on hover, themed
+  preview cells, a one-line hint per layout ("Quad — small team",
+  "Maximum spread"). Picking a layout while at least one pane has
+  an agent bound now confirms first with the list of sessions that'll
+  be stopped; idle layouts still apply with one click.
+- **Broken custom task templates are flagged, not silently skipped.**
+  When a custom template references an agent you've since renamed
+  or deleted, missing slots render with a red ✗ "missing" treatment
+  + strikethrough, the card lists which agents are gone, and the
+  apply button is disabled with an explanatory tooltip.
+
+### Changed
+
+- **Tasks modal current-session card.** The top of the Tasks modal
+  now shows your live pane setup as a feature card with editable
+  title (defaults to "Unnamed Task"), description, and an inline
+  Save-as-template action. If your current setup already matches a
+  saved or built-in template, the card surfaces that with a green
+  ✓ instead of asking you to save again.
+- **Send button + composer field redesigned.** Rounded corners
+  (12px field, 10px button) instead of pills, matching the
+  agent-cards across the rest of the app. The accent-glow on
+  focus is gone — just a clean accent border. The Send icon
+  swapped from a thin stroked arrow to a chunky filled
+  paper-plane glyph that reads as a decisive press target.
+- **Pane empty state simplified.** Dropped the big "Talk to
+  <agent>" / "Pick an agent" heading; the smaller hint line and
+  shrunken logo are enough — the pane header already tells you
+  who you're talking to.
+- **Modal cards sit flat against the body.** Task cards, the
+  current-session feature card, and layout cards switched from
+  the raised `--bg-elev-1` tile fill to the modal body's `--bg` —
+  the accent border + gradient hover bloom do the work of
+  separating cards visually, no elevation contrast needed.
+
+### Fixed
+
+- **Composer didn't pick up agent colour.** The `--pane-active-stripe`
+  CSS variable was scoped to the pane *header* div only, so the
+  composer (a sibling) couldn't see it and fell back to the global
+  yellow. Switched the composer rules to read `--pane-accent`,
+  which is set on the pane root and cascades to everything inside.
+- **Layout buttons (Split H/V, Layouts, Tasks) now share chrome.**
+  The four launchers in the workspace bar all carry the same dark
+  rounded background as the Settings gear, so the cluster reads as
+  one row of identical chips.
+
+[1.8.0]: https://github.com/eimis1990/inzone/compare/v1.7.0...v1.8.0
+
 ## [1.7.0] — 2026-05-07
 
 ### Added

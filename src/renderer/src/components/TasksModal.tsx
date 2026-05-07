@@ -195,6 +195,7 @@ export function TasksModal({ open, onClose }: TasksModalProps) {
                   <TaskCard
                     key={t.id}
                     template={t}
+                    installedAgents={installedAgents}
                     onPick={() => onPick(t)}
                     onDelete={() => {
                       if (
@@ -231,6 +232,7 @@ export function TasksModal({ open, onClose }: TasksModalProps) {
                 <TaskCard
                   key={t.id}
                   template={t}
+                  installedAgents={installedAgents}
                   onPick={() => onPick(t)}
                 />
               ))}
@@ -366,17 +368,41 @@ function CurrentSessionCard({
 
 interface TaskCardProps {
   template: TaskTemplate;
+  /** Set of agent slugs currently installed in the user's library.
+   *  Used to detect templates whose references have been broken by
+   *  rename/delete since they were saved. Missing slugs render with
+   *  a red ✗ "missing" treatment and the apply button is disabled
+   *  on any card that has at least one missing reference. */
+  installedAgents: Set<string>;
   onPick: () => void;
   onDelete?: () => void;
 }
 
-function TaskCard({ template, onPick, onDelete }: TaskCardProps) {
+function TaskCard({
+  template,
+  installedAgents,
+  onPick,
+  onDelete,
+}: TaskCardProps) {
+  const leadMissing =
+    !!template.leadAgent && !installedAgents.has(template.leadAgent);
+  const missingAgents = template.agents.filter(
+    (a) => !installedAgents.has(a),
+  );
+  const isBroken = leadMissing || missingAgents.length > 0;
+
+  const disabledTitle = isBroken
+    ? 'This template references agents that no longer exist in your library — recreate them or delete this template.'
+    : template.description || template.name;
+
   return (
-    <div className="task-card">
+    <div className={'task-card' + (isBroken ? ' task-card-broken' : '')}>
       <button
         className="task-card-body"
-        onClick={onPick}
-        title={template.description || template.name}
+        onClick={isBroken ? undefined : onPick}
+        title={disabledTitle}
+        disabled={isBroken}
+        aria-disabled={isBroken}
       >
         <div className="task-card-head">
           <span className="task-card-emoji" aria-hidden>
@@ -399,16 +425,56 @@ function TaskCard({ template, onPick, onDelete }: TaskCardProps) {
         )}
         <div className="task-card-agents">
           {template.leadAgent && (
-            <span className="task-card-agent-chip task-card-agent-lead">
-              <span aria-hidden>👑</span> {template.leadAgent}
+            <span
+              className={
+                'task-card-agent-chip' +
+                (leadMissing
+                  ? ' task-card-agent-missing'
+                  : ' task-card-agent-lead')
+              }
+              title={
+                leadMissing
+                  ? `Missing: "${template.leadAgent}" is not in your agent library`
+                  : undefined
+              }
+            >
+              <span aria-hidden>{leadMissing ? '✗' : '👑'}</span>{' '}
+              {template.leadAgent}
             </span>
           )}
-          {template.agents.map((a) => (
-            <span key={a} className="task-card-agent-chip">
-              {a}
-            </span>
-          ))}
+          {template.agents.map((a) => {
+            const missing = !installedAgents.has(a);
+            return (
+              <span
+                key={a}
+                className={
+                  'task-card-agent-chip' +
+                  (missing ? ' task-card-agent-missing' : '')
+                }
+                title={
+                  missing
+                    ? `Missing: "${a}" is not in your agent library`
+                    : undefined
+                }
+              >
+                {missing && <span aria-hidden>✗ </span>}
+                {a}
+              </span>
+            );
+          })}
         </div>
+        {isBroken && (
+          <div className="task-card-broken-note">
+            Missing:{' '}
+            {[
+              ...(leadMissing && template.leadAgent
+                ? [template.leadAgent]
+                : []),
+              ...missingAgents,
+            ].join(', ')}
+            {' — '}recreate the agent(s) or delete this template.
+          </div>
+        )}
       </button>
       {onDelete && (
         <button

@@ -201,6 +201,29 @@ export function SendIcon(props: IconProps) {
   );
 }
 
+/**
+ * Bold, horizontal filled paper-plane glyph used in the composer
+ * Send button. Renders as a solid shape (not stroked) so the icon
+ * reads as a chunky press target rather than a fine outline. The
+ * left-side V notch is drawn via a sub-path on the same fill, the
+ * tip points right.
+ */
+export function SendFilledIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="none"
+      className={className}
+      aria-hidden
+    >
+      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+    </svg>
+  );
+}
+
 export function CloseIcon(props: IconProps) {
   return (
     <Svg {...props}>

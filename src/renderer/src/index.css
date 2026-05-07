@@ -3923,7 +3923,7 @@ code.voice-tool-card-value {
 }
 .pane-empty-mark {
   display: block;
-  width: 78px;
+  width: 56px;
   height: auto;
   object-fit: contain;
   -webkit-user-drag: none;
@@ -4328,20 +4328,34 @@ code.voice-tool-card-value {
   padding: 6px;
   border: 1px solid var(--border);
   background: var(--bg-elev-2);
-  /* Pill shape for the single-line state, gracefully growing into a
-     soft-rounded rect when the textarea auto-grows past one line. */
-  border-radius: 22px;
+  /* Soft rounded corners that match the agent / worker cards in
+     the sidebar (12px radius) so the composer reads as part of
+     the same family. Was a fully-rounded pill (22px) before. */
+  border-radius: 12px;
   transition: border-color 160ms ease, box-shadow 160ms ease,
-    border-radius 160ms ease, background 160ms ease;
+    background 160ms ease;
 }
 /* Active pane: tint the composer row down so the active state feels
-   continuous from the chat scroller through to the message field. */
+   continuous from the chat scroller through to the message field.
+   Border picks up the agent's colour via `--pane-accent` (set on
+   the pane root by Pane.tsx whenever the bound agent has a colour
+   assigned) so the field reads as "this belongs to <agent>" the
+   same way the chips and gradient bloom in the header do.
+   Note: we deliberately use `--pane-accent` (root-scoped) rather
+   than `--pane-active-stripe` (header-scoped only). */
 .pane.active .composer-row {
   background: var(--bg-elev);
+  border-color: color-mix(
+    in srgb,
+    var(--pane-accent, var(--accent)) 55%,
+    var(--border)
+  );
 }
-.composer-row:focus-within {
-  border-color: rgba(228, 217, 71, 0.55);
-  box-shadow: 0 0 0 3px rgba(228, 217, 71, 0.12);
+.pane.active .composer-row:focus-within {
+  /* On focus inside an active pane, intensify the border to the
+     full agent colour. No box-shadow glow — the user asked for
+     just the border. */
+  border-color: var(--pane-accent, var(--accent));
 }
 .composer-attach {
   display: inline-flex;
@@ -4393,16 +4407,32 @@ code.voice-tool-card-value {
   align-items: center;
   gap: 6px;
   height: 32px;
-  padding: 0 16px;
-  /* Pill-shaped to mirror the rounded composer row it sits inside. */
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-on);
+  padding: 0 14px;
+  /* Rounded corners (not pill) to match the composer row's 12px
+     radius and the agent / worker cards in the sidebar. */
+  border-radius: 10px;
+  /* Default state — pane not focused / not the active one. Reads as
+     a neutral grey button so the agent's colour only lights up when
+     the pane is genuinely live. */
+  background: var(--bg-elev-2);
+  color: var(--text);
   font-weight: 700;
   font-size: 12.5px;
   letter-spacing: 0.01em;
-  transition: filter 120ms, transform 80ms;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    filter 120ms,
+    transform 80ms;
   flex-shrink: 0;
+}
+/* Active pane — Send takes the agent's colour with high-contrast
+   black text + icon so the button reads as the primary CTA the
+   moment the pane is selected. Uses `--pane-accent` (root-scoped)
+   for the same reason the composer-row does — see comment above. */
+.pane.active .composer-send:not(:disabled) {
+  background: var(--pane-accent, var(--accent));
+  color: #0a0a0a;
 }
 .composer-send:hover:not(:disabled) {
   filter: brightness(1.08);
@@ -4658,28 +4688,40 @@ code.voice-tool-card-value {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 32px;
-  padding: 0 18px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-on);
+  height: 36px;
+  padding: 0 16px;
+  /* Rounded corners (not pill) to match the inline composer Send
+     button + the agent / worker cards across the app. */
+  border-radius: 10px;
+  /* The expanded composer's modal root sets `--composer-accent` to
+     the bound agent's vivid colour, so the Send button picks up
+     the agent's tint with high-contrast black text. */
+  background: var(--composer-accent, var(--accent));
+  color: #0a0a0a;
   font-weight: 700;
   font-size: 12.5px;
   letter-spacing: 0.01em;
-  transition: filter 120ms;
+  transition: filter 120ms, background 140ms ease, color 140ms ease;
 }
 .composer-expand-send:hover:not(:disabled) {
   filter: brightness(1.08);
 }
 .composer-expand-send:disabled {
-  background: rgba(228, 217, 71, 0.22);
-  color: rgba(6, 42, 24, 0.55);
+  /* Neutral muted grey when there's nothing to send — same
+     treatment as the inline composer's disabled state. */
+  background: var(--bg-elev-2);
+  color: var(--muted, var(--text-dim));
+  opacity: 0.55;
   cursor: default;
 }
 
 .composer-send:disabled {
-  background: rgba(228, 217, 71, 0.22);
-  color: rgba(6, 42, 24, 0.55);
+  /* Disabled state — neutral muted grey regardless of pane active
+     state. The agent-coloured fill is reserved for actionable
+     buttons; a disabled Send shouldn't masquerade as ready. */
+  background: var(--bg-elev-2);
+  color: var(--muted, var(--text-dim));
+  opacity: 0.55;
   cursor: default;
 }
 
@@ -6706,7 +6748,9 @@ select:focus {
   flex-direction: column;
   padding: 0;
   border-radius: 12px;
-  background: var(--bg-elev-1);
+  /* Match the modal body so cards sit flush rather than elevated
+     above the surface — same approach as task cards. */
+  background: var(--bg);
   border: 1px solid var(--border);
   cursor: pointer;
   overflow: hidden;
@@ -6756,7 +6800,10 @@ select:focus {
   display: grid;
   gap: 5px;
   padding: 6px;
-  background: var(--bg);
+  /* Inner tile sits one elevation step ABOVE the card surface so
+     the preview reads as a "miniature pane tree" inset into the
+     darker card, not as another flat patch. */
+  background: var(--bg-elev-1);
   border-radius: 8px;
   border: 1px solid var(--border);
 }
@@ -6836,7 +6883,11 @@ select:focus {
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px;
-  background: var(--bg-elev-1);
+  /* Same flat-against-modal-body background as the suggested
+     templates list so the whole modal reads as one consistent
+     surface; the accent border + drop shadow do the work of
+     separating this feature card from the templates below. */
+  background: var(--bg);
   border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
   border-radius: 14px;
   box-shadow:
@@ -6984,7 +7035,10 @@ select:focus {
   gap: 8px;
   padding: 14px 18px;
   text-align: left;
-  background: var(--bg-elev-1);
+  /* Match the modal body so cards recede into the surface rather
+     than reading as elevated tiles. The accent border + bottom
+     gradient bloom on hover still distinguishes each card. */
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   cursor: pointer;
@@ -7128,12 +7182,60 @@ select:focus {
   background: rgba(228, 217, 71, 0.10);
   border-color: rgba(228, 217, 71, 0.45);
 }
+/* Missing-agent chip — danger-tinted so the user spots the broken
+   reference at a glance. Hover override below makes sure the
+   missing tint wins over the active-card accent tint. */
+.task-card-agent-missing {
+  color: var(--danger);
+  background: rgba(242, 109, 122, 0.10);
+  border-color: rgba(242, 109, 122, 0.45);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(242, 109, 122, 0.6);
+}
+.task-card-body:hover .task-card-agent-missing {
+  /* Don't let the accent-on-hover rule from the generic chip
+     selector override the missing tint — keep this danger-coloured. */
+  color: var(--danger);
+  background: rgba(242, 109, 122, 0.18);
+  border-color: rgba(242, 109, 122, 0.6);
+}
+
+/* Broken card variant — applied when at least one referenced agent
+   is missing. The card is non-interactive (cursor + button-disabled
+   prevent the pick). Visually muted with a danger-tinted border so
+   it's obviously different from a healthy card. */
+.task-card-broken .task-card-body {
+  cursor: not-allowed;
+  border-color: rgba(242, 109, 122, 0.35);
+  opacity: 0.85;
+}
+.task-card-broken .task-card-body:hover {
+  /* Suppress the accent hover treatment — broken cards shouldn't
+     animate to "ready to apply". */
+  border-color: rgba(242, 109, 122, 0.45);
+  box-shadow: none;
+  transform: none;
+}
+.task-card-broken .task-card-body:hover::before {
+  opacity: 0;
+}
+.task-card-broken-note {
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: rgba(242, 109, 122, 0.08);
+  border: 1px solid rgba(242, 109, 122, 0.30);
+  border-radius: 6px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
 .task-card-delete {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7143,13 +7245,20 @@ select:focus {
   color: var(--text-dim);
   cursor: pointer;
   font-size: 11px;
-  z-index: 1;
+  z-index: 2;
   transition: background 120ms, color 120ms, border-color 120ms;
 }
 .task-card-delete:hover {
   background: rgba(242, 109, 122, 0.12);
   border-color: rgba(242, 109, 122, 0.45);
   color: var(--danger);
+}
+/* When the card has a delete button, reserve room at the right of
+   the head row so the mode pill (Lead / Multi) doesn't overlap the
+   X. The :has() check is scoped to the card itself so built-in
+   templates without a delete button keep their full-width head. */
+.task-card:has(.task-card-delete) .task-card-head {
+  padding-right: 30px;
 }
 
 .tasks-footnote {
