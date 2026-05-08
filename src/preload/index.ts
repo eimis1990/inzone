@@ -409,6 +409,17 @@ const api: CoworkApi = {
      *  delete the schema file. */
     deletePage: (cwd: string, relPath: string): Promise<{ ok: true }> =>
       ipcRenderer.invoke(IPC.WIKI_DELETE_PAGE, { cwd, relPath }),
+    /** Case-insensitive search across every wiki page. Used by the
+     *  voice agent's `search_wiki` client tool — returns the top
+     *  pages by match count with short context snippets. */
+    search: (
+      cwd: string,
+      query: string,
+      limit?: number,
+    ): Promise<
+      Array<{ path: string; count: number; snippets: string[] }>
+    > =>
+      ipcRenderer.invoke(IPC.WIKI_SEARCH, { cwd, query, limit }),
   },
   state: {
     get: (): Promise<AppState> => ipcRenderer.invoke(IPC.STATE_GET),

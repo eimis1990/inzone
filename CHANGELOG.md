@@ -4,6 +4,42 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] — 2026-05-07
+
+### Added
+
+- **Voice agent can answer questions about your project from the
+  wiki.** Three new client tools — `list_wiki_pages`,
+  `read_wiki_page`, and `search_wiki` — let the ElevenLabs voice
+  agent read `.inzone/wiki/` for the active session and answer
+  project-specific questions grounded in real wiki content.
+  Updated system prompt now tells the LLM to search the wiki first
+  for any project Q&A. Each tool needs to be registered in the
+  ElevenLabs dashboard with "Wait for response" enabled — the
+  Voice settings screen carries the per-tool cards as before.
+- **Voice troubleshooting block.** New "🩺 Voice claims success
+  but nothing happens?" expander in Settings → Voice that walks
+  through the five most common failure modes (Wait-for-response
+  off, missing tool registration, stale system prompt, weak LLM
+  hallucinating success, mic muted) with a concrete fix for each.
+
+### Fixed
+
+- **Long inline code tokens overflow the pane.** Yellow inline-
+  code spans had `white-space: nowrap`, so long file paths or
+  `accessibilityLabel`-style identifiers wouldn't wrap and ran
+  off the right edge. Now wraps at word boundaries with
+  `overflow-wrap: anywhere` as a safety net for unbroken strings.
+
+### Changed
+
+- **Project rows in the sidebar match the rest of the app.** 10px
+  corner radius, accent-tinted border on hover and active, bottom
+  gradient bloom in the accent colour on hover. Same visual
+  language as task / worker / layout cards.
+
+[1.8.1]: https://github.com/eimis1990/inzone/compare/v1.8.0...v1.8.1
+
 ## [1.8.0] — 2026-05-07
 
 ### Added

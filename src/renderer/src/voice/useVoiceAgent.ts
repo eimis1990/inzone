@@ -558,6 +558,129 @@ function buildClientTools(
         });
       }
     },
+
+    // ── Wiki Q&A ────────────────────────────────────────────────
+    // The voice agent answers project-specific questions by reading
+    // the active session's `.inzone/wiki/`. All three tools refuse
+    // when there's no active session (no repo to read from).
+    list_wiki_pages: async () => {
+      const cwd = useStore.getState().cwd;
+      if (!cwd) {
+        return JSON.stringify({
+          ok: false,
+          error: 'No active session.',
+          agent_must_say:
+            "There's no active session, so I can't see a project wiki. Switch to a session first.",
+        });
+      }
+      try {
+        const pages = await window.cowork.wiki.listPages(cwd);
+        if (pages.length === 0) {
+          return JSON.stringify({
+            ok: true,
+            pages: [],
+            agent_must_say:
+              "This project doesn't have a wiki yet — `.inzone/wiki/` is empty. The user can initialise one from the sidebar's Wiki tab.",
+          });
+        }
+        return JSON.stringify({
+          ok: true,
+          // Strip bytes/dates — the voice LLM only needs the path.
+          pages: pages.map((p) => ({ path: p.path, name: p.name })),
+        });
+      } catch (err) {
+        return JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+
+    read_wiki_page: async (params: Record<string, unknown>) => {
+      const cwd = useStore.getState().cwd;
+      if (!cwd) {
+        return JSON.stringify({
+          ok: false,
+          error: 'No active session.',
+          agent_must_say:
+            "There's no active session — switch to one first.",
+        });
+      }
+      const relPath = String(params.path ?? '').trim();
+      if (!relPath) {
+        return JSON.stringify({
+          ok: false,
+          error: 'path required',
+          agent_must_say:
+            'Which wiki page should I read? Call list_wiki_pages or search_wiki first to find a path.',
+        });
+      }
+      try {
+        const content = await window.cowork.wiki.readPage(cwd, relPath);
+        // Cap at ~16KB so the voice LLM gets a manageable chunk; for
+        // longer pages, the LLM can re-call with a more specific
+        // search to narrow down. 16KB ≈ 4k tokens, comfortable for
+        // most ElevenLabs-configured LLMs.
+        const MAX = 16_000;
+        const truncated = content.length > MAX;
+        return JSON.stringify({
+          ok: true,
+          path: relPath,
+          content: truncated ? content.slice(0, MAX) : content,
+          truncated,
+        });
+      } catch (err) {
+        return JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          agent_must_say: `I couldn't read "${relPath}". Maybe the path is wrong — call list_wiki_pages to see what's available.`,
+        });
+      }
+    },
+
+    search_wiki: async (params: Record<string, unknown>) => {
+      const cwd = useStore.getState().cwd;
+      if (!cwd) {
+        return JSON.stringify({
+          ok: false,
+          error: 'No active session.',
+          agent_must_say:
+            "There's no active session — switch to one first.",
+        });
+      }
+      const query = String(params.query ?? '').trim();
+      if (!query) {
+        return JSON.stringify({
+          ok: false,
+          error: 'query required',
+          agent_must_say: 'What should I search the wiki for?',
+        });
+      }
+      try {
+        const hits = await window.cowork.wiki.search(cwd, query, 5);
+        if (hits.length === 0) {
+          return JSON.stringify({
+            ok: true,
+            query,
+            hits: [],
+            agent_must_say: `The wiki doesn't mention "${query}". Want me to list the available pages instead?`,
+          });
+        }
+        return JSON.stringify({
+          ok: true,
+          query,
+          hits,
+          // Hint to the LLM that it should usually read the top hit
+          // for the full content before answering.
+          next_action: 'CONSIDER_READING_TOP_HIT',
+        });
+      } catch (err) {
+        return JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
   };
   // Wrap every entry so tool calls are traced into the VoiceSection log.
   return Object.fromEntries(

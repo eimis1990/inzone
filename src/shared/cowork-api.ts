@@ -458,6 +458,16 @@ export interface CoworkApi {
     appendLog(cwd: string, entry: string): Promise<{ ok: true }>;
     /** Remove a page. Refuses to delete the schema file. */
     deletePage(cwd: string, relPath: string): Promise<{ ok: true }>;
+    /** Case-insensitive substring search across every wiki page.
+     *  Returns up to `limit` pages (default 5, max 20) sorted by
+     *  match count with a few short snippets each. */
+    search(
+      cwd: string,
+      query: string,
+      limit?: number,
+    ): Promise<
+      Array<{ path: string; count: number; snippets: string[] }>
+    >;
   };
   state: {
     get(): Promise<AppState>;

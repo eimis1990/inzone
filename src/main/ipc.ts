@@ -102,6 +102,7 @@ import {
   initWiki,
   listAllPages as listWikiPages,
   readPage as readWikiPage,
+  searchWiki,
   writePage as writeWikiPage,
 } from './wiki';
 import {
@@ -543,6 +544,13 @@ export function registerIpcHandlers(): void {
       await wikiDeletePage(args.cwd, args.relPath);
       return { ok: true } as const;
     },
+  );
+  ipcMain.handle(
+    IPC.WIKI_SEARCH,
+    async (
+      _e,
+      args: { cwd: string; query: string; limit?: number },
+    ) => searchWiki(args.cwd, args.query, { limit: args.limit }),
   );
 
   // -- Profile (Settings → Profile) -----------------------------------------

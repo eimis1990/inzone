@@ -158,6 +158,70 @@ export function VoiceSettingsSection() {
               </div>
             </div>
 
+            {/* Troubleshooting block — addresses the most common
+                "voice said it did but nothing happened" failure modes
+                in plain language. Lives above the setup guide so
+                users hit it before scrolling into the per-tool cards. */}
+            <details className="voice-troubleshoot">
+              <summary>
+                🩺 Voice claims success but nothing happens? Read this.
+              </summary>
+              <div className="voice-troubleshoot-body">
+                <p>
+                  The most common cause is the dashboard agent not knowing
+                  about INZONE&rsquo;s tools. Symptoms — voice says
+                  &ldquo;[done] Added the agent&rdquo; / &ldquo;Created the
+                  pane&rdquo; but the UI hasn&rsquo;t changed.
+                </p>
+                <ol>
+                  <li>
+                    <strong>
+                      Wait for response is off on at least one tool.
+                    </strong>{' '}
+                    The most frequent cause. Open every tool below in the
+                    ElevenLabs dashboard and confirm the checkbox is ticked.
+                  </li>
+                  <li>
+                    <strong>A tool isn&rsquo;t registered.</strong> If the
+                    voice agent calls <code>add_pane_to_session</code> but
+                    you&rsquo;ve only registered <code>list_agents</code> in
+                    the dashboard, the call fails silently. Verify all{' '}
+                    {VOICE_TOOLS.length} tools below appear in your
+                    agent&rsquo;s Tools list.
+                  </li>
+                  <li>
+                    <strong>
+                      The system prompt is missing or out-of-date.
+                    </strong>{' '}
+                    The prompt below tells the LLM how to read tool
+                    responses. Without it (or with a stale version that
+                    doesn&rsquo;t mention <code>agent_must_say</code> or
+                    fuzzy-match retries), the agent will narrate fictional
+                    successes. Re-paste the prompt below into the
+                    dashboard&rsquo;s <em>System prompt</em> field whenever
+                    you upgrade INZONE.
+                  </li>
+                  <li>
+                    <strong>
+                      The tool was called but the action failed silently.
+                    </strong>{' '}
+                    Open the Voice section in the sidebar — it logs every
+                    tool call with its result. If you see a call with{' '}
+                    <code>&quot;ok&quot;: false</code> but the voice agent
+                    still said &ldquo;done&rdquo;, the LLM ignored the
+                    result. Switch the agent&rsquo;s LLM to GPT-4o or Claude
+                    Sonnet — weaker models hallucinate success.
+                  </li>
+                  <li>
+                    <strong>The microphone is muted.</strong> If voice can
+                    hear you but the LLM is still answering from training
+                    data instead of calling tools, the agent setup is
+                    incomplete — re-run the wizard from the button above.
+                  </li>
+                </ol>
+              </div>
+            </details>
+
             <div className="settings-row">
               <div className="settings-row-head">
                 <label htmlFor="voice-key">ElevenLabs API key</label>

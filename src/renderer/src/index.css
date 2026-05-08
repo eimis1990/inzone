@@ -1729,19 +1729,57 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 8px 10px;
+  /* Match task / worker / layout cards across the app — 10px corner
+     radius and `--bg` flat against the sidebar surface. */
+  border-radius: 10px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background 120ms, border-color 120ms;
+  overflow: hidden;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+/* Bottom-half gradient bloom in the accent colour on hover — same
+   recipe as the task card hover. Lives in a ::before so it can fade
+   in/out independently and stay below the row content. */
+.session-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 50%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--accent) 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+  z-index: 0;
+}
+.session-row > * {
+  position: relative;
+  z-index: 1;
 }
 .session-row:hover {
-  background: var(--bg-elev);
+  background: var(--bg-elev-1);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.session-row:hover::before {
+  opacity: 0.18;
 }
 .session-row.active {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: var(--bg-elev-1);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 4px 14px -8px rgba(0, 0, 0, 0.45);
+}
+.session-row.active::before {
+  opacity: 0.20;
 }
 .session-dot {
   flex-shrink: 0;
@@ -2415,6 +2453,62 @@ textarea {
 .voice-critical-warning-body strong {
   color: var(--text);
   font-weight: 600;
+}
+
+/* "Voice claims success but nothing happens" troubleshooter — sits
+   below the Wait-for-response warning, collapsible so it doesn't
+   steal attention until the user actually has the symptom. */
+.voice-troubleshoot {
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-elev-1));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 16px;
+}
+.voice-troubleshoot > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 4px 0;
+  list-style: none;
+}
+.voice-troubleshoot > summary::-webkit-details-marker {
+  display: none;
+}
+.voice-troubleshoot[open] > summary {
+  margin-bottom: 6px;
+  border-bottom: 1px dashed
+    color-mix(in srgb, var(--accent) 25%, transparent);
+  padding-bottom: 8px;
+}
+.voice-troubleshoot-body {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.voice-troubleshoot-body p {
+  margin: 6px 0;
+}
+.voice-troubleshoot-body ol {
+  padding-left: 20px;
+  margin: 6px 0;
+}
+.voice-troubleshoot-body li {
+  margin: 6px 0;
+}
+.voice-troubleshoot-body strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.voice-troubleshoot-body code {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--text);
 }
 .voice-tool-checkbox-hint {
   color: var(--accent);
@@ -4035,7 +4129,14 @@ code.voice-tool-card-value {
   color: var(--accent);
   padding: 1px 6px;
   border-radius: 4px;
-  white-space: nowrap;
+  /* Allow wrapping so long inline-code tokens (e.g. file paths,
+     long flag names) don't overflow the pane width. Short
+     snippets like `myVar` still stay on one line because normal
+     wrapping happens at word boundaries; `overflow-wrap: anywhere`
+     is the safety net for unbroken strings (URLs, snake_case_with
+     _no_breaks). */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .md-code-block {
   margin: 8px 0;

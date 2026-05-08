@@ -136,6 +136,8 @@ export const IPC = {
   WIKI_WRITE_PAGE: 'wiki:writePage',
   WIKI_APPEND_LOG: 'wiki:appendLog',
   WIKI_DELETE_PAGE: 'wiki:deletePage',
+  /** Voice agent — case-insensitive search across every wiki page. */
+  WIKI_SEARCH: 'wiki:search',
 
   // Persistence
   STATE_GET: 'state:get',

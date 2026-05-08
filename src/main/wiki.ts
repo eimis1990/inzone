@@ -345,6 +345,77 @@ export async function readPage(cwd: string, rel: string): Promise<string> {
   return fs.readFile(abs, 'utf8');
 }
 
+export interface WikiSearchHit {
+  /** Page-relative path, e.g. "architecture.md" or "decisions/auth.md". */
+  path: string;
+  /** Number of times the query matched in this page (case-insensitive). */
+  count: number;
+  /** Up to N short context excerpts around the matches — caller-side
+   *  rendering can show them as line-anchored snippets. */
+  snippets: string[];
+}
+
+/**
+ * Case-insensitive substring search across every wiki page. Returns
+ * the top `limit` pages sorted by match count (descending). For each
+ * hit we include up to 3 short snippets around the match positions
+ * so callers (the voice agent, in particular) can speak answers
+ * grounded in real wiki content rather than hallucinating.
+ *
+ * Performance is fine for typical wikis (≤ a few dozen pages, a few
+ * hundred KB each); we read each .md once and scan in-memory. Long
+ * pages stop contributing snippets after the first 3 matches.
+ */
+export async function searchWiki(
+  cwd: string,
+  query: string,
+  opts: { limit?: number } = {},
+): Promise<WikiSearchHit[]> {
+  const trimmed = query?.trim() ?? '';
+  if (!trimmed) return [];
+  const needle = trimmed.toLowerCase();
+  const limit = Math.max(1, Math.min(opts.limit ?? 5, 20));
+
+  const pages = await listAllPages(cwd);
+  const hits: WikiSearchHit[] = [];
+
+  for (const page of pages) {
+    let raw: string;
+    try {
+      raw = await readPage(cwd, page.path);
+    } catch {
+      continue;
+    }
+    const haystack = raw.toLowerCase();
+    let cursor = 0;
+    let count = 0;
+    const snippets: string[] = [];
+    while (cursor < haystack.length) {
+      const idx = haystack.indexOf(needle, cursor);
+      if (idx === -1) break;
+      count++;
+      // First 3 matches contribute snippets; subsequent matches
+      // just bump the count so popularity ranking still works.
+      if (snippets.length < 3) {
+        const start = Math.max(0, idx - 60);
+        const end = Math.min(raw.length, idx + needle.length + 60);
+        const slice = raw.slice(start, end).replace(/\s+/g, ' ').trim();
+        snippets.push(
+          (start > 0 ? '…' : '') + slice + (end < raw.length ? '…' : ''),
+        );
+      }
+      cursor = idx + needle.length;
+    }
+    if (count > 0) {
+      hits.push({ path: page.path, count, snippets });
+    }
+  }
+
+  // Sort by count desc, then by path asc for stable ordering.
+  hits.sort((a, b) => b.count - a.count || a.path.localeCompare(b.path));
+  return hits.slice(0, limit);
+}
+
 /** Create or overwrite a wiki page. Creates intermediate
  *  directories as needed. Throws on path escape. */
 export async function writePage(

@@ -24,6 +24,11 @@ export const VOICE_TOOL_NAMES = [
   'set_lead_agent',
   'set_window_mode',
   'close_pane',
+  // Wiki Q&A — voice agent answers project questions from
+  // .inzone/wiki/ in the active session's repo.
+  'list_wiki_pages',
+  'read_wiki_page',
+  'search_wiki',
 ] as const;
 
 export type VoiceToolName = (typeof VOICE_TOOL_NAMES)[number];
@@ -183,6 +188,40 @@ export const VOICE_TOOLS: VoiceTool[] = [
       },
     ],
   },
+  {
+    name: 'list_wiki_pages',
+    description:
+      "List every page in the project's `.inzone/wiki/` knowledge base for the user's currently-active session. Returns relative paths like 'architecture.md' and 'decisions/auth.md'. Call this before read_wiki_page when you don't know what's available, or when the user asks 'what does the project's wiki cover?'.",
+    parameters: [],
+  },
+  {
+    name: 'read_wiki_page',
+    description:
+      "Read the full markdown content of a single wiki page in the user's currently-active session. Use this when you've identified a relevant page (via list_wiki_pages or search_wiki) and need the full content to answer the user's question. Quote facts from the page back to the user — don't paraphrase to the point of fabrication.",
+    parameters: [
+      {
+        identifier: 'path',
+        type: 'string',
+        required: true,
+        description:
+          "Page-relative path, e.g. 'architecture.md' or 'decisions/auth.md'. Use the path returned by list_wiki_pages or search_wiki verbatim.",
+      },
+    ],
+  },
+  {
+    name: 'search_wiki',
+    description:
+      "Case-insensitive substring search across every wiki page in the user's currently-active session. Returns the top matching pages with a few short context snippets per page. Use this whenever the user asks ANY project-specific question (architecture, conventions, decisions, gotchas, glossary, history) — search first, then read_wiki_page for the full content of the best match.",
+    parameters: [
+      {
+        identifier: 'query',
+        type: 'string',
+        required: true,
+        description:
+          "What to search for — a keyword, phrase, or short question fragment. Examples: 'session pool', 'why redux', 'oauth flow'.",
+      },
+    ],
+  },
 ];
 
 /**
@@ -298,6 +337,14 @@ Examples:
 - When the user says "make X the lead", "set X as lead agent", "use X as orchestrator" → call \`set_lead_agent\`. It auto-switches the session into Lead mode if it isn't already.
 - When the user says "add X as a sub-agent" or just "add X" while in Lead mode → call \`add_pane_to_session\` (this adds a new sub-pane).
 
+**Project Q&A — wiki tools:**
+- Each project may have a \`.inzone/wiki/\` knowledge base — markdown pages covering architecture, conventions, decisions, gotchas, glossary, history. The voice agent has read-only access via three tools.
+- When the user asks ANY project-specific question ("how does the auth flow work?", "why did we pick Zustand?", "what's the SessionPool?", "where does X live?", "what conventions do we follow for Y?") → call \`search_wiki\` FIRST with a keyword from the question. If you get hits, call \`read_wiki_page\` on the best match for the full content, then answer the user grounded in what you read.
+- If \`search_wiki\` returns no hits, you can call \`list_wiki_pages\` to see if there's a relevant page name not matched by the keyword, OR tell the user the wiki doesn't cover that topic.
+- Quote facts from the page back to the user — don't paraphrase to the point of fabrication. If the wiki contradicts your training, the wiki is right.
+- For broad "what's in this project" questions, call \`list_wiki_pages\` first to give the user a tour of available pages.
+- Both \`search_wiki\` and \`list_wiki_pages\` operate on the user's currently-active session's repo — they take no sessionId.
+
 ---
 
 ### 4. Status Awareness
@@ -340,6 +387,11 @@ Example:
 ### Agent Delegation
 - \`send_message_to_pane\`
 
+### Project Q&A (wiki)
+- \`list_wiki_pages\`
+- \`read_wiki_page\`
+- \`search_wiki\`
+
 ---
 
 ## Behavioral Rules (Critical)
@@ -356,8 +408,9 @@ Example:
   - session management
   - pane management
   - agent coordination
-- Politely redirect off-topic requests
-- Never speculate or provide general advice
+  - project Q&A from the wiki
+- Politely redirect off-topic requests (general coding advice, debugging code you can't see, world knowledge unrelated to the user's project)
+- Never speculate or provide general advice — if the wiki doesn't cover it, say so
 - If something is not possible:
   - state it clearly
   - suggest an alternative command
