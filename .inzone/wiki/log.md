@@ -28,3 +28,12 @@ safestorage-over-keytar, anthropic-only, elevenlabs-over-whisper.
 Each captures the reasoning behind a choice that shouldn't be
 re-litigated by future agents who might naively suggest "have you
 considered Tauri / keytar / multi-provider / Whisper?"
+
+## [2026-05-09] edit | gotcha: auto-scroll falls behind streaming
+
+Added a gotcha entry covering the v1.10.0 fix to v1.9.0's
+auto-scroll pin: items-length-only effect missed streaming text
+growth within an existing message, so "Jump to latest" landed once
+and then fell behind as content kept arriving. Wrapper +
+ResizeObserver + drop smooth-scroll in jumpToBottom. Updated
+[[gotchas]].

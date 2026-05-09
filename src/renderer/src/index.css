@@ -3998,6 +3998,17 @@ code.voice-tool-card-value {
 .pane-scroller {
   flex: 1;
   overflow-y: auto;
+}
+/* Inner wrapper holds the flex layout that used to live on
+ * .pane-scroller. The wrapper exists so the streaming auto-scroll
+ * ResizeObserver has something whose height grows with content
+ * (the scroller's clientHeight is fixed at the viewport).
+ * `min-height: 100%` preserves the empty-state centering — the
+ * children's `margin: auto` only works when the parent has height
+ * to spare. */
+.pane-scroller-content {
+  min-height: 100%;
+  box-sizing: border-box;
   padding: 14px;
   display: flex;
   flex-direction: column;

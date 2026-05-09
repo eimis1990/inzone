@@ -368,19 +368,51 @@ export function Pane({ id }: PaneProps) {
    */
   const isPinnedRef = useRef(true);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  /** Reference to the inner content wrapper. We track its height
+   *  (not the scroller's, whose clientHeight is the viewport and
+   *  doesn't change as content grows) via a ResizeObserver, so we
+   *  can re-pin the scroll while a single message streams in. */
+  const scrollContentRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  /** Snap to bottom WITHOUT smooth animation. Smooth scroll fires
+   *  intermediate scroll events at non-bottom positions which our
+   *  pin detector reads as "user scrolled up", so the pin gets
+   *  flipped off mid-animation and any content streaming during
+   *  those frames triggers `showJumpToBottom` again. Instant scroll
+   *  fires one event with distance=0 → pinned stays true. */
+  const snapToBottom = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+
+  // Re-pin when items.length changes (new message / tool block).
+  // Streaming text growth WITHIN an existing message is handled by
+  // the ResizeObserver effect below, since items.length doesn't
+  // change while text streams into the last item.
+  useEffect(() => {
     if (isPinnedRef.current) {
-      // Pinned to bottom — keep the latest line in view.
-      el.scrollTop = el.scrollHeight;
+      snapToBottom();
     } else {
-      // Scrolled up reading something — surface the affordance so the
-      // user knows there's new content, but DO NOT yank them back down.
       setShowJumpToBottom(true);
     }
-  }, [pane?.items.length]);
+  }, [pane?.items.length, snapToBottom]);
+
+  // Catch content-size growth even when items.length is unchanged —
+  // streaming text into an open message, expanding tool blocks,
+  // image loads, markdown re-flow. If we're pinned, follow the
+  // bottom; if we're not, leave the user where they are (the
+  // items-length effect surfaces the pill when a NEW message
+  // arrives, which is the right moment to show it).
+  useEffect(() => {
+    const content = scrollContentRef.current;
+    if (!content) return;
+    const ro = new ResizeObserver(() => {
+      if (isPinnedRef.current) snapToBottom();
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [snapToBottom]);
 
   const onScrollerScroll = useCallback(() => {
     const el = scrollerRef.current;
@@ -397,12 +429,17 @@ export function Pane({ id }: PaneProps) {
   }, [showJumpToBottom]);
 
   const jumpToBottom = useCallback(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    // Order matters: set the pin BEFORE the scroll. The scroll
+    // triggers a scroll event that runs onScrollerScroll, which
+    // would normally set the pin based on distanceFromBottom — but
+    // setting it here first means the ResizeObserver loop will keep
+    // following streaming content even before the scroll event has
+    // fired and even if there's content growth between the scroll
+    // call and the next animation frame.
     isPinnedRef.current = true;
     setShowJumpToBottom(false);
-  }, []);
+    snapToBottom();
+  }, [snapToBottom]);
 
   // Pair tool_use with its matching tool_result so we can render the two
   // as a single collapsed block in the transcript. Items without a pair
@@ -669,25 +706,33 @@ export function Pane({ id }: PaneProps) {
         ref={scrollerRef}
         onScroll={onScrollerScroll}
       >
-        {pane.items.length === 0 && (
-          <div className="pane-empty">
-            <div className="pane-empty-icon" aria-hidden>
-              <img
-                className="pane-empty-mark"
-                src={placemarkUrl}
-                alt=""
-              />
+        {/* Inner content wrapper exists ONLY so we can attach a
+            ResizeObserver to it. Observing the scroller itself
+            doesn't help — its clientHeight is fixed at the viewport,
+            so it doesn't fire when scrollHeight changes underneath.
+            This wrapper grows with the messages, which is what we
+            need to track for streaming auto-scroll. */}
+        <div className="pane-scroller-content" ref={scrollContentRef}>
+          {pane.items.length === 0 && (
+            <div className="pane-empty">
+              <div className="pane-empty-icon" aria-hidden>
+                <img
+                  className="pane-empty-mark"
+                  src={placemarkUrl}
+                  alt=""
+                />
+              </div>
+              <div className="pane-empty-sub">
+                {pane.agentName
+                  ? 'Type a message below to start the conversation.'
+                  : 'Choose one from the sidebar to start a session.'}
+              </div>
             </div>
-            <div className="pane-empty-sub">
-              {pane.agentName
-                ? 'Type a message below to start the conversation.'
-                : 'Choose one from the sidebar to start a session.'}
-            </div>
-          </div>
-        )}
-        {viewItems.map((item) => (
-          <MessageView key={item.id} item={item} paneId={id} />
-        ))}
+          )}
+          {viewItems.map((item) => (
+            <MessageView key={item.id} item={item} paneId={id} />
+          ))}
+        </div>
       </div>
 
       {/* Floating "jump to latest" pill — only renders when the user

@@ -77,6 +77,28 @@ that snaps back and re-pins.
 
 See [Pane.tsx](../../src/renderer/src/components/Pane.tsx) `isPinnedRef` + `showJumpToBottom`.
 
+## Auto-scroll falls behind streaming text (v1.9.0 fix had a hole)
+
+The pin pattern above only re-scrolled when `pane.items.length`
+changed — but during streaming, the agent grows an EXISTING
+message's text. Same array length, more pixels. So once you'd
+clicked "Jump to latest" we'd scroll once to current scrollHeight,
+then content kept arriving below and we never re-scrolled. User
+appeared stuck mid-message until the agent finished.
+
+Fix (v1.10.0): wrap the messages in `.pane-scroller-content` and
+attach a `ResizeObserver` to it. Whenever the wrapper's height
+changes AND `isPinnedRef.current === true`, snap to bottom. Catches
+streaming text, expanding tool blocks, late image loads, markdown
+re-flow.
+
+Also dropped `behavior: 'smooth'` in `jumpToBottom` — smooth-scroll
+animations fire intermediate scroll events at non-bottom positions
+which the pin detector reads as "user scrolled up", flipping the
+pin off mid-animation. Instant scroll fires one event with
+distance=0 → pinned stays true. The "Jump to latest" feel of
+instant-snap is also better when chasing a live stream.
+
 ## Pane tabs got a stray vertical scrollbar
 
 The selected-tab `::after` underline used `bottom: -1px`, which
