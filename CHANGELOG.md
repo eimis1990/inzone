@@ -4,6 +4,21 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.1] — 2026-05-09
+
+### Fixed
+
+- **Auto-scroll keeps up with streaming content.** The v1.9.0 pin
+  fix only re-scrolled when `pane.items.length` changed, but during
+  streaming the agent grows an existing message's text — same array
+  length, more pixels — so once you'd clicked "Jump to latest" the
+  scroll position stayed put while content kept arriving below. Now
+  a `ResizeObserver` on the scroller's content wrapper catches every
+  height change (streaming text, expanding tool blocks, image loads)
+  and re-snaps to bottom while you're pinned. Also dropped the
+  smooth-scroll animation in `Jump to latest` because intermediate
+  scroll events during the animation flipped the pin off mid-flight.
+
 ## [1.10.0] — 2026-05-09
 
 ### Added
@@ -37,19 +52,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are auto-migrated on first launch, then stripped from the
   electron-store JSON file. The Settings → Voice hint copy now calls
   out the encryption explicitly.
-
-### Fixed
-
-- **Auto-scroll keeps up with streaming content.** The v1.9.0 pin
-  fix only re-scrolled when `pane.items.length` changed, but during
-  streaming the agent grows an existing message's text — same array
-  length, more pixels — so once you'd clicked "Jump to latest" the
-  scroll position stayed put while content kept arriving below. Now
-  a `ResizeObserver` on the scroller's content wrapper catches every
-  height change (streaming text, expanding tool blocks, image loads)
-  and re-snaps to bottom while you're pinned. Also dropped the
-  smooth-scroll animation in `Jump to latest` because intermediate
-  scroll events during the animation flipped the pin off mid-flight.
 
 ## [1.9.0] — 2026-05-08
 
