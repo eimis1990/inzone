@@ -127,6 +127,10 @@ import {
   saveVoiceSettings,
 } from './voice';
 import {
+  getEditorPreferences,
+  saveEditorPreferences,
+} from './editor-prefs';
+import {
   killTerminal,
   resizeTerminal,
   spawnTerminal,
@@ -140,6 +144,7 @@ import {
 } from './terminal-shortcuts';
 import type { TerminalShortcut } from '@shared/types';
 import type {
+  EditorPreferences,
   McpScope,
   McpServerConfig,
   McpServerDraft,
@@ -783,6 +788,28 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.VOICE_GET_START_CREDS, async () => {
     return resolveVoiceStartCreds();
   });
+
+  // -- Editor preferences ---------------------------------------------------
+  // Personal settings that apply across every CodeMirror surface in the
+  // app (vim mode today; theme / font size in the future). On save we
+  // broadcast `editorPrefs:changed` to every window so multi-window
+  // setups stay in sync without a reload.
+  ipcMain.handle(IPC.EDITOR_PREFS_GET, async () => getEditorPreferences());
+  ipcMain.handle(
+    IPC.EDITOR_PREFS_SAVE,
+    async (_e, prefs: EditorPreferences) => {
+      saveEditorPreferences(prefs);
+      const next = getEditorPreferences();
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          win.webContents.send(IPC.EDITOR_PREFS_CHANGED, next);
+        } catch {
+          // window may be tearing down; broadcasts are best-effort
+        }
+      }
+      return { ok: true as const };
+    },
+  );
 
   // -- Terminal (PTY) -------------------------------------------------------
   ipcMain.handle(

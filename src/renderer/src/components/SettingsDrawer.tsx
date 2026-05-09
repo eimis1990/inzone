@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { AboutSection } from './settings/AboutSection';
 import { AgentsSection } from './settings/AgentsSection';
+import { EditorSection } from './settings/EditorSection';
 import { McpServersSection } from './settings/McpServersSection';
 import { MemorySection } from './settings/MemorySection';
 import { ProfileSection } from './settings/ProfileSection';
@@ -63,6 +64,12 @@ const SECTIONS: SectionEntry[] = [
     label: 'Terminal',
     hint: 'Shortcuts',
     icon: () => <TerminalIcon />,
+  },
+  {
+    id: 'editor',
+    label: 'Editor',
+    hint: 'Vim mode',
+    icon: () => <PencilIcon />,
   },
   {
     id: 'memory',
@@ -190,6 +197,7 @@ export function SettingsDrawer({
           {section === 'mcp' && <McpServersSection />}
           {section === 'voice' && <VoiceSettingsSection />}
           {section === 'terminal' && <TerminalShortcutsSection />}
+          {section === 'editor' && <EditorSection />}
           {section === 'memory' && <MemorySection />}
           {section === 'usage' && <UsageSection />}
           {section === 'workspaces' && <WorkspacesSection />}
@@ -382,6 +390,25 @@ function KeyboardIcon() {
       <line x1="14" y1="10" x2="14" y2="10" />
       <line x1="18" y1="10" x2="18" y2="10" />
       <line x1="7" y1="14" x2="17" y2="14" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
     </svg>
   );
 }

@@ -245,7 +245,8 @@ export function VoiceSettingsSection() {
                 >
                   elevenlabs.io/app/settings/api-keys
                 </a>
-                . Leave blank if your agent is public.
+                . Leave blank if your agent is public. Stored encrypted via
+                your OS keychain — never written to disk in plaintext.
               </div>
             </div>
 

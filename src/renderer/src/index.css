@@ -7829,6 +7829,42 @@ select:focus {
   color: var(--text-dim);
   margin: 0 0 8px 0;
 }
+
+/* Settings → Editor: vim toggle row + helper copy. Reused by any
+ * future single-toggle preference panes (line wrap, theme, etc.) so
+ * the styles are deliberately generic. */
+.settings-section-sub {
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 0 0 10px 0;
+}
+.settings-section-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 8px 0 0 0;
+  opacity: 0.85;
+}
+.toggle-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-soft, #2a2f3a);
+  border-radius: 8px;
+  background: var(--bg-elev-1, #14171c);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-row input[type='checkbox'] {
+  cursor: pointer;
+  accent-color: var(--accent, #e4d947);
+}
+.toggle-row .toggle-label {
+  font-size: 13px;
+  color: var(--text);
+}
 .settings-intro {
   color: var(--text-dim);
   font-size: 12px;

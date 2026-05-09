@@ -52,6 +52,11 @@ export const IPC = {
   VOICE_SAVE: 'voice:save',
   VOICE_GET_START_CREDS: 'voice:getStartCreds',
 
+  // Editor preferences (vim mode, etc.)
+  EDITOR_PREFS_GET: 'editorPrefs:get',
+  EDITOR_PREFS_SAVE: 'editorPrefs:save',
+  EDITOR_PREFS_CHANGED: 'editorPrefs:changed', // main -> renderer push
+
   // Terminal (PTY) — bottom-bar shell
   TERM_SPAWN: 'term:spawn',
   TERM_INPUT: 'term:input',

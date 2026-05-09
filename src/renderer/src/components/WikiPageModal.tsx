@@ -7,6 +7,8 @@ import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { vim } from '@replit/codemirror-vim';
+import { useEditorPreferences } from '../hooks/useEditorPreferences';
 import { useStore } from '../store';
 
 interface WikiPageModalProps {
@@ -51,6 +53,7 @@ export function WikiPageModal({
   onSaved,
 }: WikiPageModalProps) {
   const cwd = useStore((s) => s.cwd);
+  const { vimMode } = useEditorPreferences();
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -271,6 +274,7 @@ export function WikiPageModal({
                 onChange={(value) => setDraft(value)}
                 theme={oneDark}
                 extensions={[
+                  ...(vimMode ? [vim()] : []),
                   markdown({
                     base: markdownLanguage,
                     codeLanguages: languages,

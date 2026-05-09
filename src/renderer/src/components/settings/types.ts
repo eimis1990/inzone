@@ -6,6 +6,7 @@ export type SettingsSection =
   | 'mcp'
   | 'voice'
   | 'terminal'
+  | 'editor'
   | 'memory'
   | 'usage'
   | 'workspaces'

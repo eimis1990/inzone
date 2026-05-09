@@ -28,6 +28,7 @@
 
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebglAddon } from '@xterm/addon-webgl';
 
 export interface TerminalSessionInit {
   paneId: string;
@@ -170,6 +171,31 @@ export async function createTerminalSession(
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
+
+  // WebGL renderer — drastically smoother under heavy output
+  // (build logs, `npm install`, test runners). xterm renders to a
+  // GPU-backed canvas instead of the default DOM/canvas2d fallback.
+  // Must be loaded AFTER `term.open()` because the addon needs the
+  // host to be in the DOM to acquire a WebGL context. We catch
+  // construction failures (rare — old Linux + headless GPUs) and
+  // fall back silently to the default renderer; xterm continues to
+  // work, it just isn't GPU-accelerated. If the GPU process crashes
+  // mid-session we get a `webglcontextlost` event — also drop the
+  // addon then so xterm reverts to canvas2d cleanly.
+  try {
+    const webgl = new WebglAddon();
+    webgl.onContextLoss(() => {
+      try {
+        webgl.dispose();
+      } catch {
+        // already gone
+      }
+    });
+    term.loadAddon(webgl);
+  } catch {
+    // No WebGL — xterm still works, it just falls back to canvas2d.
+  }
+
   try {
     fit.fit();
   } catch {

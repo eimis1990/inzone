@@ -1,6 +1,6 @@
 {
   "name": "inzone",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "INZONE — a desktop cockpit for running multiple Claude Agent SDK sessions side-by-side.",
   "main": "out/main/index.mjs",
   "author": {
@@ -31,8 +31,10 @@
     "@codemirror/theme-one-dark": "^6.1.2",
     "@elevenlabs/react": "^1.2.1",
     "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+    "@replit/codemirror-vim": "^6.3.0",
     "@uiw/react-codemirror": "^4.23.7",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "chokidar": "^4.0.3",
     "electron-store": "^10.0.1",

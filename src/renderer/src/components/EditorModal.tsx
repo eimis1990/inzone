@@ -3,6 +3,8 @@ import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { vim } from '@replit/codemirror-vim';
+import { useEditorPreferences } from '../hooks/useEditorPreferences';
 import { useStore } from '../store';
 import { AGENT_COLORS, AGENT_TOOL_CHOICES, MODEL_CHOICES } from '@shared/palette';
 import type { McpServerEntry } from '@shared/types';
@@ -17,6 +19,7 @@ export function EditorModal() {
   const remove = useStore((s) => s.deleteFromEditor);
   const allSkills = useStore((s) => s.skills);
   const cwd = useStore((s) => s.cwd);
+  const { vimMode } = useEditorPreferences();
 
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -601,6 +604,10 @@ export function EditorModal() {
                 onChange={(value) => update({ body: value })}
                 theme={oneDark}
                 extensions={[
+                  // Vim extension MUST come first — it installs its
+                  // own keymap that should win over CodeMirror's
+                  // defaults. Toggled via Settings → Editor.
+                  ...(vimMode ? [vim()] : []),
                   markdown({
                     base: markdownLanguage,
                     codeLanguages: languages,

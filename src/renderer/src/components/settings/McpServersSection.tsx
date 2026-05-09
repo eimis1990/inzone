@@ -21,6 +21,8 @@ import { useEffect, useMemo, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { vim } from '@replit/codemirror-vim';
+import { useEditorPreferences } from '../../hooks/useEditorPreferences';
 import { useStore } from '../../store';
 import type {
   McpProbeResult,
@@ -936,6 +938,7 @@ function McpEditor({
   onSave: (draft: McpServerDraft) => Promise<void>;
 }) {
   const isNew = !initial.originalName;
+  const { vimMode } = useEditorPreferences();
   // New entries open the preset picker. Edits jump straight to advanced
   // since we can't reliably reverse-engineer a preset from a saved entry.
   const [mode, setMode] = useState<EditorMode>(
@@ -1205,7 +1208,10 @@ function McpEditor({
                   setJsonError(undefined);
                 }}
                 theme={oneDark}
-                extensions={[json()]}
+                extensions={[
+                  ...(vimMode ? [vim()] : []),
+                  json(),
+                ]}
                 basicSetup={{
                   lineNumbers: true,
                   foldGutter: true,

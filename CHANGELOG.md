@@ -4,6 +4,40 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] — 2026-05-09
+
+### Added
+
+- **GPU-accelerated terminal rendering.** Both the bottom-dock
+  terminal and per-pane terminal panes now load `@xterm/addon-webgl`,
+  drawing through the GPU instead of canvas2d. Noticeably smoother
+  scrolling under heavy output (build logs, `npm install`, test
+  runs). Falls back automatically to the default renderer if a WebGL
+  context can't be acquired (rare — old Linux + headless GPUs), and
+  recovers gracefully if the GPU process drops the context mid-session.
+- **Vim mode toggle.** New Settings → Editor section with a single
+  Vim-mode switch that applies across every CodeMirror surface in the
+  app: agent / skill prompt editor, wiki page editor, CLAUDE.md
+  editor, and the MCP raw-JSON view. Backed by
+  `@replit/codemirror-vim` — modal editing with normal/insert/visual,
+  registers, marks, search, and dot-repeat all work. Off by default.
+  Toggling takes effect immediately in every open editor (and across
+  every open INZONE window) without a reload.
+- **Editor preferences sync across windows.** Toggles in the new
+  Editor settings broadcast to every BrowserWindow via a dedicated
+  `editorPrefs:changed` IPC event, so multi-window setups stay in
+  sync without restart.
+
+### Changed
+
+- **ElevenLabs API key is now encrypted at rest** via Electron's
+  `safeStorage` — same OS-keychain-backed encryption we already use
+  for the in-app stored Anthropic API key (Keychain on macOS, DPAPI
+  on Windows, kwallet/libsecret on Linux). Existing plaintext keys
+  are auto-migrated on first launch, then stripped from the
+  electron-store JSON file. The Settings → Voice hint copy now calls
+  out the encryption explicitly.
+
 ## [1.9.0] — 2026-05-08
 
 ### Added

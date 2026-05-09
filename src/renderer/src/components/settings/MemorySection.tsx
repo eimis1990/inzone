@@ -3,7 +3,9 @@ import CodeMirror from '@uiw/react-codemirror';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { vim } from '@replit/codemirror-vim';
 import type { MemoryScope } from '@shared/types';
+import { useEditorPreferences } from '../../hooks/useEditorPreferences';
 import { useStore } from '../../store';
 
 const SCOPE_OPTIONS: Array<{ value: MemoryScope; label: string; sub: string }> = [
@@ -40,6 +42,7 @@ export function MemorySection() {
   const memoryScope = useStore((s) => s.memoryScope);
   const setMemoryScope = useStore((s) => s.setMemoryScope);
   const windowMode = useStore((s) => s.windowMode);
+  const { vimMode } = useEditorPreferences();
 
   const [project, setProject] = useState<FileState>({
     filePath: '',
@@ -163,6 +166,7 @@ export function MemorySection() {
                   onChange={(v) => setProject((p) => ({ ...p, content: v }))}
                   theme={oneDark}
                   extensions={[
+                    ...(vimMode ? [vim()] : []),
                     markdown({
                       base: markdownLanguage,
                       codeLanguages: languages,
@@ -201,6 +205,7 @@ export function MemorySection() {
               onChange={(v) => setGlobal((g) => ({ ...g, content: v }))}
               theme={oneDark}
               extensions={[
+                ...(vimMode ? [vim()] : []),
                 markdown({
                   base: markdownLanguage,
                   codeLanguages: languages,

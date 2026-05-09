@@ -30,6 +30,7 @@ import type {
   TerminalShortcut,
   TranscriptEntry,
   UsageSummary,
+  EditorPreferences,
   VoiceSettings,
   WindowState,
   Workspace,
@@ -557,6 +558,15 @@ export interface CoworkApi {
     get(): Promise<VoiceSettings>;
     save(settings: VoiceSettings): Promise<{ ok: true }>;
     getStartCreds(): Promise<VoiceStartCreds>;
+  };
+  editorPrefs: {
+    /** Read the current preferences (vim mode etc.). */
+    get(): Promise<EditorPreferences>;
+    /** Persist preferences. Triggers an `onChanged` broadcast to every
+     *  open INZONE window so multi-window setups stay in sync. */
+    save(prefs: EditorPreferences): Promise<{ ok: true }>;
+    /** Subscribe to changes. Returns an unsubscribe function. */
+    onChanged(listener: (prefs: EditorPreferences) => void): () => void;
   };
   terminal: {
     spawn(args: {

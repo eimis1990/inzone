@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalShortcut } from '@shared/types';
 import { useStore } from '../store';
@@ -92,6 +93,25 @@ export function TerminalPanel() {
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
+
+    // GPU-accelerated renderer — see terminal-sessions.ts for the
+    // why. Must run after `term.open()` so the addon has a DOM to
+    // acquire its WebGL context from. Failure to construct (rare)
+    // falls back silently to the default renderer.
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => {
+        try {
+          webgl.dispose();
+        } catch {
+          // already gone
+        }
+      });
+      term.loadAddon(webgl);
+    } catch {
+      // canvas2d fallback — xterm keeps working.
+    }
+
     fit.fit();
     term.focus();
     xtermRef.current = term;

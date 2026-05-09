@@ -523,6 +523,18 @@ export interface SkillDraft {
 }
 
 /**
+ * User-level editor preferences — apply across every CodeMirror
+ * surface (agent / skill editor, wiki page editor, CLAUDE.md editor,
+ * MCP JSON editor). Personal, machine-local; never synced or
+ * project-scoped. Default-off — vim mode is opt-in only.
+ */
+export interface EditorPreferences {
+  /** When true, every CodeMirror instance loads the @replit/codemirror-vim
+   *  extension. Toggle from Settings → Editor. */
+  vimMode?: boolean;
+}
+
+/**
  * Voice agent settings. Stored locally; the API key only ever leaves the
  * machine to mint a signed URL with ElevenLabs's REST API at session
  * start. Empty values disable the voice section.

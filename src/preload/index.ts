@@ -32,6 +32,7 @@ import type {
   TerminalShortcut,
   TranscriptEntry,
   UsageSummary,
+  EditorPreferences,
   VoiceSettings,
   WindowState,
   Workspace,
@@ -501,6 +502,22 @@ const api: CoworkApi = {
       ipcRenderer.invoke(IPC.VOICE_SAVE, settings),
     getStartCreds: (): Promise<VoiceStartCreds> =>
       ipcRenderer.invoke(IPC.VOICE_GET_START_CREDS),
+  },
+  editorPrefs: {
+    get: (): Promise<EditorPreferences> =>
+      ipcRenderer.invoke(IPC.EDITOR_PREFS_GET),
+    save: (prefs: EditorPreferences): Promise<{ ok: true }> =>
+      ipcRenderer.invoke(IPC.EDITOR_PREFS_SAVE, prefs),
+    /** Subscribe to live change events fired by other windows (or the
+     *  Settings drawer in the same window). Returns an unsubscribe
+     *  function. */
+    onChanged: (listener: (prefs: EditorPreferences) => void) => {
+      const handler = (_e: unknown, prefs: EditorPreferences) =>
+        listener(prefs);
+      ipcRenderer.on(IPC.EDITOR_PREFS_CHANGED, handler);
+      return () =>
+        ipcRenderer.removeListener(IPC.EDITOR_PREFS_CHANGED, handler);
+    },
   },
   terminal: {
     spawn: (args: {
