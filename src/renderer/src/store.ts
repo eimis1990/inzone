@@ -194,6 +194,14 @@ interface StoreState {
   cwd: string | null;
   tree: PaneNode;
   activePaneId: PaneId | null;
+  /**
+   * When set, the workspace renders ONLY this pane fullscreen
+   * (instead of the multi-pane tree). null = the regular multi-
+   * pane "All" view. Transient per session — never persisted.
+   * Resets to null on session switch, layout change, mode flip,
+   * pane add/close, and app restart.
+   */
+  focusedPaneId: PaneId | null;
   panes: Record<PaneId, PaneRuntime>;
   agents: AgentDef[];
   skills: SkillDef[];
@@ -400,6 +408,13 @@ interface StoreActions {
   pickFolder: () => Promise<void>;
 
   setActivePane: (id: PaneId) => void;
+  /**
+   * Set or clear the focused (fullscreen) pane. Pass null to return
+   * to the multi-pane "All" view. The pane itself stays alive in
+   * the store either way — focusing only changes which one is
+   * rendered, never affects the SDK session lifecycle.
+   */
+  setFocusedPane: (id: PaneId | null) => void;
   setPaneAgent: (id: PaneId, agentName: string) => Promise<void>;
   /**
    * Submit an answer to an in-pane AskUserQuestion form. Updates the
@@ -1303,6 +1318,7 @@ export const useStore = create<Store>((set, get) => ({
   cwd: null,
   tree: initialTree(),
   activePaneId: null,
+  focusedPaneId: null,
   panes: {},
   agents: [],
   skills: [],
@@ -1694,6 +1710,17 @@ export const useStore = create<Store>((set, get) => ({
 
   setActivePane: (id) => set({ activePaneId: id }),
 
+  setFocusedPane: (id) => {
+    // When entering fullscreen, also mark the focused pane as the
+    // active one so the rest of the UI (composer focus, etc.) lines
+    // up. When clearing focus we leave activePaneId alone — clicking
+    // "All" shouldn't yank focus off whatever pane the user was on.
+    set((s) => ({
+      focusedPaneId: id,
+      activePaneId: id ?? s.activePaneId,
+    }));
+  },
+
   // -- Preview window -----------------------------------------------------
 
   setPreviewUrl: (url) => {
@@ -2025,6 +2052,9 @@ export const useStore = create<Store>((set, get) => ({
         },
       },
       activePaneId: newLeaf.kind === 'leaf' ? newLeaf.id : id,
+      // Layout changed — drop fullscreen focus so the user sees the
+      // new pane appear in the multi-pane view.
+      focusedPaneId: null,
     });
     void get().saveWindow();
   },
@@ -2069,7 +2099,14 @@ export const useStore = create<Store>((set, get) => ({
     if (newActive === id || !nextPanes[newActive ?? '']) {
       newActive = collectLeaves(newTree)[0] ?? null;
     }
-    set({ tree: newTree, panes: nextPanes, activePaneId: newActive });
+    // If we were focused on the closed pane, return to All view.
+    // Otherwise leave focus alone (different pane survives).
+    set((s) => ({
+      tree: newTree,
+      panes: nextPanes,
+      activePaneId: newActive,
+      focusedPaneId: s.focusedPaneId === id ? null : s.focusedPaneId,
+    }));
     void get().saveWindow();
   },
 
@@ -2791,7 +2828,9 @@ export const useStore = create<Store>((set, get) => ({
 
   setWindowMode: (mode) => {
     if (mode === get().windowMode) return;
-    set({ windowMode: mode });
+    // Mode flip is a layout change — drop fullscreen focus so the
+    // user sees the new layout (Lead pane appears on top, etc.).
+    set({ windowMode: mode, focusedPaneId: null });
     if (mode === 'lead') {
       // Materialize a Lead pane if we don't have one yet, and focus it
       // so the next agent-click in the sidebar assigns the Lead role.
@@ -2873,18 +2912,30 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   applyLayoutTemplate: (cols, rows) => {
-    const { panes, leadPaneId } = get();
-    // Stop every current sub-agent session — the tree is about to be
-    // replaced. The Lead pane lives outside the tree so we leave it
-    // running untouched.
-    for (const p of Object.values(panes)) {
-      if (p.id === leadPaneId) continue;
-      void window.cowork.session.stop(p.id);
+    const { panes, leadPaneId, tree: currentTree } = get();
+    // Stop only the sub-panes in THIS session's tree — the store
+    // keeps inactive sessions warm in `panes`, but their tree lives
+    // in `sessions[].tree`, not the top-level `tree`. Stopping them
+    // would kill agents in unrelated projects. The Lead pane lives
+    // outside the tree so we leave it running untouched.
+    const activeLeafIdsBefore = new Set(collectLeaves(currentTree));
+    for (const id of activeLeafIdsBefore) {
+      if (id === leadPaneId) continue;
+      if (!panes[id]) continue;
+      void window.cowork.session.stop(id);
     }
     const tree = buildGridTree(cols, rows);
+    // Start `nextPanes` with the panes from OTHER sessions so we
+    // don't wipe their runtime entries. Anything in the active
+    // tree's old leaves is dropped (those panes are being replaced
+    // by the new template's leaves below). The Lead pane is
+    // explicitly preserved.
     const nextPanes: Record<PaneId, PaneRuntime> = {};
-    // Preserve the Lead pane verbatim so its agent + session + transcript
-    // survive template application.
+    for (const [id, runtime] of Object.entries(panes)) {
+      if (activeLeafIdsBefore.has(id)) continue;
+      if (id === leadPaneId) continue;
+      nextPanes[id] = runtime;
+    }
     if (leadPaneId && panes[leadPaneId]) {
       nextPanes[leadPaneId] = panes[leadPaneId];
     }
@@ -2895,16 +2946,25 @@ export const useStore = create<Store>((set, get) => ({
       tree,
       panes: nextPanes,
       activePaneId: collectLeaves(tree)[0] ?? leadPaneId ?? null,
+      // Layout entirely rebuilt — return to All view so the user
+      // sees the new grid.
+      focusedPaneId: null,
     });
     void get().saveWindow();
   },
 
   applyTaskTemplate: async (template) => {
-    // 1. Stop existing sub-agent sessions (Lead pane preserved).
-    const { panes, leadPaneId } = get();
-    for (const p of Object.values(panes)) {
-      if (p.id === leadPaneId) continue;
-      void window.cowork.session.stop(p.id);
+    // 1. Stop existing sub-agent sessions in THIS session only —
+    //    `panes` holds runtime entries for every project's panes
+    //    (kept warm), so iterating Object.values(panes) would also
+    //    kill agents in unrelated projects. Filter to the active
+    //    tree's leaves. The Lead pane is preserved.
+    const { panes, leadPaneId, tree: currentTree } = get();
+    const activeLeafIdsBefore = new Set(collectLeaves(currentTree));
+    for (const id of activeLeafIdsBefore) {
+      if (id === leadPaneId) continue;
+      if (!panes[id]) continue;
+      void window.cowork.session.stop(id);
     }
 
     // 2. Build a fresh pane tree sized to the template's agent
@@ -2915,7 +2975,14 @@ export const useStore = create<Store>((set, get) => ({
     const count = Math.max(1, template.agents.length);
     const { cols, rows } = pickGridForCount(count);
     const tree = buildGridTree(cols, rows);
+    // Preserve other sessions' panes in the runtime map (their
+    // leaves aren't in the active tree we're rebuilding).
     const nextPanes: Record<PaneId, PaneRuntime> = {};
+    for (const [id, runtime] of Object.entries(panes)) {
+      if (activeLeafIdsBefore.has(id)) continue;
+      if (id === leadPaneId) continue;
+      nextPanes[id] = runtime;
+    }
     if (leadPaneId && panes[leadPaneId]) {
       nextPanes[leadPaneId] = panes[leadPaneId];
     }
@@ -2932,6 +2999,9 @@ export const useStore = create<Store>((set, get) => ({
       panes: nextPanes,
       activePaneId: leafIds[0] ?? leadPaneId ?? null,
       windowMode: template.mode,
+      // Task templates rebuild the whole layout — drop fullscreen
+      // focus so the user sees the new pane arrangement.
+      focusedPaneId: null,
     });
 
     // 4. Set the Lead agent if the template uses Lead mode and
@@ -4095,6 +4165,9 @@ export const useStore = create<Store>((set, get) => ({
         target.windowMode === 'lead' && target.lead
           ? target.lead.paneId
           : collectLeaves(target.tree)[0] ?? null,
+      // Pane focus is per-session conceptually — entering a new
+      // session should always land on the All view.
+      focusedPaneId: null,
       previewUrl: target.previewUrl ?? null,
       // Mirror the project's pipeline into top-level state so components
       // can subscribe to one source of truth. Reset the view to panes

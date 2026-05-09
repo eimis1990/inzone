@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useStore } from '../store';
 import { AboutSection } from './settings/AboutSection';
 import { AgentsSection } from './settings/AgentsSection';
 import { McpServersSection } from './settings/McpServersSection';
 import { MemorySection } from './settings/MemorySection';
 import { ProfileSection } from './settings/ProfileSection';
+import { ShortcutsSection } from './settings/ShortcutsSection';
 import { SkillsSection } from './settings/SkillsSection';
 import { UsageSection } from './settings/UsageSection';
 import { TerminalShortcutsSection } from './settings/TerminalShortcutsSection';
@@ -79,6 +81,12 @@ const SECTIONS: SectionEntry[] = [
     icon: () => <WorkspacesIcon size={16} />,
   },
   {
+    id: 'shortcuts',
+    label: 'Shortcuts',
+    hint: 'Keyboard',
+    icon: () => <KeyboardIcon />,
+  },
+  {
     id: 'about',
     label: 'About',
     hint: 'Version & updates',
@@ -106,7 +114,15 @@ export function SettingsDrawer({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      // Don't close the drawer while the agent/skill editor modal is
+      // on top — its own Esc handler should fire first and close
+      // just the modal. Both modal and drawer attach window-level
+      // Esc listeners, so without this check both run on the same
+      // press and the drawer closes alongside the modal. The store
+      // is the source of truth for "is the editor open?".
+      if (useStore.getState().editor) return;
+      onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -177,6 +193,7 @@ export function SettingsDrawer({
           {section === 'memory' && <MemorySection />}
           {section === 'usage' && <UsageSection />}
           {section === 'workspaces' && <WorkspacesSection />}
+          {section === 'shortcuts' && <ShortcutsSection />}
           {section === 'about' && <AboutSection />}
         </main>
       </aside>
@@ -342,6 +359,29 @@ function ChartIcon() {
       <rect x="6" y="10" width="3" height="10" />
       <rect x="11" y="6" width="3" height="14" />
       <rect x="16" y="13" width="3" height="7" />
+    </svg>
+  );
+}
+
+function KeyboardIcon() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <line x1="6" y1="10" x2="6" y2="10" />
+      <line x1="10" y1="10" x2="10" y2="10" />
+      <line x1="14" y1="10" x2="14" y2="10" />
+      <line x1="18" y1="10" x2="18" y2="10" />
+      <line x1="7" y1="14" x2="17" y2="14" />
     </svg>
   );
 }

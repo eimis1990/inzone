@@ -4,6 +4,93 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] — 2026-05-08
+
+### Added
+
+- **Pane focus tabs.** New horizontal strip below the workspace
+  bar with one tab per pane plus an "All" tab. Click a pane tab
+  to fullscreen that pane (the others stay alive — sessions keep
+  running, transcripts intact, just not currently rendered). Click
+  "All" to return to multi-pane view. Each tab carries the agent's
+  emoji and gets a soft agent-coloured underline + bottom-half
+  bloom when selected. Hidden in Flow mode and when there's only
+  one pane. Resets to All on session switch / layout change /
+  app restart.
+- **Cmd+F toggles fullscreen on the active pane.** Press once to
+  zoom in, press again to return to All. Cross-platform (Cmd on
+  macOS, Ctrl on Windows/Linux).
+- **Shortcuts reference page** in Settings → Shortcuts. Lists
+  every keyboard shortcut wired into INZONE, grouped by surface
+  (Workspace, Composer, Editor & modals). Modifier glyphs swap
+  automatically — ⌘ ⇧ ⌥ on macOS, Ctrl / Shift / Alt on Windows
+  and Linux — so each user sees what their actual keyboard says.
+- **Auto-scroll pin in pane chat.** The chat scroller used to
+  yank you back to the bottom every time the agent emitted new
+  content, even if you'd scrolled up to read older context. Now
+  it only auto-scrolls when you're already at the bottom (within
+  64px). When new content arrives while you're scrolled up, a
+  small "↓ Jump to latest" pill appears that snaps you back and
+  re-pins the scroll lock.
+- **Recommended skills.** New "Recommended" section in Settings
+  → Skills with curated community skills you can install in one
+  click. First entry: VoltAgent's Awesome Design — a drop-in
+  collection of DESIGN.md files reverse-engineered from 55+
+  developer-focused brand design systems. Install does a shallow
+  git clone into `~/.claude/skills/` (idempotent — no overwrite,
+  re-installs are no-ops).
+- **Voice agent answers questions about your project from the
+  wiki.** New `list_wiki_pages`, `read_wiki_page`, and
+  `search_wiki` voice tools so the ElevenLabs voice agent can
+  ground project Q&A in `.inzone/wiki/` content. Also a new
+  troubleshooting block in Settings → Voice for the most common
+  "voice claimed success but nothing happened" failure modes.
+
+### Changed
+
+- **Sidebar project rows + Settings cards now use one consistent
+  visual language.** Same 12px corner radius, accent-tinted
+  border on hover/active, bottom gradient bloom — matches the
+  task / worker card treatment elsewhere in the app.
+- **Long inline-code tokens wrap inside the chat pane** instead
+  of overflowing the right edge.
+
+### Fixed
+
+- **Critical: applying a Layout or Task template stopped agent
+  sessions across ALL projects, not just the active one.** The
+  store keeps every project's panes warm in a single global map
+  (so transcripts persist across project switches), and both
+  apply actions iterated `Object.values(panes)` — killing every
+  running agent everywhere. Now scoped to the active session's
+  tree leaves only. The terrifying confirmation dialog ("these
+  20 agents will stop") was honest about what was about to
+  happen — that's now correctly limited to just the current
+  project's agents.
+- **Settings → Skills and Agents lists now scroll cleanly** with
+  long lists. The body is now sized via `max-height` anchored to
+  the viewport, so it has a finite height regardless of any
+  parent layout chain. Sticky table headers stay visible while
+  scrolling, with solid backgrounds that don't bleed scrolling
+  rows through. Also fixed a missing `--bg-elev-1` CSS variable
+  that was silently transparent across ~12 components.
+- **Pane composer border + Send button take the agent's colour
+  when the pane is active** (was falling back to the global
+  yellow because the underlying CSS variable was scoped to the
+  pane header only).
+- **Esc inside the agent/skill editor modal** now closes just
+  the modal — the Settings drawer behind it stays open. Press
+  Esc again to close the drawer.
+- **Modal cards (Tasks + Layouts) sit flat against the modal
+  body** so cards no longer read as elevated tiles floating
+  above the surface.
+- **Pane tabs strip no longer shows a stray vertical scrollbar.**
+  The selected-tab gradient pseudo-element extended 1px below the
+  tab edge, which counted as vertical overflow alongside the
+  horizontal scroll for many-pane sessions.
+
+[1.9.0]: https://github.com/eimis1990/inzone/compare/v1.8.1...v1.9.0
+
 ## [1.8.1] — 2026-05-07
 
 ### Added

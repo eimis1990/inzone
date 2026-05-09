@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PaneId, SessionStatus } from '@shared/types';
 import { getAgentColor } from '@shared/palette';
@@ -353,11 +353,56 @@ export function Pane({ id }: PaneProps) {
   const recorderStreamRef = useRef<MediaStream | null>(null);
   const recorderChunksRef = useRef<Blob[]>([]);
 
+  /* ── Scroll-pin pattern ──────────────────────────────────────────
+   * Only auto-scroll to the bottom when the user is ALREADY near the
+   * bottom (within 64px). If they've scrolled up to read older
+   * content, leave them where they are and surface a "jump to
+   * latest" button instead — far less infuriating than yanking the
+   * viewport back down on every new tool call.
+   *
+   * `isPinnedRef` is a ref (not state) because we read it from the
+   * effect and don't want a re-render every time it flips.
+   * `showJumpToBottom` IS state because it drives the visible
+   * affordance; it tracks "user is scrolled up AND new content has
+   * arrived since they scrolled".
+   */
+  const isPinnedRef = useRef(true);
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    if (isPinnedRef.current) {
+      // Pinned to bottom — keep the latest line in view.
+      el.scrollTop = el.scrollHeight;
+    } else {
+      // Scrolled up reading something — surface the affordance so the
+      // user knows there's new content, but DO NOT yank them back down.
+      setShowJumpToBottom(true);
+    }
   }, [pane?.items.length]);
+
+  const onScrollerScroll = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const distanceFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+    const PIN_THRESHOLD_PX = 64;
+    const pinned = distanceFromBottom <= PIN_THRESHOLD_PX;
+    isPinnedRef.current = pinned;
+    // Reaching the bottom dismisses the affordance; scrolling away
+    // doesn't show it on its own — only NEW CONTENT while detached
+    // does (handled in the items-length effect above).
+    if (pinned && showJumpToBottom) setShowJumpToBottom(false);
+  }, [showJumpToBottom]);
+
+  const jumpToBottom = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    isPinnedRef.current = true;
+    setShowJumpToBottom(false);
+  }, []);
 
   // Pair tool_use with its matching tool_result so we can render the two
   // as a single collapsed block in the transcript. Items without a pair
@@ -619,7 +664,11 @@ export function Pane({ id }: PaneProps) {
         </div>
       </div>
 
-      <div className="pane-scroller" ref={scrollerRef}>
+      <div
+        className="pane-scroller"
+        ref={scrollerRef}
+        onScroll={onScrollerScroll}
+      >
         {pane.items.length === 0 && (
           <div className="pane-empty">
             <div className="pane-empty-icon" aria-hidden>
@@ -640,6 +689,20 @@ export function Pane({ id }: PaneProps) {
           <MessageView key={item.id} item={item} paneId={id} />
         ))}
       </div>
+
+      {/* Floating "jump to latest" pill — only renders when the user
+          has scrolled up AND new content has arrived since they did.
+          Click snaps them back to the bottom and re-pins auto-scroll. */}
+      {showJumpToBottom && (
+        <button
+          type="button"
+          className="pane-jump-to-bottom"
+          onClick={jumpToBottom}
+          title="Jump to latest message"
+        >
+          ↓ Jump to latest
+        </button>
+      )}
 
       {dragging && (
         <div className="pane-drop-overlay">

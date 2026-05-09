@@ -9,6 +9,7 @@ import { useStore } from './store';
 import { AgentSidebar } from './components/AgentSidebar';
 import { WorkspaceBar } from './components/WorkspaceBar';
 import { PaneTree } from './components/PaneTree';
+import { PaneTabs } from './components/PaneTabs';
 import { Pane } from './components/Pane';
 import { EditorModal } from './components/EditorModal';
 import { AppLogo } from './components/AppLogo';
@@ -28,6 +29,7 @@ export function App() {
   const toggleSidebarCollapsed = useStore((s) => s.toggleSidebarCollapsed);
   const windowMode = useStore((s) => s.windowMode);
   const leadPaneId = useStore((s) => s.leadPaneId);
+  const focusedPaneId = useStore((s) => s.focusedPaneId);
   // The user can flip the project's main area between the regular
   // pane-tree view and the pipeline board (Multi mode only — pipelines
   // don't compose with Lead, where the orchestrator already routes work).
@@ -71,6 +73,36 @@ export function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [toggleSidebarCollapsed]);
+
+  /**
+   * Cmd+F (Ctrl+F on Win/Linux) toggles fullscreen view of the
+   * currently active pane via the PaneTabs strip. Pressing it once
+   * zooms into the active pane; pressing it again returns to the
+   * "All" multi-pane view. We intercept regardless of focus
+   * (text inputs included) since INZONE has no in-app find feature
+   * for Cmd+F to clash with — the trade-off is the user can't use
+   * the OS find shortcut to search inside an agent transcript.
+   * If that becomes a real complaint we can gate this on focus
+   * being outside text inputs the way Tab does.
+   */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'f') return;
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.altKey || e.shiftKey) return;
+      const state = useStore.getState();
+      // Don't fire if there's nothing to fullscreen (no active pane,
+      // or only one pane in the workspace — toggling between "All"
+      // and a single pane is meaningless).
+      const activeId = state.activePaneId;
+      if (!activeId) return;
+      e.preventDefault();
+      const isAlreadyFullscreen = state.focusedPaneId === activeId;
+      state.setFocusedPane(isAlreadyFullscreen ? null : activeId);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // ⌘⇧M / Ctrl+⇧M opens Mission Control. Toggle: same shortcut closes
   // it. Doesn't fight with text-input focus because we require both
@@ -152,26 +184,47 @@ export function App() {
               <ReviewViewSafe />
             ) : showPipelineBoard ? (
               <PipelineBoardSafe />
-            ) : windowMode === 'lead' && leadPaneId ? (
-              <PanelGroup direction="vertical">
-                <Panel
-                  defaultSize={38}
-                  minSize={20}
-                  id="lead-panel"
-                  order={0}
-                  className="lead-panel"
-                >
-                  <div className="lead-slot">
-                    <Pane id={leadPaneId} />
-                  </div>
-                </Panel>
-                <PanelResizeHandle className="resize-handle" />
-                <Panel defaultSize={62} id="subagents-panel" order={1}>
-                  <PaneTree />
-                </Panel>
-              </PanelGroup>
             ) : (
-              <PaneTree />
+              // The pane area is wrapped in a single flex-column
+              // container so the PaneTabs strip on top and the
+              // actual pane content below stack cleanly inside the
+              // grid's 1fr row. Without this wrapper, fragments
+              // would create multiple grid items and the layout
+              // breaks (tabs would steal the 1fr instead of the
+              // content). The Lead pane / fullscreen / multi
+              // branches each render their own content piece.
+              <div className="pane-stack">
+                <PaneTabs />
+                {focusedPaneId ? (
+                  // Fullscreen view: a single pane fills the rest
+                  // of the column. Non-focused panes stay alive in
+                  // the store (their sessions keep running), they're
+                  // just not currently rendered.
+                  <div className="pane-fullscreen-host">
+                    <Pane id={focusedPaneId} />
+                  </div>
+                ) : windowMode === 'lead' && leadPaneId ? (
+                  <PanelGroup direction="vertical">
+                    <Panel
+                      defaultSize={38}
+                      minSize={20}
+                      id="lead-panel"
+                      order={0}
+                      className="lead-panel"
+                    >
+                      <div className="lead-slot">
+                        <Pane id={leadPaneId} />
+                      </div>
+                    </Panel>
+                    <PanelResizeHandle className="resize-handle" />
+                    <Panel defaultSize={62} id="subagents-panel" order={1}>
+                      <PaneTree />
+                    </Panel>
+                  </PanelGroup>
+                ) : (
+                  <PaneTree />
+                )}
+              </div>
             )}
             {cwd && <TerminalPanel />}
           </div>

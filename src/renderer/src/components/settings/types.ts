@@ -9,4 +9,5 @@ export type SettingsSection =
   | 'memory'
   | 'usage'
   | 'workspaces'
+  | 'shortcuts'
   | 'about';

@@ -105,6 +105,8 @@ import {
   searchWiki,
   writePage as writeWikiPage,
 } from './wiki';
+import { installRecommendedSkill } from './skills-install';
+import type { RecommendedSkill } from '@shared/recommended-skills';
 import {
   applyStoredApiKey,
   clearStoredApiKey,
@@ -551,6 +553,11 @@ export function registerIpcHandlers(): void {
       _e,
       args: { cwd: string; query: string; limit?: number },
     ) => searchWiki(args.cwd, args.query, { limit: args.limit }),
+  );
+
+  ipcMain.handle(
+    IPC.SKILLS_INSTALL_RECOMMENDED,
+    async (_e, skill: RecommendedSkill) => installRecommendedSkill(skill),
   );
 
   // -- Profile (Settings → Profile) -----------------------------------------

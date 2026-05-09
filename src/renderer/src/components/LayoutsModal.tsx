@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import type { PaneNode } from '@shared/types';
 import { useStore } from '../store';
 
 interface LayoutsModalProps {
@@ -41,6 +42,13 @@ export function LayoutsModal({ open, onClose }: LayoutsModalProps) {
   const applyLayoutTemplate = useStore((s) => s.applyLayoutTemplate);
   const panes = useStore((s) => s.panes);
   const leadPaneId = useStore((s) => s.leadPaneId);
+  // The store keeps inactive sessions warm — `panes` holds runtime
+  // entries for every pane across every project. The current
+  // session's panes are the leaves in `tree` (plus the Lead pane
+  // when in Lead mode). Filtering by these so the confirmation
+  // dialog and the apply action only touch the active session's
+  // sessions, not every project the user has open.
+  const tree = useStore((s) => s.tree);
 
   useEffect(() => {
     if (!open) return;
@@ -53,13 +61,16 @@ export function LayoutsModal({ open, onClose }: LayoutsModalProps) {
 
   if (!open) return null;
 
-  // Anyone currently holding state we shouldn't trash silently? Two
-  // signals:
-  //   - any sub-pane in the tree has an agent bound (`agentName`)
-  //   - the Lead pane is live (its runtime entry has an agent)
-  // If either, prompt before applying.
+  // Restrict the bound-agents list to JUST the current session.
+  // Walk the active tree for sub-panes; add the Lead pane id when
+  // the active session is in Lead mode. Other sessions' panes —
+  // even though they live in the same `panes` map — stay untouched.
+  const activePaneIds = new Set<string>();
+  walkLeafIds(tree, activePaneIds);
+  if (leadPaneId) activePaneIds.add(leadPaneId);
+
   const boundAgents: string[] = [];
-  for (const id of Object.keys(panes)) {
+  for (const id of activePaneIds) {
     const p = panes[id];
     if (!p?.agentName) continue;
     if (id === leadPaneId) {
@@ -134,6 +145,17 @@ export function LayoutsModal({ open, onClose }: LayoutsModalProps) {
       </div>
     </div>
   );
+}
+
+/** Walk the pane tree depth-first and collect leaf ids into the
+ *  given set. Local helper so we don't have to widen the store's
+ *  internal `collectLeaves` export surface. */
+function walkLeafIds(node: PaneNode, out: Set<string>): void {
+  if (node.kind === 'leaf') {
+    out.add(node.id);
+    return;
+  }
+  for (const c of node.children) walkLeafIds(c, out);
 }
 
 function LayoutPreview({ cols, rows }: { cols: number; rows: number }) {

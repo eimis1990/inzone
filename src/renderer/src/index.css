@@ -4,6 +4,15 @@
 :root {
   --bg: #0C0E12;
   --bg-elev: #14171C;
+  /* Alias matching the naming scheme used across newer components.
+     `--bg-elev-1` is the first elevation step above the base bg —
+     same value as `--bg-elev`. Without this alias, every reference
+     to `--bg-elev-1` silently resolved to transparent (CSS treats
+     unknown vars that way) which produced bleed-through bugs
+     across modal cards, sticky table headers, hover backgrounds,
+     etc. Keep `--bg-elev` as the canonical name; this is just the
+     newer alias. */
+  --bg-elev-1: #14171C;
   --bg-elev-2: #23252E;
   --border: #2a2d36;
   --border-strong: #383b46;
@@ -4342,6 +4351,441 @@ code.voice-tool-card-value {
   border-color: rgba(242, 109, 122, 0.3);
 }
 
+/* ── Pane tabs strip ────────────────────────────────────────────
+   Plain text-with-divider tabs sitting between the workspace bar
+   and the pane area. Sized to match the sidebar's tabstrip exactly
+   so the two horizontal bars in the same row read as one cohesive
+   line. Hidden in Flow mode and when there's only one pane.
+   Selected tab gets a soft gradient bloom from the bottom + an
+   accent-coloured underline cap — same visual language as the
+   active pane header. */
+.pane-tabs {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  /* Match `.sidebar-tabstrip` padding (8px top, 8px sides, 0 bottom)
+     so this strip ends up at the same total height as the sidebar's
+     tab row. */
+  padding: 8px 8px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  /* Explicitly clip vertically — the selected-tab pseudo-element's
+     `bottom: -1px` and `box-shadow: inset 0 -2px 0` were pushing
+     content slightly past the strip's box, triggering an unwanted
+     vertical scrollbar in some viewport sizes. Horizontal stays
+     auto so the strip can scroll across many panes. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+}
+.pane-tabs::-webkit-scrollbar {
+  height: 0;
+}
+.pane-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Match `.sidebar-tab` vertical padding (8 top / 10 bottom) so
+     the per-tab footprint lines up with the sidebar tabs visually. */
+  padding: 8px 14px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 200ms ease;
+}
+/* Vertical divider between tabs — only between siblings, not
+   before the first tab. The 30%/30% offsets shorten it so it reads
+   as a thin separator instead of a full-height bar. */
+.pane-tab + .pane-tab::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 30%;
+  bottom: 30%;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.pane-tab:hover {
+  color: var(--text);
+}
+/* Selected tab — gradient bloom from the bottom in the pane's
+   agent colour + a hard 2px accent cap at the very bottom. The
+   bloom renders BEHIND the tab content via a ::after layered
+   below the tab text. */
+.pane-tab.selected {
+  color: var(--text);
+}
+.pane-tab.selected::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 60%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--tab-accent, var(--accent)) 100%
+  );
+  opacity: 0.22;
+  pointer-events: none;
+  z-index: 0;
+}
+/* The 2px accent cap that anchors the selected tab visually —
+   matches the sidebar tabstrip's sliding indicator pattern. */
+.pane-tab.selected {
+  box-shadow: inset 0 -2px 0 var(--tab-accent, var(--accent));
+}
+.pane-tab > * {
+  position: relative;
+  z-index: 1;
+}
+.pane-tab-icon {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--muted, var(--text-dim));
+}
+.pane-tab.selected .pane-tab-icon {
+  color: var(--tab-accent, var(--accent));
+}
+/* Agent emoji in the tab. Slightly smaller than the pane header
+   emoji so the tab keeps its tight footprint, with a soft drop
+   shadow so the glyph reads on dark backgrounds. */
+.pane-tab-emoji {
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+.pane-tab-label {
+  letter-spacing: -0.005em;
+}
+.pane-tab-lead-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(228, 217, 71, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(228, 217, 71, 0.4);
+}
+
+/* Wrapper that holds the single fullscreen pane below the tabs.
+   Fills remaining vertical space; the Pane component itself does
+   the rest. */
+.pane-fullscreen-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Flex column that lives inside .pane-host's 1fr row, holding the
+   PaneTabs strip on top and the actual pane content below. Without
+   this wrapper the PaneTabs + PaneTree would each become their own
+   grid items and the tabs would steal the 1fr instead of being
+   auto-sized. */
+.pane-stack {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.pane-stack > .pane-tabs {
+  flex-shrink: 0;
+}
+.pane-stack > :not(.pane-tabs) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* "Jump to latest" affordance — appears centred near the bottom
+   of the chat scroller when the user has scrolled up to read older
+   content AND new content has arrived. The pane is positioned
+   relative (see .pane below in the file), so absolute positioning
+   here pins to the pane edges, not the viewport. */
+.pane-jump-to-bottom {
+  position: absolute;
+  /* Sit just above the composer area — same offset as the recovery
+     banner, but centred horizontally rather than full-width. */
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    0 6px 18px -6px rgba(0, 0, 0, 0.55),
+    0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
+  transition: background 140ms ease, border-color 140ms ease, transform 80ms;
+  /* Tiny appear animation so the pill fades + nudges in instead of
+     popping in abruptly when new content lands. */
+  animation: pane-jump-pill-in 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.pane-jump-to-bottom:hover {
+  background: color-mix(in srgb, var(--accent) 32%, var(--bg));
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.pane-jump-to-bottom:active {
+  transform: translateX(-50%) translateY(1px);
+}
+@keyframes pane-jump-pill-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ── Shortcuts (Settings → Shortcuts) ──────────────────────────
+   Reference list of keyboard shortcuts grouped by surface. Each
+   row pairs a fixed-width key cluster on the left with a short
+   action description on the right. The ⌘/Ctrl glyphs are rendered
+   as <kbd> chips so the eye can lock onto them at a glance. */
+.shortcuts-group {
+  display: flex;
+  flex-direction: column;
+}
+.shortcuts-group-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.shortcuts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+}
+.shortcut-row + .shortcut-row {
+  border-top: 1px solid var(--border);
+}
+.shortcut-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.shortcut-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  /* Slight inset shadow to sell the "physical key" look —
+     subtle enough that it just feels keyboard-y without being a
+     skeuomorphic distraction. */
+  box-shadow:
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.shortcut-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.shortcut-action {
+  font-size: 13px;
+  color: var(--text);
+}
+.shortcut-context {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+/* ── Recommended skills (Settings → Skills) ─────────────────────
+   Single-column stack of curated community skill cards above the
+   user's own skills table. Same hover-bloom + chip language as
+   task / worker cards, scaled down a touch since they live inside
+   the Settings drawer. */
+.recommended-skills {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 18px;
+}
+.recommended-skills .tasks-section-title {
+  margin-bottom: 10px;
+}
+.recommended-skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.recommended-skill-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.recommended-skill-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 50%;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--accent) 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+  z-index: 0;
+}
+.recommended-skill-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.5);
+}
+.recommended-skill-card:hover::before {
+  opacity: 0.18;
+}
+.recommended-skill-card > * {
+  position: relative;
+  z-index: 1;
+}
+.recommended-skill-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.recommended-skill-emoji {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.recommended-skill-titles {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.recommended-skill-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+.recommended-skill-meta {
+  font-size: 11px;
+  color: var(--muted, var(--text-dim));
+}
+.recommended-skill-installed {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--success, #5fce8f);
+  background: color-mix(in srgb, var(--success, #5fce8f) 12%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--success, #5fce8f) 45%, transparent);
+}
+.recommended-skill-desc {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.recommended-skill-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+.recommended-skill-link {
+  font-size: 11.5px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.recommended-skill-link:hover {
+  text-decoration: underline;
+}
+.recommended-skill-tags {
+  display: flex;
+  gap: 5px;
+}
+.recommended-skill-tag {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-dim);
+}
+.recommended-skill-error {
+  margin-top: 4px;
+  padding: 8px 10px;
+  font-size: 11px;
+  background: rgba(242, 109, 122, 0.08);
+  border: 1px solid rgba(242, 109, 122, 0.30);
+  border-radius: 6px;
+  color: var(--text-dim);
+}
+
 /* Banner shown when this pane is a non-first step of an enabled
    Flow — manual sends are blocked because the flow will fire it
    automatically once the previous step finishes. Accent-tinted to
@@ -7458,6 +7902,12 @@ select:focus {
   inset: 0;
   display: grid;
   grid-template-columns: 240px 1fr;
+  /* Single row pinned to the drawer's full fixed height. Without
+     this, the implicit row defaults to `auto` (= fit content),
+     which means children's `height: 100%` resolves against an
+     undefined parent and the inner pane's body never gets a
+     finite height to clamp against — so long lists couldn't scroll. */
+  grid-template-rows: 100%;
   background: var(--bg);
   transform: translateX(-100%);
   transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -7559,18 +8009,33 @@ select:focus {
 
 .settings-content {
   min-width: 0;
-  overflow: auto;
+  /* `hidden` (not `auto`) so this column has a strict, finite
+     height. Without this, the inner `.settings-pane`'s `height:
+     100%` resolves to "as tall as the content" rather than to the
+     viewport height, and the body's `overflow-y: auto` never has
+     anything to clamp to — so long lists (15+ agents) couldn't
+     scroll. The pane handles its own internal scrolling now. */
+  overflow: hidden;
+  min-height: 0;
   background: var(--bg);
 }
 
 .settings-pane {
-  display: flex;
-  flex-direction: column;
-  /* Hard height (not min-height) so the inner `.settings-pane-body` can
-     actually take overflow — with min-height the pane grew to fit
-     content and the whole drawer scrolled instead. */
+  /* Grid layout for the pane — header row auto-sized, body row
+     fills the rest, optional footer row auto.
+     CRITICAL: `minmax(0, 1fr)` (NOT plain `1fr`). Plain `1fr` is
+     shorthand for `minmax(auto, 1fr)`, which means the row refuses
+     to shrink below its content's intrinsic height — so when the
+     body's content is taller than the viewport, the row grows past
+     the parent and `overflow-y: auto` on the body never has a
+     finite height to clamp against. `minmax(0, 1fr)` lets the row
+     shrink to whatever space is available, finally letting the
+     body scroll internally. */
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 .settings-pane-header {
   padding: 28px 32px 18px;
@@ -7644,7 +8109,15 @@ select:focus {
   border-radius: 4px;
 }
 .settings-pane-body {
-  flex: 1;
+  /* Hard viewport-anchored ceiling on the body's height. This
+     bypasses every height-inheritance issue — no matter what the
+     parent chain is doing, the body can never be taller than this,
+     so its overflow-y always has a clamped box to work against.
+     The 100px subtracts the top title-bar inset (40px) plus the
+     largest header padding (~60px); shorter headers leave the
+     body slightly oversized and that's fine — the body still
+     scrolls when content exceeds it. */
+  max-height: calc(100vh - 100px);
   min-height: 0;
   padding: 22px 32px 28px;
   overflow-y: auto;
@@ -7968,17 +8441,47 @@ select:focus {
 .agents-table-wrap {
   border: 1px solid var(--border);
   border-radius: 12px;
-  overflow: hidden;
+  /* Was `overflow: hidden` (for clipping the rounded corners) but
+     that prevented THIS element from scrolling when its content
+     was taller than the available space — and trying to scroll a
+     parent didn't work either. With `overflow-y: auto` directly
+     on the wrap, the table's tbody scrolls inside its own rounded
+     box, no matter what the parent layout is doing. The thead
+     stays in view because we mark it sticky below.
+     `max-height` is anchored to the viewport so this works
+     regardless of any parent height-inheritance issues. */
+  overflow: hidden auto;
+  max-height: calc(100vh - 220px);
   background: var(--bg-elev-1);
+}
+/* Sticky table header so column titles stay visible while the
+   tbody scrolls underneath. The background MUST be set on each
+   `<th>` directly — `<tr>` doesn't paint a continuous background
+   in sticky mode, so a tr-only background lets scrolling rows
+   bleed straight through the header. */
+.agents-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.agents-table thead tr {
+  background: var(--bg-elev-1);
+}
+.agents-table thead .agents-th {
+  background: var(--bg-elev-1);
+  /* The bottom border lives on the th (not the tr) so it scrolls
+     with the sticky header rather than getting overwritten by
+     scrolling rows. */
+  border-bottom: 1px solid var(--border);
 }
 .agents-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12.5px;
 }
-.agents-table thead tr {
-  background: rgba(255, 255, 255, 0.02);
-}
+/* The sticky header's solid background lives in the rule above —
+   the previous transparent tint would bleed scrolling rows
+   through, so it's been replaced. */
 .agents-th {
   text-align: left;
   font-size: 10.5px;

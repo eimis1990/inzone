@@ -35,6 +35,7 @@ import type {
   Workspace,
 } from './types';
 import type { Platform } from './worker-presets';
+import type { RecommendedSkill } from './recommended-skills';
 
 /**
  * Result of asking main for the credential to start an ElevenLabs
@@ -71,6 +72,13 @@ export interface CoworkApi {
     list(projectDir?: string): Promise<SkillDef[]>;
     save(draft: SkillDraft): Promise<SkillDef>;
     delete(filePath: string): Promise<{ ok: true }>;
+    /** One-click install of a curated community skill via shallow
+     *  git clone into ~/.claude/skills/. Idempotent — subsequent
+     *  calls report `alreadyInstalled: true` without doing anything. */
+    installRecommended(skill: RecommendedSkill): Promise<
+      | { ok: true; alreadyInstalled: boolean; installedAt: string }
+      | { ok: false; error: string }
+    >;
   };
   session: {
     start(params: StartSessionParams): Promise<{ ok: true }>;

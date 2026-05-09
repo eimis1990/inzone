@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { SkillDef } from '@shared/types';
+import {
+  RECOMMENDED_SKILLS,
+  type RecommendedSkill,
+} from '@shared/recommended-skills';
 import { humanizeAgentName, useStore } from '../../store';
 
 type SortKey = 'name';
@@ -78,6 +82,8 @@ export function SkillsSection() {
         </div>
       </div>
       <div className="settings-pane-body">
+        <RecommendedSkillsSection installedSkills={skills} />
+
         {sorted.length === 0 && (
           <div className="settings-empty">
             {query
@@ -148,6 +154,125 @@ function SortableTh({
         </span>
       </button>
     </th>
+  );
+}
+
+/**
+ * "Recommended" section above the user's own skills table. Renders
+ * one card per entry in `RECOMMENDED_SKILLS` with an Install button
+ * (or "✓ Installed" badge if the skill folder is already present in
+ * the user's library).
+ *
+ * Install does a shallow git clone in the main process and copies
+ * the relevant subtree into ~/.claude/skills/. The skill watcher
+ * picks up the new folder automatically — no app reload needed.
+ */
+function RecommendedSkillsSection({
+  installedSkills,
+}: {
+  installedSkills: SkillDef[];
+}) {
+  // Map id → status for the cards. We treat a skill as installed if
+  // any user skill's name matches the recommended skill's installAs
+  // (or its id when installAs is omitted). Watching `installedSkills`
+  // means the card flips to "Installed" the moment the chokidar
+  // listener picks up the new folder.
+  const installedNames = useMemo(
+    () => new Set(installedSkills.map((s) => s.name)),
+    [installedSkills],
+  );
+  const [installing, setInstalling] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const onInstall = async (skill: RecommendedSkill) => {
+    setInstalling((cur) => ({ ...cur, [skill.id]: true }));
+    setErrors((cur) => {
+      const { [skill.id]: _, ...rest } = cur;
+      return rest;
+    });
+    try {
+      const result = await window.cowork.skills.installRecommended(skill);
+      if (!result.ok) {
+        setErrors((cur) => ({ ...cur, [skill.id]: result.error }));
+      }
+      // Success → the watcher will refresh `installedSkills` and the
+      // card flips to "Installed" automatically.
+    } catch (err) {
+      setErrors((cur) => ({
+        ...cur,
+        [skill.id]: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setInstalling((cur) => ({ ...cur, [skill.id]: false }));
+    }
+  };
+
+  return (
+    <section className="recommended-skills">
+      <div className="tasks-section-title">Recommended skills</div>
+      <div className="recommended-skills-list">
+        {RECOMMENDED_SKILLS.map((skill) => {
+          const targetName = skill.installAs ?? skill.id;
+          const isInstalled = installedNames.has(targetName);
+          const busy = installing[skill.id] ?? false;
+          const error = errors[skill.id];
+          return (
+            <div className="recommended-skill-card" key={skill.id}>
+              <div className="recommended-skill-head">
+                <span className="recommended-skill-emoji" aria-hidden>
+                  {skill.emoji}
+                </span>
+                <div className="recommended-skill-titles">
+                  <div className="recommended-skill-name">{skill.name}</div>
+                  <div className="recommended-skill-meta">
+                    by {skill.author} · {skill.license}
+                  </div>
+                </div>
+                {isInstalled ? (
+                  <span className="recommended-skill-installed">
+                    ✓ Installed
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="primary small"
+                    onClick={() => void onInstall(skill)}
+                    disabled={busy}
+                  >
+                    {busy ? 'Installing…' : 'Install'}
+                  </button>
+                )}
+              </div>
+              <div className="recommended-skill-desc">
+                {skill.description}
+              </div>
+              <div className="recommended-skill-footer">
+                <a
+                  href={skill.repoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="recommended-skill-link"
+                >
+                  View source ↗
+                </a>
+                {skill.tags && skill.tags.length > 0 && (
+                  <div className="recommended-skill-tags">
+                    {skill.tags.map((t) => (
+                      <span key={t} className="recommended-skill-tag">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {error && (
+                <div className="recommended-skill-error">{error}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

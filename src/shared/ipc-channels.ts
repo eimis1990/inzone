@@ -139,6 +139,9 @@ export const IPC = {
   /** Voice agent — case-insensitive search across every wiki page. */
   WIKI_SEARCH: 'wiki:search',
 
+  /** Install a curated recommended skill into ~/.claude/skills/. */
+  SKILLS_INSTALL_RECOMMENDED: 'skills:installRecommended',
+
   // Persistence
   STATE_GET: 'state:get',
   STATE_SAVE_WINDOW: 'state:saveWindow',

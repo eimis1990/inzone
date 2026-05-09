@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC } from '@shared/ipc-channels';
 import type { CoworkApi, VoiceStartCreds } from '@shared/cowork-api';
+import type { RecommendedSkill } from '@shared/recommended-skills';
 import type {
   AgentDef,
   AgentDraft,
@@ -64,6 +65,16 @@ const api: CoworkApi = {
       ipcRenderer.invoke(IPC.SKILLS_SAVE, draft),
     delete: (filePath: string): Promise<{ ok: true }> =>
       ipcRenderer.invoke(IPC.SKILLS_DELETE, filePath),
+    /** Install one of the curated recommended skills (see
+     *  shared/recommended-skills.ts). Returns ok=true on success
+     *  with `alreadyInstalled` flag, ok=false with `error` string
+     *  on any failure. */
+    installRecommended: (
+      skill: RecommendedSkill,
+    ): Promise<
+      | { ok: true; alreadyInstalled: boolean; installedAt: string }
+      | { ok: false; error: string }
+    > => ipcRenderer.invoke(IPC.SKILLS_INSTALL_RECOMMENDED, skill),
   },
   session: {
     start: (params: StartSessionParams): Promise<{ ok: true }> =>
