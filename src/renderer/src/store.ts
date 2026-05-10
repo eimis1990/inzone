@@ -2264,14 +2264,37 @@ export const useStore = create<Store>((set, get) => ({
             ts: ev.ts,
           });
           break;
-        case 'assistant_text':
-          nextPane.items.push({
-            id: nanoid(8),
-            kind: 'assistant_text',
-            text: ev.text,
-            ts: ev.ts,
-          });
+        case 'assistant_text': {
+          // Coalesce consecutive assistant_text events into one item.
+          // The SDK emits one event per content block in a message —
+          // if a response is "text, tool_use, more text" we get two
+          // events with a tool_use between them, which is correct.
+          // But if a response is multiple plain text blocks back-to-
+          // back (no tool between), we'd previously create N items
+          // each with its own MessageView + Markdown parse. Merging
+          // them into one growing item means one MessageView and the
+          // memoised Markdown re-parses only when the text actually
+          // changes — instead of every Pane re-render incurring N
+          // separate Markdown renders for what's logically one reply.
+          const last = nextPane.items[nextPane.items.length - 1];
+          if (last && last.kind === 'assistant_text') {
+            // Replace the last item with an extended version (no
+            // mutation — Zustand expects immutable updates).
+            nextPane.items[nextPane.items.length - 1] = {
+              ...last,
+              text: last.text + '\n\n' + ev.text,
+              ts: ev.ts,
+            };
+          } else {
+            nextPane.items.push({
+              id: nanoid(8),
+              kind: 'assistant_text',
+              text: ev.text,
+              ts: ev.ts,
+            });
+          }
           break;
+        }
         case 'tool_use':
           nextPane.items.push({
             id: nanoid(8),

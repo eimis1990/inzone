@@ -21,6 +21,7 @@ import { MissionControlSafe } from './components/MissionControlSafe';
 import { PrModal } from './components/PrModal';
 import { WelcomeModal } from './components/WelcomeModal';
 import { VoiceSetupWizard } from './components/VoiceSetupWizard';
+import { PerfOverlay } from './perf/PerfOverlay';
 
 export function App() {
   const init = useStore((s) => s.init);
@@ -167,6 +168,9 @@ export function App() {
     <ConversationProvider>
       <div className="app">
         <div className="title-bar" />
+        {/* Dev-only — gated internally by import.meta.env.DEV so prod
+            tree-shakes it. Toggle with ⌘⇧P. */}
+        <PerfOverlay />
         <WorkspaceBar />
         <div className={'body' + (sidebarCollapsed ? ' sidebar-hidden' : '')}>
           <div

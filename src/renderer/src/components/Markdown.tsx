@@ -1,7 +1,9 @@
+import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
+import { useRenderCount } from '../perf/useRenderCount';
 
 interface MarkdownProps {
   text: string;
@@ -11,8 +13,16 @@ interface MarkdownProps {
  * Rich-text rendering for assistant messages and tool results.
  * Lists, tables, fenced code with syntax highlighting, links that open
  * in the user's default browser via the system's window-open handler.
+ *
+ * Memoised: react-markdown + remark-gfm + rehype-highlight is the
+ * single most expensive thing rendered per chat message. Without
+ * memo, every Pane re-render parses every prior message's markdown
+ * from scratch — quadratic work in transcript length. Default
+ * shallow compare on the one prop (`text: string`) is exactly what
+ * we want; strings compare by value.
  */
-export function Markdown({ text }: MarkdownProps) {
+function MarkdownImpl({ text }: MarkdownProps) {
+  useRenderCount('Markdown');
   return (
     <div className="md-body">
       <ReactMarkdown
@@ -64,3 +74,5 @@ export function Markdown({ text }: MarkdownProps) {
     </div>
   );
 }
+
+export const Markdown = memo(MarkdownImpl);

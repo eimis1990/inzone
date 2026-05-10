@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useRenderCount } from '../perf/useRenderCount';
 import { useStore } from '../store';
 import { primeAudio } from '../chime';
 import { LayoutsModal } from './LayoutsModal';
@@ -26,6 +27,7 @@ import {
 } from './icons';
 
 export function WorkspaceBar() {
+  useRenderCount('WorkspaceBar');
   const cwd = useStore((s) => s.cwd);
   const pickFolder = useStore((s) => s.pickFolder);
   const windowId = useStore((s) => s.windowId);

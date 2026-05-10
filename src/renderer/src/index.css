@@ -7839,6 +7839,91 @@ select:focus {
   line-height: 1.5;
 }
 
+/* Dev-only perf overlay (⌘⇧P to toggle). Production builds skip
+ * the component entirely; styles ride along but reference nothing
+ * else and add ~1 KB to the CSS bundle. */
+.perf-overlay {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  z-index: 9999;
+  background: rgba(12, 14, 18, 0.96);
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--text, #e6e8ee);
+  width: 320px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  user-select: none;
+}
+.perf-overlay-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.perf-overlay-title {
+  font-weight: 700;
+  color: var(--accent, #e4d947);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.perf-overlay-fps {
+  flex: 1;
+  color: var(--text-dim, #8a8f9a);
+}
+.perf-overlay-heap {
+  opacity: 0.8;
+}
+.perf-overlay-reset,
+.perf-overlay-close {
+  background: transparent;
+  border: 1px solid var(--border, #2a2f3a);
+  color: var(--text-dim, #8a8f9a);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.perf-overlay-reset:hover,
+.perf-overlay-close:hover {
+  color: var(--text, #e6e8ee);
+}
+.perf-overlay-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.perf-overlay-table th {
+  text-align: left;
+  color: var(--text-dim, #8a8f9a);
+  font-weight: 500;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--border, #2a2f3a);
+}
+.perf-overlay-table td {
+  padding: 2px 4px;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.04);
+}
+.perf-overlay-table .perf-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.perf-empty {
+  text-align: center;
+  color: var(--text-dim, #8a8f9a);
+  font-style: italic;
+  padding: 8px;
+}
+.perf-overlay-hint {
+  margin-top: 6px;
+  color: var(--text-dim, #8a8f9a);
+  font-size: 10px;
+  opacity: 0.7;
+}
+
 /* Settings modal */
 .settings-modal {
   width: min(600px, 96vw);

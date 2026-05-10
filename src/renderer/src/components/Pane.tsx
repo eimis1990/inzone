@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useShallow } from 'zustand/react/shallow';
+import { useRenderCount } from '../perf/useRenderCount';
 import type { PaneId, SessionStatus } from '@shared/types';
 import { getAgentColor } from '@shared/palette';
 import {
@@ -255,18 +257,40 @@ interface PaneProps {
 }
 
 export function Pane({ id }: PaneProps) {
+  useRenderCount('Pane', id);
+  // Pane runtime + selection flags — change frequently (per-event
+  // pushes, active/lead changes). Keep these as individual
+  // subscriptions so each can early-out independently.
   const pane = useStore((s) => s.panes[id]);
   const isActive = useStore((s) => s.activePaneId === id);
   const isLead = useStore((s) => s.leadPaneId === id);
-  const setActivePane = useStore((s) => s.setActivePane);
-  const closePane = useStore((s) => s.closePane);
-  const clearPane = useStore((s) => s.clearPane);
-  const sendMessage = useStore((s) => s.sendMessage);
-  const interrupt = useStore((s) => s.interrupt);
-  const setPaneName = useStore((s) => s.setPaneName);
   const tree = useStore((s) => s.tree);
   const leadPaneId = useStore((s) => s.leadPaneId);
   const leadPaneName = useStore((s) => s.leadPaneName);
+
+  // Action getters — these are stable function references for the
+  // lifetime of the store, so we bundle them in one `useShallow`
+  // subscription instead of seven. Cuts subscription count from 7
+  // to 1 with no behaviour change.
+  const {
+    setActivePane,
+    closePane,
+    clearPane,
+    sendMessage,
+    interrupt,
+    setPaneName,
+    consumePaneSeed,
+  } = useStore(
+    useShallow((s) => ({
+      setActivePane: s.setActivePane,
+      closePane: s.closePane,
+      clearPane: s.clearPane,
+      sendMessage: s.sendMessage,
+      interrupt: s.interrupt,
+      setPaneName: s.setPaneName,
+      consumePaneSeed: s.consumePaneSeed,
+    })),
+  );
   const agent = useStore((s) =>
     pane?.agentName
       ? s.agents.find((a) => a.name === pane.agentName)
@@ -332,8 +356,10 @@ export function Pane({ id }: PaneProps) {
   // mount) doesn't re-apply the same seed. Append rather than
   // overwrite when there's already user input — protects half-typed
   // messages.
+  // `consumePaneSeed` was bundled with the other action getters at
+  // the top of this function; we only need the per-event `pendingSeed`
+  // here as a regular subscription.
   const pendingSeed = useStore((s) => s.pendingPaneSeed);
-  const consumePaneSeed = useStore((s) => s.consumePaneSeed);
   useEffect(() => {
     if (!pendingSeed || pendingSeed.paneId !== id) return;
     setInput((prev) =>

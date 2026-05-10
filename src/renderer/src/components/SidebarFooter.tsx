@@ -55,12 +55,32 @@ export function SidebarFooter() {
       }
     };
     void poll();
-    const id = setInterval(() => {
-      void poll();
-    }, 5000);
+    // Pause polling while the window is unfocused — the branch only
+    // changes via human action (checkout, switch in another app), and
+    // we re-poll on focus return below. Halves idle CPU for this
+    // strip when the user has the app in the background.
+    let id: number | null = null;
+    const start = () => {
+      if (id != null) return;
+      id = window.setInterval(() => void poll(), 5000);
+    };
+    const stop = () => {
+      if (id == null) return;
+      window.clearInterval(id);
+      id = null;
+    };
+    const onFocus = () => {
+      void poll(); // catch up immediately on focus return
+      start();
+    };
+    if (document.hasFocus()) start();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', stop);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      stop();
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', stop);
     };
   }, [cwd]);
 

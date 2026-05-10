@@ -48,6 +48,45 @@ context regardless of in-pane z-index. Fix: portal the menu to
 (agent panes) and TerminalPaneMenu (terminal panes). Updated
 [[gotchas]].
 
+## [2026-05-09] edit | v1.11.0 perf pass — memo, coalesce, pause polls
+
+Shipped the four perf wins identified in the audit:
+
+1. `React.memo(Markdown)` with default text equality.
+2. `React.memo(MessageView, areMessagePropsEqual)` with a custom
+   comparator that handles `ToolBlockView` wrapper churn from
+   `buildViewItems()`. The comparator checks the underlying
+   store-stable refs (`a.input === b.input`, `a.result?.content
+   === b.result?.content`) instead of the wrapper identity.
+3. Coalesce consecutive `assistant_text` events into one growing
+   item (when no tool_use between them).
+4. Bundled Pane's seven action-getter subscriptions into one
+   `useShallow` call.
+5. `SidebarFooter` / `AgentSidebar` install probe / `PreviewButton`
+   port sweep now pause on window blur, matching the pattern
+   already in `App.tsx`'s PR poll.
+
+Captured the [[conventions/memoisation]] page documenting the
+pattern so future agents adding heavy components reach for memo
+correctly. Indexed under Conventions.
+
+## [2026-05-09] edit | add perf measurement page + dev-only overlay
+
+Created [[perf-measurement]] documenting the four metrics we care
+about (streaming FPS, MessageView/Markdown render counts, heap), the
+tools (PerfOverlay ⌘⇧P, Activity Monitor, Chrome DevTools, React
+Profiler), and the five-test baseline protocol. Added the PerfOverlay
+component itself ([src/renderer/src/perf/](../../src/renderer/src/perf/)) — dev-only via
+`import.meta.env.DEV`, zero cost in production builds. Wired
+useRenderCount into Pane, MessageView, ToolBlock, Markdown,
+AgentSidebar, WorkspaceBar.
+
+Static analysis suggests biggest wins come from React.memo on
+MessageView + Markdown + ToolBlock (5–10x render speed on long
+transcripts) and coalescing successive assistant_text chunks into
+the prior item (cuts re-render frequency during streaming). Not
+shipping the optimisations yet — measure first, then target.
+
 ## [2026-05-09] edit | gotcha: require is undefined in ESM main +
 wipe-before-write loses user data
 

@@ -4,6 +4,49 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] — 2026-05-09
+
+### Performance
+
+- **Memoised `MessageView` and `Markdown`.** The chat transcript
+  used to re-parse every prior message's markdown on every store
+  update — every new event from the agent triggered a Pane
+  re-render, which rebuilt every `MessageView`, which re-ran
+  `react-markdown + remark-gfm + rehype-highlight` on every prior
+  message. Quadratic work in transcript length. `Markdown` is now
+  wrapped in `React.memo` with default text equality. `MessageView`
+  uses a custom comparator that handles the `ToolBlockView` wrapper
+  churn — `buildViewItems()` synthesises fresh tool-block wrappers
+  on every Pane render, but the underlying `tool_use` / `tool_result`
+  refs come from the immutable store, so the comparator compares
+  those instead of the wrapper identity.
+- **Coalesce consecutive `assistant_text` events into one item.**
+  When the agent emits multiple plain text blocks in a row (no
+  tool calls between), they now merge into one growing item rather
+  than N separate items each with its own MessageView + Markdown
+  render. Pairs with the memoisation: combined, the Markdown parser
+  runs once per actual text-block change instead of once per render.
+- **Bundled `useStore` action getters in `Pane.tsx` with
+  `useShallow`.** Pane.tsx had 17 separate store subscriptions; the
+  seven action getters (which are stable references for the
+  store's lifetime) are now one subscription with shallow compare.
+- **Polling intervals pause on window blur.** `SidebarFooter`'s
+  git-branch check (5s), `AgentSidebar`'s CLI install probe (4s),
+  and `PreviewButton`'s lsof port sweep (12s) now stop when the
+  window isn't focused and resume on focus return (with an
+  immediate catch-up tick). `App.tsx`'s PR poll already did this —
+  the rest now match.
+
+### Added
+
+- **Dev-only `PerfOverlay` (⌘⇧P).** Floating widget in the bottom-
+  right showing FPS, JS heap, per-component render counts, last
+  render time, and a Reset button. Gated behind
+  `import.meta.env.DEV` so it tree-shakes entirely from production
+  builds. Used to capture before/after numbers for the perf work
+  in this release — see `.inzone/wiki/perf-measurement.md` for the
+  measurement protocol.
+
 ## [1.10.2] — 2026-05-09
 
 ### Fixed

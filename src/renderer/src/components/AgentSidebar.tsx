@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { getAgentColor } from '@shared/palette';
+import { useRenderCount } from '../perf/useRenderCount';
 import { useStore } from '../store';
 import { SessionsList } from './SessionsList';
 import { SidebarFooter } from './SidebarFooter';
@@ -35,6 +36,7 @@ type SidebarTab = 'sessions' | 'workers' | 'voice' | 'wiki';
  * reloads (we want first-launch to land on Sessions).
  */
 export function AgentSidebar() {
+  useRenderCount('AgentSidebar');
   const [tab, setTab] = useState<SidebarTab>('sessions');
   // Tab badge counts only the TOP-LEVEL projects in the active
   // workspace (worktrees aren't separate projects, just branches of
@@ -321,6 +323,8 @@ function WorkersTab() {
   // Stops once everything is installed — no point burning cycles
   // when there's nothing to discover. The poll uses the *known*
   // state so we don't re-check things already confirmed installed.
+  // Also pauses while the window is blurred — the user can't be
+  // installing CLIs in another window without giving us focus first.
   useEffect(() => {
     const missing = allPresetCommands.filter(
       (c) => installed[c] === false,
@@ -333,8 +337,28 @@ function WorkersTab() {
     const tick = () => {
       void probe(todo);
     };
-    const handle = window.setInterval(tick, 4000);
-    return () => window.clearInterval(handle);
+    let handle: number | null = null;
+    const start = () => {
+      if (handle != null) return;
+      handle = window.setInterval(tick, 4000);
+    };
+    const stop = () => {
+      if (handle == null) return;
+      window.clearInterval(handle);
+      handle = null;
+    };
+    const onFocus = () => {
+      tick(); // catch up on focus return
+      start();
+    };
+    if (document.hasFocus()) start();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', stop);
+    return () => {
+      stop();
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', stop);
+    };
   }, [installed, allPresetCommands, probe]);
 
   // Section collapse state. Persist in localStorage so the user's

@@ -24,7 +24,12 @@ here when an organising theme emerges.
 
 ## Conventions
 
-- (none yet — see [[conventions/README]])
+- [[conventions/memoisation]] — `React.memo` / `useShallow` patterns
+
+## Performance
+
+- [[perf-measurement]] — protocol for capturing renderer perf
+  baselines + the in-app PerfOverlay (⌘⇧P)
 
 ## Activity
 

@@ -280,13 +280,33 @@ export function PreviewButton() {
     const initial = setTimeout(() => {
       void sweep();
     }, 1500);
-    const id = setInterval(() => {
+    // Pause sweeps while blurred — dev servers don't come up
+    // spontaneously, and the user will return focus to INZONE to
+    // use whatever new port they spawned. Saves ~12s-cadence lsof
+    // calls when the user is working elsewhere.
+    let id: number | null = null;
+    const start = () => {
+      if (id != null) return;
+      id = window.setInterval(() => void sweep(), 12000);
+    };
+    const stop = () => {
+      if (id == null) return;
+      window.clearInterval(id);
+      id = null;
+    };
+    const onFocus = () => {
       void sweep();
-    }, 12000);
+      start();
+    };
+    if (document.hasFocus()) start();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', stop);
     return () => {
       cancelled = true;
       clearTimeout(initial);
-      clearInterval(id);
+      stop();
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', stop);
     };
   }, []);
 

@@ -1,5 +1,7 @@
+import { memo } from 'react';
 import type { PaneId } from '@shared/types';
 import type { ChatItem } from '../store';
+import { useRenderCount } from '../perf/useRenderCount';
 import { Markdown } from './Markdown';
 import { AskUserQuestionForm } from './AskUserQuestionForm';
 
@@ -30,7 +32,8 @@ interface Props {
   paneId: PaneId;
 }
 
-export function MessageView({ item, paneId }: Props) {
+function MessageViewImpl({ item, paneId }: Props) {
+  useRenderCount('MessageView', item.id);
   switch (item.kind) {
     case 'user':
       return (
@@ -125,11 +128,60 @@ export function MessageView({ item, paneId }: Props) {
 }
 
 /**
+ * Custom equality check for memoised MessageView.
+ *
+ * Why the custom comparator: most of our `ChatItemView` values come
+ * straight from the Zustand store with stable references, so naive
+ * `a === b` would cover them. But `tool_block` items are NOT in the
+ * store — `buildViewItems()` in Pane.tsx synthesises them on every
+ * render by zipping a `tool_use` with its matching `tool_result`,
+ * which means a fresh `ToolBlockView` object every time even when
+ * nothing changed. Default shallow compare on that would invalidate
+ * every tool block on every Pane re-render, defeating the memo.
+ *
+ * Strategy:
+ *  - paneId must match (string compare)
+ *  - if `prev.item === next.item` we're done (stable store refs)
+ *  - otherwise inspect the meaningful fields. For tool_block: input
+ *    + name + result.content + result.isError — every one of those
+ *    references survives the buildViewItems rebuild because they
+ *    come from the store-side ChatItem objects, not from the
+ *    synthesised wrapper.
+ */
+function areMessagePropsEqual(prev: Props, next: Props): boolean {
+  if (prev.paneId !== next.paneId) return false;
+  const a = prev.item;
+  const b = next.item;
+  if (a === b) return true;
+  if (a.kind !== b.kind || a.id !== b.id) return false;
+  if (a.kind === 'tool_block' && b.kind === 'tool_block') {
+    return (
+      a.name === b.name &&
+      a.input === b.input &&
+      a.result?.content === b.result?.content &&
+      a.result?.isError === b.result?.isError
+    );
+  }
+  // For non-tool-block kinds, the items live in the store with
+  // stable refs — if we reach this branch they're conceptually
+  // different items (different snapshots of the same id) and we
+  // want to re-render.
+  return false;
+}
+
+export const MessageView = memo(MessageViewImpl, areMessagePropsEqual);
+
+/**
  * Collapsible tool call: shows just the tool name + a short preview of
  * the input on a single line, with a chevron. Click to expand the input
  * JSON and the result body. Default = collapsed.
+ *
+ * Not separately memoised — it lives inside MessageView (the
+ * `tool_block` branch), so the parent's memo gates re-evaluation
+ * transitively.
  */
 function ToolBlock({ item }: { item: ToolBlockView }) {
+  useRenderCount('ToolBlock', item.id);
   const summary = summarizeInput(item.name, item.input);
   const status = item.result
     ? item.result.isError
