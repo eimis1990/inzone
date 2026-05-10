@@ -118,6 +118,13 @@ function RefreshIcon() {
  * Compact dropdown for the per-pane "more" actions. Replaces the row
  * of inline icon buttons that crowded the header at narrow widths.
  * Each menu item shows an icon + text label, click-outside dismisses.
+ *
+ * Rendered via React portal to `document.body` so the menu always
+ * stacks above the surrounding `react-resizable-panels` resize
+ * handles — see TerminalPaneMenu in TerminalPane.tsx for the full
+ * z-index gotcha. Click-outside checks both the trigger and the
+ * portaled menu, since the menu is no longer a DOM descendant of
+ * the trigger.
  */
 function PaneMoreMenu({
   canClear,
@@ -131,22 +138,38 @@ function PaneMoreMenu({
   onClose: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number }>({
+    top: 0,
+    right: 0,
+  });
+
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setPos({
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      const inTrigger = triggerRef.current?.contains(target);
+      const inMenu = menuRef.current?.contains(target);
+      if (!inTrigger && !inMenu) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
   return (
-    <div className="pane-more" ref={wrapRef}>
+    <div className="pane-more">
       <button
+        ref={triggerRef}
         type="button"
         className="pane-icon-btn"
         onClick={(e) => {
@@ -160,42 +183,49 @@ function PaneMoreMenu({
       >
         <MoreIcon />
       </button>
-      {open && (
-        <div className="pane-more-menu" role="menu">
-          {canClear && (
-            <button
-              type="button"
-              role="menuitem"
-              className="pane-more-item"
-              onClick={() => {
-                setOpen(false);
-                onClear();
-              }}
-            >
-              <span className="pane-more-icon" aria-hidden>
-                <RefreshIcon />
-              </span>
-              Clear conversation
-            </button>
-          )}
-          {canClose && (
-            <button
-              type="button"
-              role="menuitem"
-              className="pane-more-item danger"
-              onClick={() => {
-                setOpen(false);
-                onClose();
-              }}
-            >
-              <span className="pane-more-icon" aria-hidden>
-                <CloseIcon size={13} />
-              </span>
-              Close pane
-            </button>
-          )}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="pane-more-menu pane-more-menu-portal"
+            role="menu"
+            style={{ top: pos.top, right: pos.right }}
+          >
+            {canClear && (
+              <button
+                type="button"
+                role="menuitem"
+                className="pane-more-item"
+                onClick={() => {
+                  setOpen(false);
+                  onClear();
+                }}
+              >
+                <span className="pane-more-icon" aria-hidden>
+                  <RefreshIcon />
+                </span>
+                Clear conversation
+              </button>
+            )}
+            {canClose && (
+              <button
+                type="button"
+                role="menuitem"
+                className="pane-more-item danger"
+                onClick={() => {
+                  setOpen(false);
+                  onClose();
+                }}
+              >
+                <span className="pane-more-icon" aria-hidden>
+                  <CloseIcon size={13} />
+                </span>
+                Close pane
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

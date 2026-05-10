@@ -37,3 +37,27 @@ growth within an existing message, so "Jump to latest" landed once
 and then fell behind as content kept arriving. Wrapper +
 ResizeObserver + drop smooth-scroll in jumpToBottom. Updated
 [[gotchas]].
+
+## [2026-05-09] edit | gotcha: resize handles eat in-pane popovers
+
+Added a gotcha covering the v1.10.2 fix to the per-pane ⋮ menu's
+"Close pane doesn't hover" bug. PanelResizeHandle from
+react-resizable-panels stacks above the menu in PanelGroup's
+context regardless of in-pane z-index. Fix: portal the menu to
+`document.body` with `position: fixed`. Applies to both PaneMoreMenu
+(agent panes) and TerminalPaneMenu (terminal panes). Updated
+[[gotchas]].
+
+## [2026-05-09] edit | gotcha: require is undefined in ESM main +
+wipe-before-write loses user data
+
+Added two related gotchas covering the v1.10.2 voice-key fix.
+v1.10.0 shipped a migration from plaintext electron-store to
+encrypted safeStorage with two compounding bugs: `require('fs')`
+in an ESM main process (silently failed), and the save flow wiped
+the legacy plaintext BEFORE the encrypted write completed (fire-
+and-forget `void`). Users whose first action post-upgrade was
+opening Voice settings + Save lost their key entirely. Manifested
+as "could not establish signal connection: Failed to fetch" because
+the missing key forced the public-agent path against private
+agents.

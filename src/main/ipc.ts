@@ -782,8 +782,13 @@ export function registerIpcHandlers(): void {
   // -- Voice agent ----------------------------------------------------------
   ipcMain.handle(IPC.VOICE_GET, async () => getVoiceSettings());
   ipcMain.handle(IPC.VOICE_SAVE, async (_e, settings: VoiceSettings) => {
-    saveVoiceSettings(settings);
-    return { ok: true };
+    // Awaited — saveVoiceSettings is async (it writes the encrypted
+    // API-key file via fs.writeFile). Previously this handler called
+    // it sync-style, returned `{ ok: true }` before the file write
+    // completed, and the renderer thought the save had succeeded. If
+    // the write then failed, the user lost their key silently.
+    await saveVoiceSettings(settings);
+    return { ok: true as const };
   });
   ipcMain.handle(IPC.VOICE_GET_START_CREDS, async () => {
     return resolveVoiceStartCreds();

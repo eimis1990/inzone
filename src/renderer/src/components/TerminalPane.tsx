@@ -26,6 +26,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import '@xterm/xterm/css/xterm.css';
 import type { PaneId } from '@shared/types';
 import { findWorkerPreset } from '@shared/worker-presets';
@@ -257,6 +258,16 @@ export function TerminalPane({ id }: Props) {
  * shell with the same preset) and Close. Uses the same visual shape
  * as agent panes' more-menu so the two pane kinds feel consistent.
  *
+ * The menu is rendered via React portal into `document.body` rather
+ * than inline below the trigger. Why: react-resizable-panels'
+ * PanelResizeHandle is a sibling of the Panel that contains this
+ * pane, and renders AFTER the panel in DOM order. Without explicit
+ * z-index on either, the handle wins stacking and steals pointer
+ * events over its small hit-zone — which sits right where the menu
+ * tends to land, especially in terminal panes (often the smallest).
+ * Portaling out escapes the pane's stacking context entirely; the
+ * menu sits above every panel + handle, every time.
+ *
  * Click-outside dismisses; Esc closes; menu items are real <button>s
  * for accessibility.
  */
@@ -268,14 +279,36 @@ function TerminalPaneMenu({
   onClose: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  // Computed `position: fixed` coords for the portaled menu. Anchored
+  // below the trigger and aligned to the trigger's right edge so the
+  // menu always grows leftward / downward — same visual as the old
+  // inline absolute positioning.
+  const [pos, setPos] = useState<{ top: number; right: number }>({
+    top: 0,
+    right: 0,
+  });
+
+  // Recompute coords on open. We don't follow the trigger if the
+  // user resizes the window mid-open — click-outside / Esc will
+  // close it well before that's a practical concern.
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setPos({
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onMouse = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      const inTrigger = triggerRef.current?.contains(target);
+      const inMenu = menuRef.current?.contains(target);
+      if (!inTrigger && !inMenu) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
@@ -289,8 +322,9 @@ function TerminalPaneMenu({
   }, [open]);
 
   return (
-    <div className="pane-more" ref={wrapRef}>
+    <div className="pane-more">
       <button
+        ref={triggerRef}
         type="button"
         className="pane-icon-btn"
         onClick={(e) => {
@@ -314,52 +348,59 @@ function TerminalPaneMenu({
           <circle cx="12" cy="19" r="1.6" />
         </svg>
       </button>
-      {open && (
-        <div className="pane-more-menu" role="menu">
-          <button
-            type="button"
-            role="menuitem"
-            className="pane-more-item"
-            onClick={() => {
-              setOpen(false);
-              onReset();
-            }}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="pane-more-menu pane-more-menu-portal"
+            role="menu"
+            style={{ top: pos.top, right: pos.right }}
           >
-            <span className="pane-more-icon" aria-hidden>
-              <svg
-                width={13}
-                height={13}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.75}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                <path d="M21 3v5h-5" />
-                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-                <path d="M3 21v-5h5" />
-              </svg>
-            </span>
-            Reset shell
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="pane-more-item danger"
-            onClick={() => {
-              setOpen(false);
-              onClose();
-            }}
-          >
-            <span className="pane-more-icon" aria-hidden>
-              <CloseIcon size={13} />
-            </span>
-            Close pane
-          </button>
-        </div>
-      )}
+            <button
+              type="button"
+              role="menuitem"
+              className="pane-more-item"
+              onClick={() => {
+                setOpen(false);
+                onReset();
+              }}
+            >
+              <span className="pane-more-icon" aria-hidden>
+                <svg
+                  width={13}
+                  height={13}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.75}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                  <path d="M3 21v-5h5" />
+                </svg>
+              </span>
+              Reset shell
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="pane-more-item danger"
+              onClick={() => {
+                setOpen(false);
+                onClose();
+              }}
+            >
+              <span className="pane-more-icon" aria-hidden>
+                <CloseIcon size={13} />
+              </span>
+              Close pane
+            </button>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

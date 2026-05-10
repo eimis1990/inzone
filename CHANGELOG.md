@@ -4,10 +4,30 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.10.1] — 2026-05-09
+## [1.10.2] — 2026-05-09
 
 ### Fixed
 
+- **Voice agent connection restored after the v1.10.0 keychain
+  migration.** The v1.10.0 migration that moved the ElevenLabs API
+  key from plaintext electron-store to encrypted safeStorage had
+  three compounding bugs: (1) the migration helper called
+  `require('fs')` inside an ESM main process where `require` is
+  undefined, so the migration silently failed for every upgrader;
+  (2) `saveVoiceSettings` synchronously wiped the legacy plaintext
+  from the JSON store BEFORE the encrypted-file write completed,
+  fired with `void` so failures vanished; (3) the IPC handler
+  didn't await the save. The combination meant: the first time a
+  user opened Voice settings and clicked Save after upgrading, the
+  plaintext could be wiped without the encrypted version being
+  written, leaving voice with no key — manifesting as "could not
+  establish signal connection: Failed to fetch" because the
+  public-agent path was being taken against a private agent. Fix:
+  static `fs` imports, await the encrypted write before touching
+  the store, preserve plaintext as a fallback if the save call
+  didn't include a new apiKey, and the IPC handler now awaits the
+  full save. Users whose key was wiped need to re-enter it in
+  Settings → Voice once after upgrading to v1.10.2.
 - **Auto-scroll keeps up with streaming content.** The v1.9.0 pin
   fix only re-scrolled when `pane.items.length` changed, but during
   streaming the agent grows an existing message's text — same array
@@ -18,6 +38,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and re-snaps to bottom while you're pinned. Also dropped the
   smooth-scroll animation in `Jump to latest` because intermediate
   scroll events during the animation flipped the pin off mid-flight.
+- **Pane "Close pane" menu now responds to hover.** The per-pane ⋮
+  dropdown (Reset / Close on terminal panes, Clear / Close on agent
+  panes) lived inside the pane's stacking context, so the
+  `react-resizable-panels` resize handle — a DOM sibling that
+  renders after the panel — was stealing pointer events whenever the
+  menu landed near the pane's edge. Most visible on terminal panes,
+  where the menu often sits right above the bottom handle. Fix: the
+  menu now portals to `document.body` with `position: fixed` and a
+  viewport-level z-index, escaping the pane's stacking context
+  entirely. Also bumped the hover backgrounds (12% → 22% accent,
+  14% → 26% danger) so the hover state is actually visible.
 
 ## [1.10.0] — 2026-05-09
 

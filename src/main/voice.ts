@@ -31,7 +31,12 @@
 
 import { app, safeStorage } from 'electron';
 import { promises as fs } from 'fs';
-import { existsSync, readFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs';
 import path from 'path';
 import Store from 'electron-store';
 import type { VoiceSettings } from '@shared/types';
@@ -101,29 +106,37 @@ function migrateLegacyApiKeyIfNeeded(): void {
   const v = store.get('voice', {});
   // legacy field is typed as VoiceSettings.apiKey — non-empty means
   // we're upgrading from a pre-encryption build.
-  if (v.apiKey && v.apiKey.trim().length > 0) {
-    try {
-      // Sync write path is fine: this runs once on boot. We don't
-      // await fs.writeFile because the existing API is sync; small
-      // tradeoff for boot simplicity.
-      if (safeStorage.isEncryptionAvailable()) {
-        const enc = safeStorage.encryptString(v.apiKey.trim());
-        const file = apiKeyPath();
-        // Make sure the dir exists.
-        try {
-          require('fs').mkdirSync(path.dirname(file), { recursive: true });
-        } catch {
-          // ignore
-        }
-        require('fs').writeFileSync(file, enc, { mode: 0o600 });
-        // Strip the plaintext from the JSON.
-        store.set('voice', { ...v, apiKey: undefined });
-      }
-    } catch {
-      // If migration fails the user's voice setup keeps working off
-      // the legacy plaintext until they re-save in Settings — which
-      // will go through the encrypted path.
+  if (!v.apiKey || v.apiKey.trim().length === 0) return;
+
+  try {
+    if (!safeStorage.isEncryptionAvailable()) {
+      // Keyring not ready at boot (rare). Leave plaintext as a
+      // fallback so voice keeps working; next boot or next save
+      // will move it.
+      return;
     }
+    const enc = safeStorage.encryptString(v.apiKey.trim());
+    const file = apiKeyPath();
+    // Use static sync imports — `require('fs')` is undefined in this
+    // ESM main process, and the old code's require call was throwing
+    // silently inside two nested try-catches, leaving every upgrader
+    // with their plaintext key still in the JSON store. Fixed in
+    // v1.10.2.
+    try {
+      mkdirSync(path.dirname(file), { recursive: true });
+    } catch {
+      // dir already exists — fine
+    }
+    writeFileSync(file, enc, { mode: 0o600 });
+    // ONLY strip plaintext after the encrypted file is on disk.
+    store.set('voice', { ...v, apiKey: undefined });
+  } catch (err) {
+    // Migration failed (file system permissions, keychain hiccup,
+    // etc.). Keep plaintext in store as fallback — voice keeps
+    // working off the plaintext path via getVoiceSettings(). Log
+    // for diagnostics.
+    // eslint-disable-next-line no-console
+    console.warn('[voice] legacy apiKey migration failed:', err);
   }
 }
 
@@ -142,17 +155,35 @@ export function getVoiceSettings(): VoiceSettings {
   };
 }
 
-export function saveVoiceSettings(next: VoiceSettings): void {
+export async function saveVoiceSettings(next: VoiceSettings): Promise<void> {
   const current = store.get('voice', {});
-  // Agent ID — plain JSON.
+
+  // 1) Handle the API key FIRST so a half-completed save can't
+  //    wipe the plaintext fallback while the encrypted write is
+  //    still pending. `undefined` means "leave the current key
+  //    alone"; empty string means "explicitly clear it".
+  let apiKeyWasWritten = false;
+  if (next.apiKey !== undefined) {
+    await writeStoredApiKey(next.apiKey);
+    apiKeyWasWritten = true;
+  }
+
+  // 2) Build the next JSON-stored shape. Agent ID lives here as
+  //    plaintext (public identifier). API key is encrypted on disk,
+  //    NOT here — UNLESS migration hasn't run yet and we don't
+  //    want to clobber the user's only copy of their key.
   const agentId =
     next.agentId !== undefined ? next.agentId || undefined : current.agentId;
-  store.set('voice', { agentId });
-  // API key — encrypted. `undefined` means "don't change". Empty
-  // string means "clear".
-  if (next.apiKey !== undefined) {
-    void writeStoredApiKey(next.apiKey);
+  const nextStore: VoiceSettings = { agentId };
+  if (!apiKeyWasWritten && current.apiKey) {
+    // We didn't update the key in this save, and there's a legacy
+    // plaintext value in the store. Preserve it — clobbering it
+    // here would leave the user with no key at all if the boot-time
+    // migration also failed (e.g. keychain unavailable). The next
+    // successful write OR the next migration run will move it.
+    nextStore.apiKey = current.apiKey;
   }
+  store.set('voice', nextStore);
 }
 
 /**

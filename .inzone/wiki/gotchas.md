@@ -147,6 +147,76 @@ its WebGL context. Loading it before `open()` silently does nothing
 or throws depending on the platform. Always: `term.open(host)` first,
 `term.loadAddon(webgl)` second. (v1.10 wiring.)
 
+## Resize handles steal pointer events from in-pane popovers
+
+The pane's ⋮ more-menu used `position: absolute` + `z-index: 30`
+anchored inside the pane. That z-index only applied within the
+pane's stacking context — `react-resizable-panels` renders its
+`PanelResizeHandle` as a DOM sibling AFTER the panel, so the handle
+always stacked above the menu in the outer (PanelGroup) context.
+The handle's tiny hit-zone happens to fall right where menus tend
+to land — most visibly in terminal panes which are usually compact
+— so hovering the bottom menu item silently triggered the handle's
+hover instead.
+
+Fix (v1.10.2): portal the menu to `document.body` and switch to
+`position: fixed` with viewport-relative coords from
+`triggerRef.getBoundingClientRect()`. The menu escapes the pane's
+stacking context entirely. Click-outside has to check both the
+trigger ref AND the menu ref now since the menu is no longer a DOM
+descendant of the trigger.
+
+Lesson: any popover anchored inside a `react-resizable-panels`
+panel needs to portal out. Same applies to tooltips, comboboxes,
+date pickers — any floating overlay.
+
+See [Pane.tsx](../../src/renderer/src/components/Pane.tsx) `PaneMoreMenu` and
+[TerminalPane.tsx](../../src/renderer/src/components/TerminalPane.tsx) `TerminalPaneMenu`.
+
+## `require()` is undefined in the ESM main process
+
+The app's main entry is `out/main/index.mjs` — ESM. In ESM scope,
+`require` doesn't exist as a global. Calling `require('fs')` throws
+`ReferenceError: require is not defined`. v1.10.0's voice-key
+migration had two `require('fs').mkdirSync/writeFileSync` calls
+wrapped in nested try-catches; both threw, both got swallowed,
+migration silently failed for every upgrader. They only noticed
+when a subsequent save wiped their plaintext key and voice broke.
+
+Lesson: never sneak a `require()` into main-process code without
+verifying it's ESM-safe. Either import the function statically, or
+use `await import()` if you really need a dynamic import. Static
+imports for sync `fs` functions:
+
+```ts
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { promises as fs } from 'fs';  // async versions
+```
+
+Fixed in v1.10.2.
+
+## Wipe-before-write loses user data
+
+The v1.10.0 `saveVoiceSettings` ran:
+
+```ts
+store.set('voice', { agentId });          // wipes plaintext apiKey
+void writeStoredApiKey(next.apiKey);      // async, fire-and-forget
+```
+
+Two failure modes: (1) if the async encrypted write rejected, the
+user lost their key because the JSON wipe had already happened;
+(2) the IPC handler returned success before the write completed,
+so the renderer's "Saved!" toast was a lie. v1.10.2 reorders:
+`await` the encrypted write FIRST, only then mutate the store —
+and the IPC handler awaits the full chain so the renderer sees
+the actual result.
+
+Lesson: any "migrate from old storage to new storage" code must
+always succeed at writing the new home before clearing the old.
+Order matters: write-new → verify → delete-old. Never the other
+way around.
+
 ## `keytar` is a trap
 
 Tempting to reach for `keytar` for secrets, but it's deprecated and

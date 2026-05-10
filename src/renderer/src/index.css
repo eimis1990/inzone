@@ -3948,6 +3948,15 @@ code.voice-tool-card-value {
   display: flex;
   flex-direction: column;
 }
+/* When the menu is portaled out of its pane (to document.body), we
+ * swap to position: fixed and a viewport-relative z-index so it sits
+ * above react-resizable-panels' resize handles regardless of which
+ * pane it belongs to. Inline `top` / `right` come from the trigger
+ * ref's bounding rect at open time. */
+.pane-more-menu-portal {
+  position: fixed;
+  z-index: 1000;
+}
 .pane-more-item {
   display: inline-flex;
   align-items: center;
@@ -3965,13 +3974,15 @@ code.voice-tool-card-value {
   transition: background 100ms ease, color 100ms ease;
 }
 .pane-more-item:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  /* Bumped from 12%/14% to 22%/26% — old values were so faint the
+   * hover was easy to miss, especially against the menu's dark bg. */
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .pane-more-item.danger {
   color: var(--danger);
 }
 .pane-more-item.danger:hover {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  background: color-mix(in srgb, var(--danger) 26%, transparent);
 }
 .pane-more-icon {
   display: inline-flex;
