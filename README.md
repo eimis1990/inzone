@@ -50,7 +50,7 @@ It's compatible with Claude Code's `~/.claude/` directory, so any agents and ski
 
 ### Multi-Agent Workspace
 
-Drop several Claude agents into independent panes inside one window. Each pane has its own conversation, transcript, and SDK session, so agents can work on different parts of the same project in parallel without stepping on each other. Pre-set 1, 2, 4, 6, 8, or 10-pane grids are one click away — and they're resizable.
+Drop several Claude agents into independent panes inside one window. Each pane has its own conversation, transcript, and SDK session, so agents can work on different parts of the same project in parallel without stepping on each other. Splitters resize panes live; pre-built grids (1, 2, 4, 6, 8, 10-pane) are one click away in [Layouts](#layouts--save-your-pane-setups), and [Tasks](#tasks--one-click-mission-setups) bundle a layout with the right agents already assigned.
 
 <p align="center">
   <img src="docs/screenshots/multi-agents-feature.png" alt="Multiple Claude agents running side by side" />
@@ -72,6 +72,32 @@ Chain panes into a synchronous sequence. Each step fires the next as soon as it 
   <img src="docs/screenshots/multi-agents-flow-feature.png" alt="Flow pipeline canvas with chained agents" />
 </p>
 
+### Tasks — One-Click Mission Setups
+
+Spin up the right multi-pane setup for the work you're about to do — no manual splitting, no manual agent assignment. Nine built-in task templates ship with the app ("Build a feature", "Fix a bug", "Code review", "Ship to production", and more), each pre-wiring the pane layout and dropping the appropriate agents into each slot. Pick one, click apply, start working.
+
+Save your own setups too: the "current session" card at the top of the modal captures your live pane tree + agent bindings as a reusable template. Templates that reference agents you've since deleted are flagged with a red ✗ chip and disabled rather than silently breaking — you'll know exactly what's wrong before you click.
+
+<p align="center">
+  <img src="docs/screenshots/tasks-templates.png" alt="Tasks modal showing built-in mission templates and custom user tasks" />
+</p>
+
+### Layouts — Save Your Pane Setups
+
+Named pane-tree presets, separate from Tasks. Where Tasks bundle a layout *plus* agent assignments, Layouts are just the shape — useful when you want the same arrangement (a 2x2 grid, a triangle review, a wide-and-narrow split) but plan to drop different agents in each session. Apply a layout and your current panes rearrange in place; agents already running keep their transcripts and stay attached to their new slots.
+
+<p align="center">
+  <img src="docs/screenshots/layouts-templates.png" alt="Layouts modal with named pane-tree presets" />
+</p>
+
+### Pane Focus Tabs + Fullscreen
+
+A horizontal tabs strip below the workspace bar gives you one tab per pane plus an "All" tab. Click a pane tab to fullscreen that pane — every other agent keeps running in the background, transcripts intact, just not visible. Click "All" to return. Press `⌘F` to toggle fullscreen on whichever pane is active. Each tab carries the agent's emoji and a soft agent-coloured underline when selected, so a 6-pane workspace stays scannable instead of a blur of identical headers.
+
+<p align="center">
+  <img src="docs/screenshots/pane-focus.png" alt="Pane focus tabs strip below the workspace bar" />
+</p>
+
 ### Worktrees — Parallel Branches Without Stepping On Yourself
 
 Spin up a git worktree off any branch directly from the sidebar. INZONE creates a sibling directory with its own branch (with optional `feature/`, `fix/`, `chore/`, `experiment/` prefix) and registers it as a sister project under the parent, indented in the sidebar with a "WT" chip. Run several agents on different branches of the same repo in parallel without them clobbering each other's working trees.
@@ -90,7 +116,7 @@ The second half of the worktree story. A Review chip in the workspace bar opens 
 
 ### Built-In Terminal
 
-A real PTY shell (zsh/bash via node-pty) docked at the bottom of the pane host. `⌘T` toggles a slide-up overlay with a blurred backdrop. Full ANSI color support, interactive programs, persistent across panel open/close. Configurable shortcut buttons for quick commands like `npm run dev` or `git status`. Terminal cwd follows the active project's folder automatically.
+A real PTY shell (zsh/bash via node-pty) docked at the bottom of the pane host. `⌘T` toggles a slide-up overlay with a blurred backdrop. Full ANSI color support, interactive programs, persistent across panel open/close. Configurable shortcut buttons for quick commands like `npm run dev` or `git status`. Terminal cwd follows the active project's folder automatically. GPU-accelerated WebGL renderer (with graceful canvas2d fallback) keeps scrolling smooth even under heavy output like `npm install` or full test runs.
 
 <p align="center">
   <img src="docs/screenshots/in-app-terminal.png" alt="Built-in terminal docked at the bottom" />
@@ -112,9 +138,22 @@ A persistent, agent-editable wiki that lives at `.inzone/wiki/` inside your proj
   <img src="docs/screenshots/wiki-feature.png" alt="Project wiki sidebar with page tree, dashboard strip, and the in-app markdown viewer" />
 </p>
 
-### Voice Agent
+### Voice Agent — Drive INZONE Hands-Free
 
-Talk to a dedicated voice agent (powered by ElevenLabs Conversational AI) that drives the rest of INZONE. Tap the mic in the sidebar, ask in plain English — *"spin up a frontend agent on this folder"* — and it calls real INZONE actions: switch projects, run agents, send messages to specific panes, set Lead, close panes. A three-slide setup wizard walks first-time users through getting it configured.
+A dedicated voice agent (powered by ElevenLabs Conversational AI) that operates the rest of INZONE for you. Tap the mic in the sidebar, ask in plain English, and it calls real INZONE actions on your behalf:
+
+- **"Spin up a frontend agent and a backend agent side by side"** — splits the pane tree and binds the matching agents
+- **"Switch to Lead mode and promote the frontend agent"** — flips the workspace mode and sets the orchestrator
+- **"Send the diff review notes to the backend pane"** — routes a message into a specific pane's composer
+- **"What's the architecture of this project?"** — reads `.inzone/wiki/` and answers from your documented source, with proper citations to the wiki pages it pulled from
+
+The wiki Q&A is the big one: the voice agent has `list_wiki_pages`, `read_wiki_page`, and `search_wiki` tools, so it grounds project questions in *your* committed documentation rather than guessing from training. Ask it a real codebase question while you're walking around, away from the keyboard.
+
+API key encrypted at rest in macOS keychain via Electron `safeStorage`. A three-slide setup wizard walks first-time users through getting it configured.
+
+<p align="center">
+  <img src="docs/screenshots/voice-panes-wiki.png" alt="Voice agent creating panes and answering wiki questions hands-free" />
+</p>
 
 ### Workers Tab — Agents + CLI Tools In One Place
 
@@ -130,6 +169,12 @@ On first launch, INZONE copies a curated set of starter agents and skills into `
 
 - **5 starter agents**: backend-developer, fullstack-developer, frontend-developer, solo-founder, lead-users-agent
 - **8 starter skills**: code-reviewer, frontend-design, mobile-design, motion-system, senior-frontend, senior-fullstack, senior-prompt-engineer, seo-optimizer
+
+Plus a **Recommended skills** section in Settings → Skills with one-click install of curated community skills (starting with VoltAgent's Awesome Design — 55+ reverse-engineered brand design systems as Claude skills). Installs are idempotent shallow git clones into `~/.claude/skills/` — no overwrite of anything you've authored.
+
+### Vim Mode + Editor Preferences
+
+A Vim mode toggle in Settings → Editor turns on modal editing across every CodeMirror surface in the app: the agent / skill prompt editor, the wiki page editor, the CLAUDE.md editor, and the MCP raw-JSON view. Normal / insert / visual modes, registers, marks, search, and dot-repeat all work — backed by `@replit/codemirror-vim`. Off by default. Toggle takes effect immediately in every open editor (and across every open INZONE window) without a reload. Settings → Shortcuts has the full keyboard reference, with modifier glyphs that match your OS.
 
 ### Project Resume + Auto-Update
 
