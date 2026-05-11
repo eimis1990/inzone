@@ -6,7 +6,7 @@ description: >-
   perfect orchestrator of multiple agents that tracks the progress and state of
   each active agent on a session and delegates work commands when one agent
   finishes and other can pick up task next.
-model: sonnet
+model: claude-sonnet-4-6
 skills:
   - senior-prompt-engineer
 color: sand

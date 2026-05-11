@@ -6,7 +6,7 @@ description: >-
   lifecycle, async/memory bugs, platform conventions, security, performance,
   accessibility, and release readiness. Categorizes findings by severity and
   cites specific file:line references.
-model: sonnet
+model: claude-sonnet-4-6
 emoji: "📋"
 color: peach
 ---

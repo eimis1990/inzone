@@ -158,6 +158,20 @@ export class SessionController implements IAgentSession {
    * that follows is not a user-facing error — the work was done.
    */
   private lastTurnWasSuccess = false;
+  /**
+   * Previous result's cumulative session totals. The SDK reports
+   * `total_cost_usd`, `duration_ms`, and `num_turns` as session-
+   * wide cumulative numbers — every result message gives you the
+   * running total at that moment, not the cost of just that turn.
+   * That's surprising for users who naturally read the result
+   * block as "this task cost X". We subtract these prevs from the
+   * incoming cumulative to compute per-turn deltas, then ship both
+   * to the renderer. First result of a session has no prev, so
+   * delta = cumulative there.
+   */
+  private prevTotalCostUsd: number | undefined;
+  private prevDurationMs: number | undefined;
+  private prevNumTurns: number | undefined;
   private queryHandle: AsyncIterable<unknown> & {
     interrupt?: () => Promise<void>;
   } | undefined;
@@ -531,14 +545,51 @@ export class SessionController implements IAgentSession {
         // error result resets it — we're back in "any later throw
         // is a real error" territory.
         this.lastTurnWasSuccess = subtype === 'success';
+        // Compute per-turn deltas against the previous result's
+        // cumulative totals. The SDK reports cumulative session-wide
+        // numbers in every result message, so the "this task cost X"
+        // value users actually want is the delta from the prior
+        // result. First result of a session has no prior, so we
+        // attribute the full cumulative to this single turn (which
+        // is correct: it IS the first turn).
+        const totalCostUsd = msg.total_cost_usd;
+        const durationMs = msg.duration_ms;
+        const numTurns = msg.num_turns;
+        const deltaCostUsd =
+          totalCostUsd === undefined
+            ? undefined
+            : this.prevTotalCostUsd === undefined
+              ? totalCostUsd
+              : Math.max(0, totalCostUsd - this.prevTotalCostUsd);
+        const deltaDurationMs =
+          durationMs === undefined
+            ? undefined
+            : this.prevDurationMs === undefined
+              ? durationMs
+              : Math.max(0, durationMs - this.prevDurationMs);
+        const deltaNumTurns =
+          numTurns === undefined
+            ? undefined
+            : this.prevNumTurns === undefined
+              ? numTurns
+              : Math.max(0, numTurns - this.prevNumTurns);
+        // Save the new cumulative for the next result's delta. Do
+        // this AFTER computing the deltas so we don't subtract from
+        // ourselves.
+        this.prevTotalCostUsd = totalCostUsd;
+        this.prevDurationMs = durationMs;
+        this.prevNumTurns = numTurns;
         const event: SessionEvent = {
           kind: 'result',
           paneId: this.paneId,
           subtype,
           sessionId: msg.session_id,
-          durationMs: msg.duration_ms,
-          totalCostUsd: msg.total_cost_usd,
-          numTurns: msg.num_turns,
+          durationMs,
+          totalCostUsd,
+          numTurns,
+          deltaDurationMs,
+          deltaCostUsd,
+          deltaNumTurns,
           ts,
         };
         this.emit(event);

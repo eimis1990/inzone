@@ -40,7 +40,7 @@ description: >-
   metrics.\"\\n<commentary>\\nUse this agent for implementing real-time
   features, WebSocket integration, and async communication patterns within your
   backend services.\\n</commentary>\\n</example>
-model: opus
+model: claude-sonnet-4-6
 color: aqua
 emoji: "\U0001F6E0️"
 ---

@@ -5,7 +5,7 @@ description: >-
   Kotlin, and Go. Reviews diffs for correctness, architecture, security,
   performance, accessibility, and test coverage. Categorizes findings by
   severity, explains the reasoning behind each comment, and never rubber-stamps.
-model: sonnet
+model: claude-sonnet-4-6
 emoji: "🔍"
 color: rose
 ---

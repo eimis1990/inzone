@@ -4,7 +4,7 @@ description: >-
   Engineer level front end developer with perfect knowledge in React, TS, CSS,
   HTML etc. Knows everything about NextJS websites development and best
   practices and is very strong at architectural knowledge. 
-model: opus
+model: claude-sonnet-4-6
 skills:
   - frontend-design
   - mobile-design

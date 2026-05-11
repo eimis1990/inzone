@@ -5,7 +5,7 @@ description: >-
   modern, production-ready redesign — fresh visual direction, refined
   typography and color system, polished layouts, accessibility, and
   performance. Hands off implementation-ready guidance to frontend-developer.
-model: claude-opus-4-6
+model: claude-sonnet-4-6
 emoji: "🤖"
 color: violet
 ---

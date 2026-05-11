@@ -48,6 +48,31 @@ context regardless of in-pane z-index. Fix: portal the menu to
 (agent panes) and TerminalPaneMenu (terminal panes). Updated
 [[gotchas]].
 
+## [2026-05-10] edit | bundled agents → Sonnet + per-turn cost delta
+
+Two cost-related changes for v1.12.0:
+
+1. Flipped 5 bundled coding agents from `model: opus` to
+   `model: claude-sonnet-4-6` (backend / frontend / fullstack /
+   mobile developers + frontend-website-redesign). While in
+   there, also locked the rest of the bundle (code-reviewer,
+   lead-users-agent, mobile-design, mobile-code-reviewer,
+   solo-founder, website-data-extractor) from the `sonnet` alias
+   to the explicit `claude-sonnet-4-6` so the version is pinned
+   rather than tracking whatever "latest Sonnet" resolves to. At
+   Anthropic's pricing Opus is ~5x Sonnet, and Sonnet 4.6 is
+   plenty for routine coding work. Users who want Opus can flip
+   the dropdown per-agent. Existing installs are untouched —
+   `bundled-resources.ts` never clobbers user-customised files.
+
+2. Result block shows per-turn delta cost instead of cumulative
+   session total. SDK's `total_cost_usd` is cumulative, which
+   our previous renderer surfaced as if it were "this turn's
+   cost". Fixed in [src/main/sessions.ts](../../src/main/sessions.ts) via prev-totals
+   tracking + delta computation, plus a new gotcha entry
+   ([[gotchas]] — `total_cost_usd from the SDK is cumulative`).
+   Cumulative stays accessible via tooltip + Settings → Usage.
+
 ## [2026-05-10] edit | Printing Press preset + post-success error fix
 
 Two things bundled into v1.12.0.

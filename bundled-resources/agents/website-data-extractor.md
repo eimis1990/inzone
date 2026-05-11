@@ -6,7 +6,7 @@ description: >-
   then writes a structured spec the redesign + frontend agents can build from.
   Refuses to fabricate — every field is either grounded in the source or
   explicitly marked unknown.
-model: sonnet
+model: claude-sonnet-4-6
 emoji: "🎯"
 color: amber
 ---

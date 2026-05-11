@@ -3,7 +3,7 @@ name: fullstack-developer
 description: >-
   A engineer level fullstack developer with perfect knowledge of best
   architectures and newest practices and newest tools and libraries 
-model: opus
+model: claude-sonnet-4-6
 skills:
   - frontend-design
   - mobile-design

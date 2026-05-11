@@ -146,9 +146,16 @@ export type ChatItem =
       id: string;
       kind: 'result';
       subtype: string;
+      /** Cumulative session totals at the time of this result. */
       durationMs?: number;
       totalCostUsd?: number;
       numTurns?: number;
+      /** Per-turn deltas — what THIS turn actually consumed. The
+       *  renderer prefers these for the headline numbers; the
+       *  cumulative fields go into the tooltip. */
+      deltaDurationMs?: number;
+      deltaCostUsd?: number;
+      deltaNumTurns?: number;
       ts: number;
     }
   /**
@@ -826,6 +833,13 @@ function transcriptToItems(
           durationMs: t.durationMs as number,
           totalCostUsd: t.totalCostUsd as number | undefined,
           numTurns: t.numTurns as number | undefined,
+          // Deltas weren't persisted before v1.12 — fields are
+          // optional, so reading legacy transcripts just gives
+          // undefined here. The renderer falls back to the
+          // cumulative number for those rows.
+          deltaDurationMs: t.deltaDurationMs as number | undefined,
+          deltaCostUsd: t.deltaCostUsd as number | undefined,
+          deltaNumTurns: t.deltaNumTurns as number | undefined,
           ts: t.ts as number,
         });
         break;
@@ -2377,6 +2391,9 @@ export const useStore = create<Store>((set, get) => ({
             durationMs: ev.durationMs,
             totalCostUsd: ev.totalCostUsd,
             numTurns: ev.numTurns,
+            deltaDurationMs: ev.deltaDurationMs,
+            deltaCostUsd: ev.deltaCostUsd,
+            deltaNumTurns: ev.deltaNumTurns,
             ts: ev.ts,
           });
           if (ev.sessionId) nextPane.sessionId = ev.sessionId;

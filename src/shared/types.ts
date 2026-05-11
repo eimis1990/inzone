@@ -112,9 +112,21 @@ export type SessionEvent =
       paneId: PaneId;
       subtype: string;
       sessionId?: string;
+      /** Cumulative session totals reported by the SDK. These are
+       *  totals since the session started — not "this turn's cost". */
       durationMs?: number;
       totalCostUsd?: number;
       numTurns?: number;
+      /** Per-turn deltas computed against the previous `result` event
+       *  in this session. SDK reports cumulative totals; users care
+       *  about "what did THIS turn cost", which is the delta. The
+       *  renderer prefers these for the prominent display and keeps
+       *  the cumulative fields as the tooltip / session breadcrumb.
+       *  Undefined on the very first result of a session (no prior
+       *  to subtract from). */
+      deltaDurationMs?: number;
+      deltaCostUsd?: number;
+      deltaNumTurns?: number;
       ts: number;
     };
 

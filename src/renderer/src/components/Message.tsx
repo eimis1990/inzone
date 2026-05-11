@@ -109,17 +109,41 @@ function MessageViewImpl({ item, paneId }: Props) {
           : item.subtype.startsWith('error')
             ? 'error'
             : 'neutral';
+      // Prefer per-turn deltas in the headline. The SDK reports
+      // cumulative session totals — showing $9.55 next to a
+      // 4-turn task makes users think that one task cost $9.55,
+      // when really the session-so-far has spent $9.55 and THIS
+      // turn was much less. Falls back to the cumulative if the
+      // delta is unavailable (legacy transcripts saved before
+      // v1.12 didn't store deltas).
+      const headlineDurationMs =
+        item.deltaDurationMs ?? item.durationMs;
+      const headlineCostUsd = item.deltaCostUsd ?? item.totalCostUsd;
+      const headlineNumTurns = item.deltaNumTurns ?? item.numTurns;
+      // Tooltip with cumulative session totals — there for
+      // budget-awareness without dominating the visual.
+      const tooltipParts: string[] = [];
+      if (typeof item.totalCostUsd === 'number') {
+        tooltipParts.push(`session total: $${item.totalCostUsd.toFixed(4)}`);
+      }
+      if (typeof item.durationMs === 'number') {
+        tooltipParts.push(`session time: ${(item.durationMs / 1000).toFixed(1)}s`);
+      }
+      if (typeof item.numTurns === 'number') {
+        tooltipParts.push(`session turns: ${item.numTurns}`);
+      }
+      const tooltip = tooltipParts.join(' · ') || undefined;
       return (
-        <div className={`msg result ${variant}`}>
+        <div className={`msg result ${variant}`} title={tooltip}>
           <span className={`result-badge ${variant}`}>{item.subtype}</span>
-          {typeof item.durationMs === 'number' && (
-            <span> · {(item.durationMs / 1000).toFixed(1)}s</span>
+          {typeof headlineDurationMs === 'number' && (
+            <span> · {(headlineDurationMs / 1000).toFixed(1)}s</span>
           )}
-          {typeof item.totalCostUsd === 'number' && (
-            <span> · ${item.totalCostUsd.toFixed(4)}</span>
+          {typeof headlineCostUsd === 'number' && (
+            <span> · ${headlineCostUsd.toFixed(4)}</span>
           )}
-          {typeof item.numTurns === 'number' && (
-            <span> · {item.numTurns} turns</span>
+          {typeof headlineNumTurns === 'number' && (
+            <span> · {headlineNumTurns} turns</span>
           )}
         </div>
       );

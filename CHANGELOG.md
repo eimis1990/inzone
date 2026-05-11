@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.12.0] — Unreleased
 
+### Changed
+
+- **Bundled coding agents now default to Sonnet 4.6, not Opus.**
+  Five starter agents (`backend-developer`, `frontend-developer`,
+  `fullstack-developer`, `mobile-developer`,
+  `frontend-website-redesign`) shipped with `model: opus` in their
+  frontmatter, which meant every fresh INZONE install was running
+  routine coding work on Opus at ~5x Sonnet's per-token rate. All
+  bundled agents now pin to `claude-sonnet-4-6` explicitly (not
+  the `sonnet` alias) so the version is locked. Opus stays
+  available via the model dropdown in the agent editor — switch
+  back any time a task wants the heavier reasoning.
+- **Per-turn cost is now shown in the result block** instead of
+  the cumulative session total. The SDK reports `total_cost_usd`
+  as the running session-wide sum; we previously rendered that
+  directly, so a single 4-turn task in a long session could show
+  `$9.55` and look like that one task burned $9 — actually it was
+  the session-so-far total, with the turn itself costing maybe
+  fifty cents. Now: the duration / cost / turns shown are the
+  per-result deltas (cost of THIS turn), and the cumulative
+  session totals are in a hover tooltip on the result row. The
+  underlying `total_cost_usd` is still saved to the usage ledger
+  for cross-session aggregation in Settings → Usage & cost.
+
 ### Added
 
 - **Printing Press worker preset.** Drop the new "Printing Press"

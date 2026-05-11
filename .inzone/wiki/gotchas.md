@@ -217,6 +217,30 @@ always succeed at writing the new home before clearing the old.
 Order matters: write-new → verify → delete-old. Never the other
 way around.
 
+## `total_cost_usd` from the SDK is cumulative, not per-turn
+
+Every `result` message the Claude Agent SDK emits carries a
+`total_cost_usd`, `duration_ms`, and `num_turns` field. These are
+**cumulative session-wide totals**, not the cost / time / turns
+of just the turn that finished. We previously rendered them
+directly in the result block, which made a single 4-turn task in
+a long session look like it cost $9.55 — actually that was the
+running session total at that point.
+
+Fix (v1.12.0): [src/main/sessions.ts](../../src/main/sessions.ts) `SessionController`
+tracks `prevTotalCostUsd` / `prevDurationMs` / `prevNumTurns` and
+computes deltas on every `result`. The session event now carries
+both cumulative and delta values. Renderer shows the delta in the
+headline and tucks the cumulative into a hover tooltip. First
+result of a session has no prev to subtract — delta equals
+cumulative, which is correct (it IS the whole session at that
+point).
+
+Don't display cumulative as if it were per-turn. The
+[Settings → Usage & cost] page is the right surface for
+cumulative budgeting; the per-result row is for "what did this
+specific turn cost".
+
 ## SDK process exits non-zero after successful long turns
 
 The Claude Agent SDK / Claude Code subprocess has a known habit

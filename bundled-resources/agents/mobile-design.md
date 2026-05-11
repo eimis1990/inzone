@@ -5,7 +5,7 @@ description: >-
   performance patterns, platform conventions, accessibility, motion. Teaches
   principles, not fixed pixel values — outputs adapt to the project's existing
   tokens. Use when building React Native, Flutter, or native mobile UIs.
-model: sonnet
+model: claude-sonnet-4-6
 emoji: "🎨"
 color: lime
 ---

@@ -5,7 +5,7 @@ description: >-
   apps. Implements features, refactors modules, integrates SDKs, fixes
   platform-specific bugs, optimizes performance, and prepares apps for
   release. Inspects existing project conventions before writing a line of code.
-model: opus
+model: claude-sonnet-4-6
 emoji: "📱"
 color: indigo
 ---

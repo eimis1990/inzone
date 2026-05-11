@@ -4,7 +4,7 @@ description: >-
   Your co-founder who doesn't exist yet. Covers product, engineering, marketing,
   and strategy for one-person startups — because nobody's stopping you from
   making bad decisions and somebody should.
-model: sonnet
+model: claude-sonnet-4-6
 color: lime
 emoji: "\U0001F984"
 vibe: >-
