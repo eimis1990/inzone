@@ -4,6 +4,40 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] — Unreleased
+
+### Added
+
+- **Printing Press worker preset.** Drop the new "Printing Press"
+  card onto a pane to launch
+  [VoltAgent / Matt Van Horn's Printing Press](https://printingpress.dev/)
+  in a terminal. From there you can browse and install agent-native
+  CLIs (Linear, Stripe, Shopify, Notion, Slack, plus dozens of
+  others in the library), or use the Press generator to mint a new
+  CLI + skill + MCP server for any API. Pairs naturally with
+  INZONE's agent runner — each Press-printed CLI is designed to be
+  driven by an LLM, with terse output, compound commands, and a
+  local SQLite mirror that beats remote API calls.
+
+### Fixed
+
+- **"Session ended in an error" no longer appears after a
+  successful long turn.** The Claude Agent SDK has a known pattern
+  where the Claude Code subprocess exits non-zero during cleanup
+  after a long multi-turn task, even though the user's actual
+  request finished cleanly. Symptoms: a green SUCCESS result
+  block, immediately followed by a red ERROR_DURING_EXECUTION
+  block (0 turns, $0, 0 ms) and a red "Session ended in an error"
+  banner — most jarring in Lead-mode sub-agents where the Lead has
+  already reported success to the user. INZONE now recognises this
+  specific pattern: it suppresses the zero-stat error-during-
+  execution stub, and when the iterable then throws with an exit
+  code message it emits a soft 'stopped' status instead of the
+  scary 'error' one. The underlying SDK / CLI exit is still logged
+  to the main-process console for diagnostics. Real mid-turn
+  errors (auth failures, connection drops, etc.) are unaffected
+  and still show the recovery banner.
+
 ## [1.11.1] — 2026-05-10
 
 ### Added

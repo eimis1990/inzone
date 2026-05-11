@@ -148,6 +148,16 @@ export class SessionController implements IAgentSession {
   private abort = new AbortController();
   private sessionId: string | undefined;
   private pumpPromise: Promise<void> | undefined;
+  /**
+   * True between a successful `result` arriving and the next
+   * `user` message being sent. Used to recognise the SDK's
+   * "process exited after a successful turn" pattern: success
+   * result → zero-stat error_during_execution result → CLI
+   * process crash. When that pattern lands, the second result
+   * is noise (no turns/cost/duration) and the iterable throw
+   * that follows is not a user-facing error — the work was done.
+   */
+  private lastTurnWasSuccess = false;
   private queryHandle: AsyncIterable<unknown> & {
     interrupt?: () => Promise<void>;
   } | undefined;
@@ -390,12 +400,46 @@ export class SessionController implements IAgentSession {
       });
     } catch (err) {
       this.pumpDone = true;
-      this.emit({
-        kind: 'status',
-        paneId: this.paneId,
-        status: 'error',
-        error: err instanceof Error ? err.message : String(err),
-      });
+      // Distinguish two failure modes:
+      //
+      //  1. The SDK / Claude Code process crashed AFTER a successful
+      //     turn finished. Common pattern: long multi-turn task ends
+      //     with subtype='success', then the CLI subprocess exits 1
+      //     during cleanup, the SDK iterable throws "Claude Code
+      //     process exited with code 1". The user got their answer —
+      //     surfacing this as a red "Session ended in an error"
+      //     banner contradicts the result that's still in the
+      //     transcript above it. Especially confusing for Lead-mode
+      //     sub-agents where the Lead has already reported success.
+      //
+      //  2. A real mid-turn error: connection drop, auth failure,
+      //     model error, etc. The iterable throws BEFORE we get a
+      //     terminal 'success' result. This one IS a user-facing
+      //     error and needs the recovery banner.
+      //
+      // We track `lastTurnWasSuccess` in dispatch — if it's true at
+      // throw time, we emit a soft 'stopped' so the user can keep
+      // working without a scary banner. The error message is still
+      // logged for our own debugging.
+      const errMessage = err instanceof Error ? err.message : String(err);
+      if (this.lastTurnWasSuccess) {
+        console.warn(
+          `[session] pane=${this.paneId} SDK process exited cleanly ` +
+            `after a successful turn (treating as 'stopped'): ${errMessage}`,
+        );
+        this.emit({
+          kind: 'status',
+          paneId: this.paneId,
+          status: 'stopped',
+        });
+      } else {
+        this.emit({
+          kind: 'status',
+          paneId: this.paneId,
+          status: 'error',
+          error: errMessage,
+        });
+      }
     }
   }
 
@@ -459,10 +503,38 @@ export class SessionController implements IAgentSession {
         break;
       }
       case 'result': {
+        const subtype = msg.subtype ?? 'unknown';
+        // Suppress the SDK's "post-success error stub" — a second
+        // result with subtype='error_during_execution' and zero
+        // duration / cost / turns that arrives right after a real
+        // success. It's the SDK telling us the CLI process is about
+        // to crash on cleanup; the next iteration of the for-await
+        // will throw and we handle that in `pump`. Forwarding this
+        // stub to the transcript would render a red ERROR_DURING_
+        // EXECUTION block that contradicts the green SUCCESS block
+        // immediately above it — see the conversation trace for the
+        // Lead-mode sub-agent case where this is most jarring.
+        const isPostSuccessStub =
+          this.lastTurnWasSuccess &&
+          subtype === 'error_during_execution' &&
+          !msg.duration_ms &&
+          !msg.total_cost_usd &&
+          !msg.num_turns;
+        if (isPostSuccessStub) {
+          console.warn(
+            `[session] pane=${this.paneId} suppressed post-success ` +
+              `error_during_execution stub (zero stats)`,
+          );
+          break;
+        }
+        // Track for the pump's catch-handler heuristic. A non-stub
+        // error result resets it — we're back in "any later throw
+        // is a real error" territory.
+        this.lastTurnWasSuccess = subtype === 'success';
         const event: SessionEvent = {
           kind: 'result',
           paneId: this.paneId,
-          subtype: msg.subtype ?? 'unknown',
+          subtype,
           sessionId: msg.session_id,
           durationMs: msg.duration_ms,
           totalCostUsd: msg.total_cost_usd,
@@ -534,6 +606,10 @@ export class SessionController implements IAgentSession {
       });
       return;
     }
+    // Clear the post-success heuristic — we're starting a new turn,
+    // so any error that bubbles out is a real new-turn error, not a
+    // stale "process crashed after success" carry-over.
+    this.lastTurnWasSuccess = false;
 
     // Emit + persist the user turn locally.
     const event: SessionEvent = {

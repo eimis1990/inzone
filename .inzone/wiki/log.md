@@ -48,6 +48,29 @@ context regardless of in-pane z-index. Fix: portal the menu to
 (agent panes) and TerminalPaneMenu (terminal panes). Updated
 [[gotchas]].
 
+## [2026-05-10] edit | Printing Press preset + post-success error fix
+
+Two things bundled into v1.12.0.
+
+1. New Worker preset for Printing Press (printingpress.dev). Drop
+   on a pane → `npx -y @mvanhorn/printing-press` launches. This
+   is "Path A" of three possible integrations evaluated: lowest-
+   cost surface that exposes the tool without vouching for any
+   specific library entry. Path B (curating individual Press
+   skills as Recommended Skills) and Path C (wrapping the Press
+   generator inside INZONE directly) deferred until we see
+   adoption.
+
+2. Fix for the "ERROR_DURING_EXECUTION after success" UX bug.
+   SDK emits a zero-stat error_during_execution result + then
+   throws "Claude Code process exited with code 1" during
+   cleanup after long successful turns. We now suppress the
+   stub at dispatch time and downgrade the iterable throw to a
+   soft 'stopped' status (no recovery banner) when the previous
+   turn was a success. Filed full gotcha under
+   [[gotchas]] (`SDK process exits non-zero after successful
+   long turns`).
+
 ## [2026-05-10] edit | default agents on fresh session + Lead mode
 
 Added `DEFAULT_FIRST_PANE_AGENT` (`fullstack-developer`) and

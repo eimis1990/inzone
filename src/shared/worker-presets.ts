@@ -17,6 +17,7 @@ export type WorkerPresetId =
   | 'claude-code'
   | 'codex'
   | 'gemini'
+  | 'printing-press'
   | 'terminal';
 
 export interface WorkerPreset {
@@ -84,6 +85,17 @@ export const WORKER_PRESETS: WorkerPreset[] = [
     command: 'gemini',
   },
   {
+    id: 'printing-press',
+    name: 'Printing Press',
+    description: 'Mint agent-native CLIs for any API.',
+    // Use npx with -y so the launcher is non-interactive — the
+    // user can browse the library, install entries, and run them
+    // without first installing the Press globally. Falls back to
+    // a real shell when the Press exits, same as our other CLI
+    // presets.
+    command: 'npx -y @mvanhorn/printing-press',
+  },
+  {
     id: 'terminal',
     name: 'Terminal',
     description: 'Plain shell in the project folder.',
@@ -144,6 +156,11 @@ export function installCommandFor(
     case 'gemini':
       // Google's Gemini CLI is also on npm.
       return 'npm install -g @google/gemini-cli';
+    case 'printing-press':
+      // Printing Press is on npm too — `npx -y @mvanhorn/printing-press`
+      // also works without installing globally, but a global install
+      // makes repeated invocations faster (no per-call npx resolve).
+      return 'npm install -g @mvanhorn/printing-press';
     default:
       return undefined;
   }

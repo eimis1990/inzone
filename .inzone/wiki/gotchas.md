@@ -217,6 +217,40 @@ always succeed at writing the new home before clearing the old.
 Order matters: write-new → verify → delete-old. Never the other
 way around.
 
+## SDK process exits non-zero after successful long turns
+
+The Claude Agent SDK / Claude Code subprocess has a known habit
+of exiting with code 1 during cleanup AFTER a long successful
+turn finishes. The wire pattern looks like:
+
+```
+{ type: 'result', subtype: 'success', duration_ms: 465900,
+  total_cost_usd: 1.84, num_turns: 28, ... }
+{ type: 'result', subtype: 'error_during_execution',
+  duration_ms: 0, total_cost_usd: 0, num_turns: 0 }
+// iterator then throws: "Claude Code process exited with code 1"
+```
+
+Three artefacts hit the UI if you forward all of that naively:
+the success block (correct), a contradictory zero-stat error
+block, and a red "Session ended in an error" banner from the
+catch handler. Especially confusing in Lead-mode sub-agents
+because the Lead has already reported success.
+
+Fix (v1.12.0): in [src/main/sessions.ts](../../src/main/sessions.ts) the controller
+tracks `lastTurnWasSuccess`. When a zero-stat
+error_during_execution arrives while that flag is set, we
+suppress the dispatch. When the iterable then throws with the
+flag still set, we emit a 'stopped' status instead of 'error',
+sparing the user the recovery banner for a turn that actually
+succeeded. The next user-send clears the flag so legit new-turn
+errors still surface.
+
+Don't suppress non-zero-stat errors. A real `error_during_
+execution` with actual `duration_ms` / `num_turns` is a turn
+that genuinely errored mid-flight (auth dropped, model error,
+context window blown) — that DOES need the banner.
+
 ## Not every recommended-skill repo ships a SKILL.md
 
 The original install logic assumed every recommended-skill repo
