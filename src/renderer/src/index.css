@@ -4081,6 +4081,45 @@ code.voice-tool-card-value {
   letter-spacing: 0.04em;
   margin-bottom: 4px;
 }
+/* Variant that hosts the role label PLUS right-aligned badges (e.g. the
+   Caveman experiment badge). Keeps the base font weight + letterspacing
+   of `.msg-role` so the "CLAUDE" label sits unchanged on the left. */
+.msg .msg-role.msg-role-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.msg .msg-caveman-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* Drop the uppercase / letterspacing the parent .msg-role applies so
+     the badge text reads as a regular small label rather than another
+     CLAUDE-style header. */
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px 2px 6px;
+  border-radius: 999px;
+  /* Quiet accent-tinted pill — picks up the per-pane accent so multiple
+     panes don't all look identical. */
+  background: color-mix(in srgb, var(--pane-accent, var(--accent)) 18%, transparent);
+  color: color-mix(in srgb, var(--pane-accent, var(--accent)) 75%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--pane-accent, var(--accent)) 35%, transparent);
+  /* Defensive: keep the badge from stretching the row on very narrow
+     panes — let it shrink before the label does. */
+  flex-shrink: 0;
+}
+.msg .msg-caveman-badge svg {
+  /* The icon inherits color from the badge text via fill="currentColor". */
+  opacity: 0.85;
+}
+.msg .msg-caveman-badge-text {
+  /* Slight letter-spacing for a more deliberate, "tag"-like feel. */
+  letter-spacing: 0.02em;
+}
 .msg .msg-body {
   white-space: pre-wrap;
   word-break: break-word;

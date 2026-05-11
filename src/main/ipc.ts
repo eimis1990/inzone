@@ -131,6 +131,10 @@ import {
   saveEditorPreferences,
 } from './editor-prefs';
 import {
+  getCavemanSettings,
+  saveCavemanSettings,
+} from './caveman-prefs';
+import {
   killTerminal,
   resizeTerminal,
   spawnTerminal,
@@ -144,6 +148,7 @@ import {
 } from './terminal-shortcuts';
 import type { TerminalShortcut } from '@shared/types';
 import type {
+  CavemanSettings,
   EditorPreferences,
   McpScope,
   McpServerConfig,
@@ -808,6 +813,30 @@ export function registerIpcHandlers(): void {
       for (const win of BrowserWindow.getAllWindows()) {
         try {
           win.webContents.send(IPC.EDITOR_PREFS_CHANGED, next);
+        } catch {
+          // window may be tearing down; broadcasts are best-effort
+        }
+      }
+      return { ok: true as const };
+    },
+  );
+
+  // -- Caveman mode (Settings → Experiments) --------------------------------
+  // Opt-in token-compression directive that the session controller
+  // prepends to every agent's system prompt. Save broadcasts so a flip
+  // in one window updates the toggle UI in others — the effect on
+  // running agents lands on their *next* session:start (SDK doesn't
+  // refresh system prompts mid-session). See caveman-prefs.ts for the
+  // intensity-to-prompt mapping.
+  ipcMain.handle(IPC.CAVEMAN_GET, async () => getCavemanSettings());
+  ipcMain.handle(
+    IPC.CAVEMAN_SAVE,
+    async (_e, prefs: CavemanSettings) => {
+      saveCavemanSettings(prefs);
+      const next = getCavemanSettings();
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          win.webContents.send(IPC.CAVEMAN_CHANGED, next);
         } catch {
           // window may be tearing down; broadcasts are best-effort
         }

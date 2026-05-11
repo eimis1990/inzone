@@ -2,6 +2,10 @@ import { memo } from 'react';
 import type { PaneId } from '@shared/types';
 import type { ChatItem } from '../store';
 import { useRenderCount } from '../perf/useRenderCount';
+import {
+  formatCavemanLevel,
+  useCavemanSettings,
+} from '../hooks/useCavemanSettings';
 import { Markdown } from './Markdown';
 import { AskUserQuestionForm } from './AskUserQuestionForm';
 
@@ -55,12 +59,7 @@ function MessageViewImpl({ item, paneId }: Props) {
         </div>
       );
     case 'assistant_text':
-      return (
-        <div className="msg assistant">
-          <div className="msg-role">Claude</div>
-          <Markdown text={item.text} />
-        </div>
-      );
+      return <AssistantMessage text={item.text} />;
     case 'tool_block':
       return <ToolBlock item={item} />;
     case 'tool_use':
@@ -194,6 +193,60 @@ function areMessagePropsEqual(prev: Props, next: Props): boolean {
 }
 
 export const MessageView = memo(MessageViewImpl, areMessagePropsEqual);
+
+/**
+ * One assistant message bubble. Split out from MessageViewImpl so we
+ * can call `useCavemanSettings()` without making the hook fire on
+ * every chat-item kind (the parent switch would force it through
+ * tool_block / result / user branches too, which is fine for React
+ * but adds a subscription per item — this way only assistant bubbles
+ * subscribe).
+ *
+ * Renders a small "Caveman" badge in the top-right of the role row
+ * when the user has the experiment enabled. Hovering the badge shows
+ * the active intensity in the tooltip so they can confirm what's
+ * applied without opening Settings.
+ */
+function AssistantMessage({ text }: { text: string }) {
+  const caveman = useCavemanSettings();
+  return (
+    <div className="msg assistant">
+      <div className="msg-role msg-role-row">
+        <span>Claude</span>
+        {caveman.enabled && (
+          <span
+            className="msg-caveman-badge"
+            title={`Caveman mode · ${formatCavemanLevel(caveman.level)} · toggle in Settings → Experiments`}
+          >
+            <CavemanBadgeIcon />
+            <span className="msg-caveman-badge-text">Caveman</span>
+          </span>
+        )}
+      </div>
+      <Markdown text={text} />
+    </div>
+  );
+}
+
+/**
+ * Tiny club icon for the Caveman badge. ~10px so it sits visually
+ * level with the uppercase "CLAUDE" label without dragging the row
+ * height.
+ */
+function CavemanBadgeIcon() {
+  return (
+    <svg
+      width={10}
+      height={10}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      {/* Caveman club — wide head on top, narrow handle below */}
+      <path d="M14 2c-3.5 0-6 2.5-6 6 0 1.7.6 3.2 1.6 4.3l-7 7a2 2 0 1 0 2.8 2.8l7-7c1.1 1 2.6 1.6 4.3 1.6 3.5 0 6-2.5 6-6 0-3.6-3.2-8.7-8.7-8.7z" />
+    </svg>
+  );
+}
 
 /**
  * Collapsible tool call: shows just the tool name + a short preview of

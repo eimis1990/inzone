@@ -57,6 +57,16 @@ export const IPC = {
   EDITOR_PREFS_SAVE: 'editorPrefs:save',
   EDITOR_PREFS_CHANGED: 'editorPrefs:changed', // main -> renderer push
 
+  // Caveman mode — opt-in token-compression layer (Settings → Experiments).
+  // Read/written via a dedicated electron-store JSON so it survives nukes
+  // of the main app state. Saves broadcast `caveman:changed` so a flip in
+  // one INZONE window updates UI in others; the effect on agent sessions
+  // applies on the next `session:start` (we don't hot-mutate live sessions
+  // because the SDK doesn't refresh system prompts on already-running turns).
+  CAVEMAN_GET: 'caveman:get',
+  CAVEMAN_SAVE: 'caveman:save',
+  CAVEMAN_CHANGED: 'caveman:changed', // main -> renderer push
+
   // Terminal (PTY) — bottom-bar shell
   TERM_SPAWN: 'term:spawn',
   TERM_INPUT: 'term:input',

@@ -32,6 +32,7 @@ import type {
   TerminalShortcut,
   TranscriptEntry,
   UsageSummary,
+  CavemanSettings,
   EditorPreferences,
   VoiceSettings,
   WindowState,
@@ -517,6 +518,22 @@ const api: CoworkApi = {
       ipcRenderer.on(IPC.EDITOR_PREFS_CHANGED, handler);
       return () =>
         ipcRenderer.removeListener(IPC.EDITOR_PREFS_CHANGED, handler);
+    },
+  },
+  caveman: {
+    get: (): Promise<CavemanSettings> =>
+      ipcRenderer.invoke(IPC.CAVEMAN_GET),
+    save: (prefs: CavemanSettings): Promise<{ ok: true }> =>
+      ipcRenderer.invoke(IPC.CAVEMAN_SAVE, prefs),
+    /** Subscribe to live change events fired by other windows so the
+     *  Experiments toggle UI stays in sync. Returns an unsubscribe
+     *  function. */
+    onChanged: (listener: (prefs: CavemanSettings) => void) => {
+      const handler = (_e: unknown, prefs: CavemanSettings) =>
+        listener(prefs);
+      ipcRenderer.on(IPC.CAVEMAN_CHANGED, handler);
+      return () =>
+        ipcRenderer.removeListener(IPC.CAVEMAN_CHANGED, handler);
     },
   },
   terminal: {

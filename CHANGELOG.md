@@ -4,6 +4,43 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] — 2026-05-11
+
+### Added
+
+- **Caveman mode** in a new **Settings → Experiments** tab. Opt-in
+  token-compression directive derived from
+  [`JuliusBrussee/caveman`](https://github.com/JuliusBrussee/caveman)
+  that prepends an intensity-aware instruction block to every
+  agent's system prompt at session start — typically cutting
+  **~65–75%** of natural-language tokens in assistant text. Off by
+  default. Six intensity levels (lite / full / ultra plus three
+  classical-Chinese `wenyan-*` variants) and a global on/off
+  switch. Code blocks, file paths, identifiers, error messages,
+  commit messages, and PR text are explicitly preserved at every
+  level — compression is presentation-only and never changes
+  agent behaviour.
+- **Assistant messages render a "Caveman" badge** in the top-right
+  of the role row when the experiment is active. Hover for the
+  active intensity. Picks up the per-pane accent color so multiple
+  panes don't look identical. Disappears the moment the toggle is
+  flipped off — no reload needed.
+- **Bundled caveman skill** at
+  `bundled-resources/skills/caveman/SKILL.md`. Auto-installs to
+  `~/.claude/skills/caveman/` on next launch via the existing
+  starter-library copy, so individual agents can opt-in via their
+  frontmatter `skills:` list independently of the global toggle.
+- **New `experiments` Settings section** with its own nav entry +
+  flask icon, future home for other opt-in features.
+
+### Notes
+
+- Caveman applies to **new** sessions only. Already-running panes
+  keep their current system prompt because the Claude Agent SDK
+  doesn't refresh prompts on in-flight turns — click "Clear
+  session" in the pane menu to force a fresh start with the new
+  setting.
+
 ## [1.12.2] — 2026-05-11
 
 ### Changed

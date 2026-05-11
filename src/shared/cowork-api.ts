@@ -2,6 +2,7 @@ import type {
   AgentDef,
   AgentDraft,
   AppState,
+  CavemanSettings,
   McpProbeResult,
   McpScope,
   McpServerConfig,
@@ -567,6 +568,19 @@ export interface CoworkApi {
     save(prefs: EditorPreferences): Promise<{ ok: true }>;
     /** Subscribe to changes. Returns an unsubscribe function. */
     onChanged(listener: (prefs: EditorPreferences) => void): () => void;
+  };
+  caveman: {
+    /** Read the current caveman-mode settings (enabled + level). */
+    get(): Promise<CavemanSettings>;
+    /** Persist settings. Triggers an `onChanged` broadcast to every
+     *  open INZONE window so the Experiments toggle stays in sync.
+     *  Effect on agent system prompts applies to the *next*
+     *  session start — already-running sessions keep their current
+     *  prompt because the SDK doesn't re-inject system prompts on
+     *  in-flight turns. */
+    save(prefs: CavemanSettings): Promise<{ ok: true }>;
+    /** Subscribe to changes. Returns an unsubscribe function. */
+    onChanged(listener: (prefs: CavemanSettings) => void): () => void;
   };
   terminal: {
     spawn(args: {

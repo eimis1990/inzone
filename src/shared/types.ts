@@ -547,6 +547,37 @@ export interface EditorPreferences {
 }
 
 /**
+ * Caveman mode — opt-in token-compression layer that prepends the
+ * [caveman](https://github.com/JuliusBrussee/caveman) compression rules
+ * to every agent's system prompt. Cuts ~65–75% of natural-language
+ * tokens by stripping articles, filler, pleasantries, and hedging,
+ * while leaving code blocks, file paths, and error messages untouched.
+ *
+ * The level controls intensity:
+ *  - `lite`  : drop pleasantries + worst filler only; readable prose
+ *  - `full`  : the canonical caveman mode (default)
+ *  - `ultra` : maximum compression — telegraphic fragments only
+ *  - `wenyan-lite` / `wenyan-full` / `wenyan-ultra` : classical
+ *    Chinese (文言) literary compression for users who want
+ *    information density beyond English fragments
+ */
+export type CavemanLevel =
+  | 'lite'
+  | 'full'
+  | 'ultra'
+  | 'wenyan-lite'
+  | 'wenyan-full'
+  | 'wenyan-ultra';
+
+export interface CavemanSettings {
+  /** Global on/off. When false, no injection happens — agents behave
+   *  exactly as before. Default-off. */
+  enabled?: boolean;
+  /** Intensity. Defaults to `full` (canonical caveman). */
+  level?: CavemanLevel;
+}
+
+/**
  * Voice agent settings. Stored locally; the API key only ever leaves the
  * machine to mint a signed URL with ElevenLabs's REST API at session
  * start. Empty values disable the voice section.

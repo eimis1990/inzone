@@ -11,4 +11,5 @@ export type SettingsSection =
   | 'usage'
   | 'workspaces'
   | 'shortcuts'
+  | 'experiments'
   | 'about';

@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { AboutSection } from './settings/AboutSection';
 import { AgentsSection } from './settings/AgentsSection';
 import { EditorSection } from './settings/EditorSection';
+import { ExperimentsSection } from './settings/ExperimentsSection';
 import { McpServersSection } from './settings/McpServersSection';
 import { MemorySection } from './settings/MemorySection';
 import { ProfileSection } from './settings/ProfileSection';
@@ -92,6 +93,12 @@ const SECTIONS: SectionEntry[] = [
     label: 'Shortcuts',
     hint: 'Keyboard',
     icon: () => <KeyboardIcon />,
+  },
+  {
+    id: 'experiments',
+    label: 'Experiments',
+    hint: 'Opt-in features',
+    icon: () => <FlaskIcon />,
   },
   {
     id: 'about',
@@ -202,6 +209,7 @@ export function SettingsDrawer({
           {section === 'usage' && <UsageSection />}
           {section === 'workspaces' && <WorkspacesSection />}
           {section === 'shortcuts' && <ShortcutsSection />}
+          {section === 'experiments' && <ExperimentsSection />}
           {section === 'about' && <AboutSection />}
         </main>
       </aside>
@@ -409,6 +417,29 @@ function PencilIcon() {
     >
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </svg>
+  );
+}
+
+function FlaskIcon() {
+  // Erlenmeyer flask — visually distinct from the other Settings
+  // icons (most of which are square/grid-like). Reads as "lab /
+  // experiment" even at 16px.
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9 3h6" />
+      <path d="M10 3v6L4.5 19A2 2 0 0 0 6.2 22h11.6a2 2 0 0 0 1.7-3L14 9V3" />
+      <path d="M7 15h10" />
     </svg>
   );
 }

@@ -14,6 +14,7 @@ import type { IAgentSession, SessionEmit } from './providers/types';
 import { loadSessionState, saveSessionState } from './session-store';
 import { buildSdkMcpMap } from './mcp-config';
 import { buildWikiContextBlock } from './wiki';
+import { buildCavemanPrompt, getCavemanSettings } from './caveman-prefs';
 
 // The SDK's concrete message types are elaborate and versioned; we treat
 // incoming messages as unknown and inspect the minimal fields we need.
@@ -242,6 +243,15 @@ export class SessionController implements IAgentSession {
     // exactly as before — wiki context is opt-in per project.
     const wikiBlock = await buildWikiContextBlock(params.cwd);
 
+    // Settings → Experiments → Caveman mode. When the user has the
+    // global toggle on, prepend a level-appropriate compression
+    // directive so the agent shrinks natural-language output from
+    // turn 1. Returns '' when the toggle is off, so this is a free
+    // no-op for users who haven't opted in. Read each session-start
+    // (not cached) so flipping the toggle in Settings affects new
+    // sessions immediately without an app restart.
+    const cavemanBlock = buildCavemanPrompt(getCavemanSettings());
+
     const systemAppend = [
       leadExtras?.leadPrompt,
       agent.body,
@@ -249,6 +259,14 @@ export class SessionController implements IAgentSession {
       memoryBlock,
       wikiBlock,
       coordination,
+      // Caveman lands LAST so it's the freshest instruction in the
+      // model's context — sits closer to the user turn than the
+      // earlier blocks and is therefore most likely to "win" any
+      // tonal conflict with the agent's own body prompt. Boundary
+      // rules inside the block (code/paths/error messages stay
+      // normal) keep this safe alongside coordination's "announce
+      // paths relative to workspace" guidance.
+      cavemanBlock,
     ]
       .filter((s): s is string => !!s && s.trim().length > 0)
       .join('\n\n---\n\n');

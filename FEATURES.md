@@ -250,6 +250,23 @@ memory files that get injected into agent system prompts. Editable
 from Settings → CLAUDE.md. Set the scope per project: project only,
 global only, both, or none.
 
+### Caveman Mode (Experimental)
+Opt-in token-compression layer in Settings → Experiments. When
+enabled, every new agent session starts with a system-prompt
+addendum derived from
+[JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
+that asks the model to drop articles, filler, pleasantries, and
+hedging from its natural-language output — typically cutting
+~65–75% of tokens in assistant text. Six intensity levels (lite,
+full, ultra, plus three classical-Chinese `wenyan-*` modes) and a
+single global on/off switch. Code blocks, file paths, identifiers,
+error messages, commit text, and PR descriptions are preserved at
+every level. Assistant messages display a small "Caveman" badge in
+the top-right of the role row whenever the mode is active, so
+there's never ambiguity about why output looks terse. The full
+caveman skill is also bundled at `~/.claude/skills/caveman/` for
+per-agent opt-in via frontmatter.
+
 ### AskUserQuestion Tool
 Built-in MCP tool that lets agents present a structured multi-choice
 question to the user instead of guessing or asking ambiguously in
