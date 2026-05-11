@@ -105,23 +105,57 @@ export async function installRecommendedSkill(
       };
     }
 
-    // Sanity-check the source has a SKILL.md — Claude Code's skill
-    // contract requires it. If missing, the install would create an
-    // unrecognised folder.
+    // Two install modes:
+    //  A) Source ships a SKILL.md → copy as-is (the original "this is
+    //     a pre-packaged Claude skill" path).
+    //  B) Source doesn't ship SKILL.md but the recommended-skill
+    //     entry provides a `generateSkillMd` config → copy the
+    //     resources + write a generated SKILL.md wrapper at the
+    //     target root. This is how raw-resource repos (DESIGN.md
+    //     collections, template libraries) become navigable Claude
+    //     skills without forking upstream.
+    //  C) Neither → error.
+    let sourceHasSkillMd = false;
     try {
       await fs.access(path.join(sourceDir, 'SKILL.md'));
+      sourceHasSkillMd = true;
     } catch {
+      /* not present — fall back to generation if configured */
+    }
+
+    if (!sourceHasSkillMd && !skill.generateSkillMd) {
       return {
         ok: false,
         error:
-          'The cloned skill is missing a SKILL.md at its root. INZONE expects every skill folder to start with one.',
+          'The cloned skill is missing a SKILL.md at its root, and no SKILL.md generator was configured for this entry. INZONE expects every skill folder to start with one.',
       };
     }
 
-    // Copy into ~/.claude/skills/<installAs>/, preserving any files
-    // the user already has. We DO NOT clobber — collisions skip.
+    // Copy the source tree into ~/.claude/skills/<installAs>/,
+    // preserving any files the user already has. We DO NOT clobber —
+    // collisions skip.
     await fs.mkdir(targetDir, { recursive: true });
     await copyRecursivePreserving(sourceDir, targetDir);
+
+    // Generate the SKILL.md wrapper if needed. Done AFTER the copy
+    // so that if the user already has a SKILL.md in the target
+    // (manual customisation), copyRecursivePreserving has already
+    // kept it and we'd skip writing over it here too.
+    if (!sourceHasSkillMd && skill.generateSkillMd) {
+      const skillMdPath = path.join(targetDir, 'SKILL.md');
+      try {
+        await fs.access(skillMdPath);
+        // user already has one — leave it alone
+      } catch {
+        const name =
+          skill.generateSkillMd.name ?? skill.installAs ?? skill.id;
+        const description =
+          skill.generateSkillMd.description ?? skill.description;
+        const content =
+          buildGeneratedSkillMd(name, description, skill.generateSkillMd.body);
+        await fs.writeFile(skillMdPath, content, 'utf8');
+      }
+    }
 
     return { ok: true, alreadyInstalled: false, installedAt: targetDir };
   } finally {
@@ -158,6 +192,44 @@ async function copyRecursivePreserving(
       }
     }
   }
+}
+
+/**
+ * Build the SKILL.md content for raw-resource repos that don't ship
+ * one. Frontmatter follows the Claude Code skill format that the
+ * SDK reads — `name` and `description` are the two fields surfaced
+ * to other agents at skill-list time.
+ *
+ * The description goes through `escapeYamlScalar` because skill
+ * descriptions tend to contain colons and commas that YAML would
+ * otherwise interpret as structure rather than text.
+ */
+function buildGeneratedSkillMd(
+  name: string,
+  description: string,
+  body: string,
+): string {
+  return [
+    '---',
+    `name: ${name}`,
+    `description: ${escapeYamlScalar(description)}`,
+    '---',
+    '',
+    body.endsWith('\n') ? body : body + '\n',
+  ].join('\n');
+}
+
+/** Quote-and-escape a scalar so YAML always parses it as a single
+ *  string, even when it contains colons, commas, special characters,
+ *  or starts with reserved chars. Single quotes are used (YAML
+ *  doesn't interpret escapes in single-quoted scalars, except `''`
+ *  for a literal single quote). */
+function escapeYamlScalar(value: string): string {
+  // Replace any embedded single quote with the YAML-escaped form (''),
+  // collapse newlines to spaces (descriptions should be one line),
+  // and wrap.
+  const safe = value.replace(/\r?\n/g, ' ').replace(/'/g, "''");
+  return `'${safe}'`;
 }
 
 /** Tiny git runner. Spawns + collects stdout/stderr; rejects on

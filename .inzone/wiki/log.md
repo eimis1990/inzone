@@ -48,6 +48,42 @@ context regardless of in-pane z-index. Fix: portal the menu to
 (agent panes) and TerminalPaneMenu (terminal panes). Updated
 [[gotchas]].
 
+## [2026-05-10] edit | default agents on fresh session + Lead mode
+
+Added `DEFAULT_FIRST_PANE_AGENT` (`fullstack-developer`) and
+`DEFAULT_LEAD_AGENT` (`lead-users-agent`) constants at the top of
+[store.ts](../../src/renderer/src/store.ts). Wired into `pickFolder`
+(initial pane on new project) and `setWindowMode` (only when the
+Lead pane is freshly materialised, never overwriting an existing
+binding). Both fall through silently if the user has deleted the
+bundled starter, so we never error on a "missing default".
+
+The `pickFolder` path defends against a race: if `refreshAgents`
+hasn't completed at the moment of folder selection, the find
+returns undefined, so we also kick off `window.cowork.agents.list`
+and retry after it resolves — but only if the pane is still
+empty, so we don't clobber a manual binding the user made in the
+meantime.
+
+## [2026-05-10] edit | fix Awesome Design install + wrap pattern
+
+v1.11.0 shipped, user tried installing the Awesome Design
+recommended skill → install errored with "missing SKILL.md".
+Looked at the actual repo (VoltAgent/awesome-design-md) — it's a
+collection of DESIGN.md files from 30+ websites, no SKILL.md
+anywhere. The original assumption that every recommended-skill
+repo ships a SKILL.md was wrong.
+
+Added `generateSkillMd` field on `RecommendedSkill` so raw-
+resource repos can be wrapped on install with a generated SKILL.md
+that tells Claude how to navigate the bundled content. Updated
+the Awesome Design entry to use the whole repo (preserves MIT
+LICENSE) plus a generated wrapper that points to
+`design-md/<brand>/DESIGN.md`.
+
+Filed [[gotchas]] entry "Not every recommended-skill repo ships a
+SKILL.md" so future entries follow the wrap-it-up pattern.
+
 ## [2026-05-09] edit | v1.11.0 perf pass — memo, coalesce, pause polls
 
 Shipped the four perf wins identified in the audit:

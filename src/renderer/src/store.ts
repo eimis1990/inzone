@@ -27,6 +27,27 @@ import type {
 } from '@shared/types';
 
 /**
+ * Default agents assigned automatically in specific UX moments.
+ *
+ * These names match bundled starter agents that ship with INZONE on
+ * first launch (see bundled-resources/.claude/agents/). If the user
+ * has deleted either one, the default-assignment paths fall through
+ * silently and leave the pane empty — no error.
+ *
+ *  - DEFAULT_FIRST_PANE_AGENT: assigned to the single empty pane on
+ *    a brand-new session (pickFolder for a folder we haven't seen
+ *    before). Gives first-launch users an actionable starting point
+ *    instead of "now pick an agent from the sidebar".
+ *
+ *  - DEFAULT_LEAD_AGENT: assigned to the Lead pane the first time
+ *    the user enters Lead mode in a session (i.e. when the Lead
+ *    pane is freshly materialised, not when re-entering Lead mode
+ *    where the previous binding is preserved).
+ */
+const DEFAULT_FIRST_PANE_AGENT = 'fullstack-developer';
+const DEFAULT_LEAD_AGENT = 'lead-users-agent';
+
+/**
  * Strip Electron's IPC wrapper from a thrown error so the user-facing
  * message is just our friendly text. Errors that bubble out of
  * ipcMain.handle come back to the renderer wrapped like:
@@ -1701,11 +1722,44 @@ export const useStore = create<Store>((set, get) => ({
       activePaneId: id,
       windowMode: 'multi',
       leadPaneId: null,
-  leadPaneName: null,
-          memoryScope: 'project',
+      leadPaneName: null,
+      memoryScope: 'project',
     });
     void get().refreshAgents();
     void get().saveWindow();
+    // Auto-assign DEFAULT_FIRST_PANE_AGENT to the new session's
+    // single pane so first-launch users land with a ready-to-message
+    // agent rather than an empty "pick something from the sidebar"
+    // state. We do this AFTER refreshAgents kicks off so the agent
+    // library is loaded, but we still check the current snapshot for
+    // resilience — refreshAgents is async, and if it hasn't completed
+    // yet (or the user deleted the bundled fullstack-developer), we
+    // fall through silently. setPaneAgent is itself async; firing it
+    // with `void` matches the pattern used elsewhere in this store.
+    const defaultAgent = get().agents.find(
+      (a) => a.name === DEFAULT_FIRST_PANE_AGENT,
+    );
+    if (defaultAgent) {
+      void get().setPaneAgent(id, DEFAULT_FIRST_PANE_AGENT);
+    } else {
+      // Agents may not be loaded yet — re-check once refreshAgents
+      // settles. We re-read the live state, so if the user manually
+      // bound an agent in the brief window before refresh completed,
+      // we don't clobber their choice.
+      void window.cowork.agents
+        .list(folder)
+        .then((agents) => {
+          const stillEmpty =
+            get().panes[id] && !get().panes[id]?.agentName;
+          if (!stillEmpty) return;
+          if (agents.some((a) => a.name === DEFAULT_FIRST_PANE_AGENT)) {
+            void get().setPaneAgent(id, DEFAULT_FIRST_PANE_AGENT);
+          }
+        })
+        .catch(() => {
+          // ignore — non-critical default
+        });
+    }
   },
 
   setActivePane: (id) => set({ activePaneId: id }),
@@ -2859,8 +2913,10 @@ export const useStore = create<Store>((set, get) => ({
       // so the next agent-click in the sidebar assigns the Lead role.
       const { leadPaneId, panes } = get();
       let id = leadPaneId;
+      let materialisedFresh = false;
       if (!id || !panes[id]) {
         id = nanoid(8);
+        materialisedFresh = true;
         set({
           leadPaneId: id,
           panes: {
@@ -2870,6 +2926,21 @@ export const useStore = create<Store>((set, get) => ({
         });
       }
       set({ activePaneId: id });
+      // Auto-assign DEFAULT_LEAD_AGENT to a freshly-created Lead pane
+      // so the user lands ready to send a message rather than having
+      // to pick an agent first. If the user re-enters Lead mode after
+      // toggling to Multi, the previous Lead binding is preserved
+      // (we only fall into this branch on first materialisation).
+      // Falls back silently if the agent doesn't exist (e.g. user
+      // deleted the bundled starter).
+      if (materialisedFresh) {
+        const defaultAgent = get().agents.find(
+          (a) => a.name === DEFAULT_LEAD_AGENT,
+        );
+        if (defaultAgent) {
+          void get().setLeadAgent(DEFAULT_LEAD_AGENT);
+        }
+      }
     }
   },
 

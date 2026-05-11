@@ -217,6 +217,28 @@ always succeed at writing the new home before clearing the old.
 Order matters: write-new → verify → delete-old. Never the other
 way around.
 
+## Not every recommended-skill repo ships a SKILL.md
+
+The original install logic assumed every recommended-skill repo
+shipped a `SKILL.md` at its root (or at `subPath`). It bailed out
+when the file was missing. Reasonable assumption for repos that
+*are* Claude skills — but plenty of useful community repos are
+raw-resource collections (DESIGN.md catalogues, template
+libraries, prompt collections) where the wrapping into a Claude
+skill is INZONE's job, not the source repo's.
+
+Hit this with VoltAgent/awesome-design-md, a collection of
+DESIGN.md files extracted from 30+ real websites. No SKILL.md
+anywhere. Fix (v1.11.1): added a `generateSkillMd` field on
+`RecommendedSkill` — when set, the install flow generates a
+SKILL.md wrapper at the install target's root that tells Claude
+how to navigate the bundled resources. The frontmatter follows
+the Claude Code skill format so the SDK picks it up the same way
+as a hand-authored skill.
+
+Lesson: don't assume external repos conform to a structure you
+control. Always have a "wrap it up for us" escape hatch.
+
 ## `keytar` is a trap
 
 Tempting to reach for `keytar` for secrets, but it's deprecated and

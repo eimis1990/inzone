@@ -4,6 +4,38 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.1] — 2026-05-10
+
+### Added
+
+- **Default agents on first launch / new project.** Opening a fresh
+  project folder now auto-assigns `fullstack-developer` to the
+  initial pane, so first-time users land in a ready-to-message
+  workspace instead of an empty "pick an agent from the sidebar"
+  state. Similarly, the first time you enter Lead mode in a
+  session, the Lead pane auto-binds `lead-users-agent`. Both
+  defaults respect the user — if you've already picked something
+  else (or deleted the bundled starter), the defaults fall through
+  silently and don't clobber your choice. Re-entering Lead mode
+  after toggling back to Multi preserves whatever agent you had
+  bound to the Lead pane, rather than re-defaulting.
+
+### Fixed
+
+- **Awesome Design recommended-skill install no longer errors with
+  "missing SKILL.md".** The VoltAgent/awesome-design-md repo is a
+  collection of DESIGN.md files extracted from real websites
+  (Stripe, Figma, Vercel, Apple, Linear, Cursor, Notion, and 25+
+  more), not a pre-packaged Claude skill — it has no SKILL.md
+  anywhere. Install was checking for one and bailing out. Now the
+  install flow can generate a SKILL.md wrapper for raw-resource
+  repos when the recommended-skill entry provides a
+  `generateSkillMd` config. The generated wrapper tells Claude
+  agents how to navigate `design-md/<brand>/DESIGN.md` based on
+  what brand style the user asks for. The whole repo (including
+  the MIT LICENSE for attribution) is now cloned, not just one
+  subdirectory.
+
 ## [1.11.0] — 2026-05-09
 
 ### Performance
