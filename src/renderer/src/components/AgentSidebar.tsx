@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { getAgentColor } from '@shared/palette';
+import type { PaneId } from '@shared/types';
 import { useRenderCount } from '../perf/useRenderCount';
 import { useStore } from '../store';
 import { SessionsList } from './SessionsList';
@@ -18,7 +19,7 @@ import {
   WORKER_PRESETS,
   WorkerPresetIcon,
 } from './worker-presets';
-import { installCommandFor } from '@shared/worker-presets';
+import { installCommandFor, probeCommandFor } from '@shared/worker-presets';
 
 type SidebarTab = 'sessions' | 'workers' | 'voice' | 'wiki';
 
@@ -264,6 +265,25 @@ function WorkersTab() {
   // through our terminal panel surfaces the success without the user
   // having to switch tabs or restart.
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
+  /**
+   * When the user clicks a not-installed preset on a focused pane,
+   * we kick off the install in the bottom-bar terminal. The user
+   * watches it run, but they shouldn't then have to click the card
+   * again to actually bind it — we remember the intent here so the
+   * `installed`-watcher effect below can finish the job when the
+   * PATH probe flips to true.
+   *
+   * Lives in a ref (not state) so updates don't cause re-renders;
+   * the effect reads it directly. Expires after PENDING_INSTALL_MAX
+   * so a failed install (or a user who walked away) doesn't leave
+   * a stale "auto-assign on next probe true" surprise hours later.
+   */
+  const pendingAssignmentRef = useRef<{
+    paneId: PaneId;
+    presetId: string;
+    probeKey: string;
+    ts: number;
+  } | null>(null);
 
   /**
    * Re-probe the listed commands and merge into `installed`. Returns
@@ -303,11 +323,17 @@ function WorkersTab() {
     [installed],
   );
 
-  // Stable list of all preset commands (skipping empty — Terminal
-  // preset has no command and is always available).
+  // Stable list of all preset *probe* commands — the actual binary
+  // each preset shells out to, not the full command line. For most
+  // presets (claude, codex, aider, gemini) the probe equals the
+  // command. For npx-prefixed presets like Printing Press, this is
+  // `npx` rather than the full `npx -y @mvanhorn/printing-press`,
+  // which would never resolve to a single executable. Empty-command
+  // presets (Terminal) drop out via probeCommandFor returning
+  // undefined.
   const allPresetCommands = useMemo(
     () =>
-      WORKER_PRESETS.map((p) => p.command).filter(
+      WORKER_PRESETS.map((p) => probeCommandFor(p)).filter(
         (c): c is string => !!c,
       ),
     [],
@@ -360,6 +386,39 @@ function WorkersTab() {
       window.removeEventListener('blur', stop);
     };
   }, [installed, allPresetCommands, probe]);
+
+  // Auto-assign after install. When the user kicked off an install
+  // via the click handler we stashed { paneId, presetId, probeKey }
+  // in pendingAssignmentRef. As soon as the polling effect above
+  // sees `installed[probeKey]` flip to true, fire setPaneToTerminal
+  // for the pane the user originally clicked, then clear the intent.
+  // We also expire the intent after PENDING_INSTALL_MAX so a failed
+  // install or a walked-away user doesn't surprise-bind a preset
+  // hours later if they ever do install it.
+  const PENDING_INSTALL_MAX = 5 * 60 * 1000;
+  useEffect(() => {
+    const pending = pendingAssignmentRef.current;
+    if (!pending) return;
+    if (Date.now() - pending.ts > PENDING_INSTALL_MAX) {
+      pendingAssignmentRef.current = null;
+      return;
+    }
+    if (installed[pending.probeKey] !== true) return;
+    // Probe says installed. Confirm the pane still exists (the user
+    // may have closed or repurposed it while waiting) and that no
+    // OTHER worker has been bound to it in the meantime — in either
+    // case the polite move is to drop the intent quietly rather than
+    // override what the user did.
+    const pane = panes[pending.paneId];
+    if (!pane) {
+      pendingAssignmentRef.current = null;
+      return;
+    }
+    const targetPaneId = pending.paneId;
+    const targetPresetId = pending.presetId;
+    pendingAssignmentRef.current = null;
+    void setPaneToTerminal(targetPaneId, targetPresetId);
+  }, [installed, panes, setPaneToTerminal]);
 
   // Section collapse state. Persist in localStorage so the user's
   // chosen layout survives reloads. Default: both expanded — we want
@@ -526,9 +585,14 @@ function WorkersTab() {
               const isActive = activePresetId === preset.id;
               // Plain Terminal has no `command` (it just runs the
               // user's login shell, which is always present), so we
-              // treat it as always-installed.
-              const isInstalled = preset.command
-                ? (installed[preset.command] ?? null)
+              // treat it as always-installed. For everyone else,
+              // we probe the FIRST WORD of the command, not the
+              // full line — `command -v 'npx -y X'` is nonsense.
+              // probeCommandFor handles this; undefined means
+              // "no binary to probe, always available".
+              const probeKey = probeCommandFor(preset);
+              const isInstalled = probeKey
+                ? (installed[probeKey] ?? null)
                 : true;
               const installKnown = isInstalled !== null;
               return (
@@ -565,23 +629,15 @@ function WorkersTab() {
                     // detection here lets the click fall straight
                     // through to setPaneToTerminal.
                     let freshInstalled = isInstalled;
-                    if (
-                      installKnown &&
-                      !isInstalled &&
-                      preset.command
-                    ) {
-                      const fresh = await probe([preset.command]);
-                      freshInstalled = fresh[preset.command] ?? false;
+                    if (installKnown && !isInstalled && probeKey) {
+                      const fresh = await probe([probeKey]);
+                      freshInstalled = fresh[probeKey] ?? false;
                     }
                     // Block missing CLIs — if the underlying command
                     // isn't on PATH, the spawned shell will print
                     // "command not found" and look broken. Better
                     // to surface the install step explicitly.
-                    if (
-                      installKnown &&
-                      !freshInstalled &&
-                      preset.command
-                    ) {
+                    if (installKnown && !freshInstalled && probeKey) {
                       // Pass the host platform so we surface a Windows-
                       // friendly install command when the user is on
                       // Windows (e.g. npm-only tools instead of `brew
@@ -607,17 +663,28 @@ function WorkersTab() {
                         `Run this in the terminal panel?`,
                         `  ${installHint}`,
                         '',
-                        'Press OK to install, or Cancel to dismiss.',
+                        'Press OK to install. INZONE will automatically assign ' +
+                          `${preset.name} to this pane once the install finishes.`,
                       ];
                       const ok = confirm(lines.join('\n'));
                       if (ok) {
+                        // Remember which pane the user wanted this on
+                        // so we can auto-assign as soon as the probe
+                        // flips to true. Without this the user has to
+                        // wait for the install + click the card again
+                        // — friction we promised to remove.
+                        pendingAssignmentRef.current = {
+                          paneId: activePaneId,
+                          presetId: preset.id,
+                          probeKey,
+                          ts: Date.now(),
+                        };
                         // Hand off to the bottom-bar TerminalPanel:
                         // it opens itself, lazy-spawns its PTY if
                         // needed, then types the install command +
                         // Enter. The user watches the install play
-                        // out and can re-click the preset once it's
-                        // done — a fresh PATH probe runs on next
-                        // mount of the Workers tab.
+                        // out; our poll picks up the PATH change and
+                        // fires setPaneToTerminal for them.
                         window.dispatchEvent(
                           new CustomEvent<string>('inzone:terminal-run', {
                             detail: installHint,

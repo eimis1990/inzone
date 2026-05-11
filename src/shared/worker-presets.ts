@@ -17,7 +17,6 @@ export type WorkerPresetId =
   | 'claude-code'
   | 'codex'
   | 'gemini'
-  | 'printing-press'
   | 'terminal';
 
 export interface WorkerPreset {
@@ -34,6 +33,20 @@ export interface WorkerPreset {
    * shell after the CLI exits.
    */
   command: string;
+  /**
+   * Optional override for the install-detection probe.
+   *
+   * By default the install check runs `command -v <first word of
+   * preset.command>`. That works for presets whose `command` is the
+   * actual binary (aider, claude, codex, gemini), and also for
+   * npx-prefixed presets where the first word IS the dependency to
+   * check (`npx`). But when `command` is a multi-step shell script
+   * — e.g. the Printing Press preset prints a welcome banner via
+   * chained `echo`s — the first word (`echo`) is meaningless as a
+   * dependency check; what the user really needs is `npx` or
+   * `node`. Set this field to override.
+   */
+  probeCommand?: string;
 }
 
 /**
@@ -85,17 +98,6 @@ export const WORKER_PRESETS: WorkerPreset[] = [
     command: 'gemini',
   },
   {
-    id: 'printing-press',
-    name: 'Printing Press',
-    description: 'Mint agent-native CLIs for any API.',
-    // Use npx with -y so the launcher is non-interactive — the
-    // user can browse the library, install entries, and run them
-    // without first installing the Press globally. Falls back to
-    // a real shell when the Press exits, same as our other CLI
-    // presets.
-    command: 'npx -y @mvanhorn/printing-press',
-  },
-  {
     id: 'terminal',
     name: 'Terminal',
     description: 'Plain shell in the project folder.',
@@ -109,6 +111,38 @@ export function findWorkerPreset(
 ): WorkerPreset | undefined {
   if (!id) return undefined;
   return WORKER_PRESETS.find((p) => p.id === id);
+}
+
+/**
+ * The binary name we use to detect whether a preset is installed.
+ *
+ * Resolution order:
+ *  1. Explicit `preset.probeCommand` override (for presets whose
+ *     `command` is a script, not a single CLI invocation — e.g.
+ *     the Printing Press preset which prints a welcome banner).
+ *  2. The first whitespace-separated token of `preset.command`.
+ *     For most presets (`aider`, `claude`, `codex`, `gemini`) this
+ *     IS the binary. For npx-prefixed presets it's `npx`, which
+ *     is virtually always present when Node.js is installed.
+ *  3. Returns `undefined` for the plain Terminal preset (empty
+ *     command), which the caller treats as "always available —
+ *     no probe needed".
+ *
+ * Never probes the literal full command line — `command -v 'npx -y
+ * X'` is meaningless because shells look for an executable literally
+ * named "npx -y X" with spaces and all, which never exists. That's
+ * the bug we fixed in v1.12.2.
+ */
+export function probeCommandFor(
+  preset: Pick<WorkerPreset, 'command' | 'probeCommand'>,
+): string | undefined {
+  if (preset.probeCommand && preset.probeCommand.trim().length > 0) {
+    return preset.probeCommand.trim();
+  }
+  if (!preset.command) return undefined;
+  const trimmed = preset.command.trim();
+  if (!trimmed) return undefined;
+  return trimmed.split(/\s+/)[0];
 }
 
 /**
@@ -156,11 +190,6 @@ export function installCommandFor(
     case 'gemini':
       // Google's Gemini CLI is also on npm.
       return 'npm install -g @google/gemini-cli';
-    case 'printing-press':
-      // Printing Press is on npm too — `npx -y @mvanhorn/printing-press`
-      // also works without installing globally, but a global install
-      // makes repeated invocations faster (no per-call npx resolve).
-      return 'npm install -g @mvanhorn/printing-press';
     default:
       return undefined;
   }

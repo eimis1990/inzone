@@ -217,6 +217,62 @@ always succeed at writing the new home before clearing the old.
 Order matters: write-new → verify → delete-old. Never the other
 way around.
 
+## `command -v` on a multi-word command line is meaningless
+
+Worker preset install detection runs `command -v <preset.command>`
+to check if the binary is on PATH. Works fine when `command` IS
+the binary name (`aider`, `claude`, `codex`, `gemini`). Breaks
+silently when `command` is a multi-word invocation like
+`npx -y @mvanhorn/printing-press` — the shell looks for an
+executable literally named "npx -y @mvanhorn/printing-press"
+with spaces and all, which never exists. The preset stays at
+"NOT INSTALLED" forever, regardless of whether the user has
+actually installed anything.
+
+Fix (v1.12.2): added `probeCommandFor(preset)` in
+[src/shared/worker-presets.ts](../../src/shared/worker-presets.ts) that returns the first
+whitespace-separated token of `preset.command`. For single-word
+commands it's a no-op; for npx-prefixed commands it correctly
+returns `npx`. All probe call sites use this helper now.
+
+Don't probe multi-word command lines. Always probe the actual
+binary name. If a preset's CLI requires a separate package +
+the npx-wrapper command-line is just an invocation, the probe
+target is the wrapper command (npx), not the full line.
+
+## electron-updater's 404 message lies about authentication
+
+When the GitHub Release exists but `latest-mac.yml` doesn't (yet —
+because the macOS leg of CI is still publishing), electron-updater
+surfaces:
+
+```
+Cannot find latest-mac.yml in the latest release artifacts (...):
+HttpError: 404 "method: GET url: ...latest-mac.yml
+
+Please double check that your authentication token is correct.
+Due to security reasons, actual status maybe not reported, but 404."
+```
+
+The "authentication token" line is **misleading**. GitHub releases
+are public; no token is involved. Any user hits the same 404 on
+the same URL. The user-friendly meaning is "the release exists
+but its artifacts haven't been uploaded yet" — a transient state
+that resolves once CI finishes the macOS publish (~5–15 min after
+the tag push).
+
+Fix (v1.12.2): `friendlyUpdateError` in
+[src/main/about.ts](../../src/main/about.ts) detects the manifest-404 case via
+`/Cannot find latest(?:-mac|-linux)?\.yml/` and translates to
+"A newer release is being built. Try again in a few minutes." Raw
+error still goes to console.warn for diagnostics. Same function
+also handles network failures (ENOTFOUND/ETIMEDOUT) and signature
+verification errors with their own friendly one-liners.
+
+Don't surface electron-updater errors verbatim. They include
+stack traces, response headers, and the authentication
+misdirection.
+
 ## `total_cost_usd` from the SDK is cumulative, not per-turn
 
 Every `result` message the Claude Agent SDK emits carries a

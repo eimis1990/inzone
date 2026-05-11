@@ -85,8 +85,6 @@ export function WorkerPresetIcon({
       return <AiderGlyph size={size} />;
     case 'gemini':
       return <GeminiGlyph size={size} />;
-    case 'printing-press':
-      return <PrintingPressGlyph size={size} />;
   }
 }
 
@@ -196,22 +194,3 @@ function GeminiGlyph({ size }: { size: number }) {
   );
 }
 
-/**
- * Printing Press — a stylised printing-press frame: top platen, two
- * uprights, a paper sheet between them, and the press bed below.
- * Reads as "press" at icon sizes without needing the brand logo file
- * (users can still drop one into assets/worker-icons/ to override).
- */
-function PrintingPressGlyph({ size }: { size: number }) {
-  return (
-    <GlyphFrame size={size}>
-      <line x1="4" y1="4" x2="20" y2="4" />
-      <line x1="6" y1="4" x2="6" y2="20" />
-      <line x1="18" y1="4" x2="18" y2="20" />
-      <rect x="8" y="8" width="8" height="9" rx="0.5" />
-      <line x1="10" y1="11" x2="14" y2="11" />
-      <line x1="10" y1="13.5" x2="14" y2="13.5" />
-      <line x1="4" y1="20" x2="20" y2="20" />
-    </GlyphFrame>
-  );
-}

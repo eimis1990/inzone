@@ -16,7 +16,22 @@
   // Claude Code installer (`curl https://claude.ai/install`) drops
   // its binary; ~/bin is the classic user-bin path.
   const homeExtras = home
-    ? [`${home}/.local/bin`, `${home}/bin`]
+    ? [
+        `${home}/.local/bin`,
+        `${home}/bin`,
+        // Go binaries installed by `go install` / `printing-press
+        // install <name>` land in $GOPATH/bin which defaults to
+        // ~/go/bin. Without this on PATH the Claude Agent SDK's
+        // Bash tool would `which hackernews-pp-cli` → not found,
+        // and skills that point at Press CLIs would silently fail
+        // with command-not-found in agent transcripts.
+        `${home}/go/bin`,
+        // npm global packages installed via `npm install -g`
+        // when nvm is in use land here instead of /usr/local/bin.
+        // Covers Claude Code, Codex CLI, Gemini CLI, Aider when
+        // installed via npm.
+        `${home}/.npm/bin`,
+      ]
     : [];
   const extras = [
     ...homeExtras,

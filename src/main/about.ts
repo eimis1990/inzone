@@ -235,6 +235,50 @@ export async function getReleaseNotes(limit = 5): Promise<ReleaseEntry[]> {
 }
 
 /**
+ * Translate raw electron-updater errors into something a human can
+ * read. The library's stack-traces and HTTP-response dumps are
+ * unhelpful to most users; in particular its 404 message includes
+ * a misleading "double check your authentication token" line which
+ * has nothing to do with reality — GitHub releases are public and
+ * no token is involved. We map the common failure modes to plain
+ * one-liners and fall back to the first line of the original
+ * message for the long tail.
+ *
+ * The full error is still logged via console.warn for diagnostics.
+ */
+function friendlyUpdateError(rawErr: unknown): string {
+  const msg = rawErr instanceof Error ? rawErr.message : String(rawErr);
+
+  // Manifest 404. Happens between a git-tag push and the macOS leg
+  // of CI finishing — the tag exists, the GitHub Release exists,
+  // but `latest-mac.yml` (electron-updater's manifest) hasn't been
+  // uploaded yet because the build's still running. Surface as a
+  // soft "try again later" instead of the scary 404 dump.
+  if (/Cannot find latest(?:-mac|-linux)?\.yml/i.test(msg)) {
+    return "A newer release is being built. Try again in a few minutes — GitHub Actions takes up to ~15 min to publish the macOS build.";
+  }
+  if (/HttpError:\s*404|"\s*404\s*"/i.test(msg) && /\.yml/i.test(msg)) {
+    return "A newer release is being built. Try again in a few minutes — GitHub Actions takes up to ~15 min to publish the macOS build.";
+  }
+
+  // Network failures — DNS, connection refused, timeout. The user's
+  // offline or behind a proxy that's blocking github.com.
+  if (/ENOTFOUND|ETIMEDOUT|ECONNRESET|ECONNREFUSED|getaddrinfo/i.test(msg)) {
+    return "Can't reach the update server. Check your internet connection.";
+  }
+
+  // Signature / certificate problems on the downloaded artifact.
+  if (/code signature|signature.*invalid|notariz/i.test(msg)) {
+    return 'The downloaded update failed signature verification. Try checking again later, or download manually from the GitHub releases page.';
+  }
+
+  // Generic fallback — first line only, no stack. Cap length so a
+  // pathological one-liner can't push past the dialog's bounds.
+  const firstLine = msg.split('\n')[0]?.trim() ?? 'Update check failed.';
+  return firstLine.length > 200 ? firstLine.slice(0, 200) + '…' : firstLine;
+}
+
+/**
  * Manually trigger an update check. The dev-mode early-return mirrors
  * `auto-update.ts` so we never hit the publish feed while iterating
  * locally. In packaged mode we delegate to electron-updater and turn
@@ -265,10 +309,14 @@ export async function manualCheckForUpdates(): Promise<UpdateCheckResult> {
       latestVersion,
     };
   } catch (err) {
+    // Log the raw error for diagnostics, then translate to something
+    // the user can act on (or ignore). See `friendlyUpdateError`
+    // above for the mapping.
+    console.warn('[about] update check failed:', err);
     return {
       status: 'error',
       currentVersion,
-      error: err instanceof Error ? err.message : String(err),
+      error: friendlyUpdateError(err),
     };
   }
 }

@@ -4679,10 +4679,37 @@ code.voice-tool-card-value {
 .recommended-skills .tasks-section-title {
   margin-bottom: 10px;
 }
+/* Horizontal scroll rail. The user's own skills table below
+ * eats the rest of the Settings drawer height, so a vertical
+ * stack of recommended cards squeezed it; a horizontal rail
+ * keeps the recommended cards always visible and one row tall,
+ * scrolling horizontally for more. */
 .recommended-skills-list {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  gap: 12px;
+  /* Stretch across the section, then scroll overflow. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Pad the right edge so the last card's hover-bloom shadow
+   * isn't clipped against the panel edge, and so the user can
+   * tell there's more to scroll to. */
+  padding: 4px 12px 12px 2px;
+  margin: -4px -12px -12px -2px;
+  /* Snap to cards on touchpad / scroll-wheel drag. Feels more
+   * deliberate than free scrolling for a small fixed-width grid. */
+  scroll-snap-type: x proximity;
+  scroll-padding-left: 2px;
+}
+.recommended-skills-list::-webkit-scrollbar {
+  height: 8px;
+}
+.recommended-skills-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.recommended-skills-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
 }
 .recommended-skill-card {
   position: relative;
@@ -4690,10 +4717,20 @@ code.voice-tool-card-value {
   flex-direction: column;
   gap: 8px;
   padding: 14px 16px;
+  /* Fixed width keeps the row scannable. min-height anchors
+   * the cards visually so descriptions of different lengths
+   * don't make the rail look jagged. 360px gives enough room
+   * for multi-word tag chips ("project-management", "dev-tools")
+   * to sit on one row alongside the View source link. */
+  flex: 0 0 360px;
+  width: 360px;
+  min-height: 210px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  scroll-snap-align: start;
+  cursor: pointer;
   transition:
     background 140ms ease,
     border-color 140ms ease,
@@ -4729,8 +4766,8 @@ code.voice-tool-card-value {
 }
 .recommended-skill-head {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 10px;
 }
 .recommended-skill-emoji {
   font-size: 24px;
@@ -4755,28 +4792,81 @@ code.voice-tool-card-value {
   color: var(--muted, var(--text-dim));
 }
 .recommended-skill-installed {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   color: var(--success, #5fce8f);
   background: color-mix(in srgb, var(--success, #5fce8f) 12%, transparent);
   border: 1px solid
     color-mix(in srgb, var(--success, #5fce8f) 45%, transparent);
+  white-space: nowrap;
+}
+/* Top-right expand glyph on uninstalled cards. Replaces the old
+ * primary Install button — clicking the card now opens the detail
+ * modal which owns the Install action. This is just a subtle hint
+ * that the card is interactive. */
+.recommended-skill-expand {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  padding: 2px 6px;
+  opacity: 0.65;
+  transition: opacity 140ms ease, color 140ms ease;
+}
+.recommended-skill-card:hover .recommended-skill-expand {
+  opacity: 1;
+  color: var(--accent);
+}
+/* Compact "Install failed" indicator that replaces the full error
+ * block on the card. Keeps card heights even in the rail; the
+ * detail modal renders the full error + recovery action. */
+.recommended-skill-error-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: rgba(242, 109, 122, 0.08);
+  border: 1px solid rgba(242, 109, 122, 0.30);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--danger, #f26d7a) 80%, var(--text));
+  cursor: pointer;
+}
+.recommended-skill-error-pill:hover {
+  background: rgba(242, 109, 122, 0.14);
+}
+.recommended-skill-error-dot {
+  font-size: 8px;
+  line-height: 1;
+  color: var(--danger, #f26d7a);
 }
 .recommended-skill-desc {
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--text-dim);
+  /* Cap at ~4 lines so the card stays a predictable height —
+   * longer descriptions ellipsize. The fixed card height
+   * (200px in the rail) and the description-as-flex-grow ratio
+   * make this work naturally. */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
 }
 .recommended-skill-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   padding-top: 4px;
+  margin-top: auto;
 }
 .recommended-skill-link {
   font-size: 11.5px;
@@ -4800,12 +4890,90 @@ code.voice-tool-card-value {
 }
 .recommended-skill-error {
   margin-top: 4px;
-  padding: 8px 10px;
-  font-size: 11px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
   background: rgba(242, 109, 122, 0.08);
   border: 1px solid rgba(242, 109, 122, 0.30);
   border-radius: 6px;
   color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Inline "install missing dep" action — sits below the error text
+ * when we recognise the missing-dependency hint. The button itself
+ * uses our existing .primary small styling; the hint is muted
+ * supporting text. */
+.recommended-skill-dep-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.recommended-skill-dep-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.85;
+}
+
+/* Recommended skill detail modal (opens on card click). The cards
+ * clip descriptions at 4 lines so the rail stays even-height; this
+ * modal is the "tell me more" surface where the full text plus
+ * disk-location explainer live. */
+.recommended-skill-modal {
+  width: min(560px, 92vw);
+}
+.recommended-skill-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+.recommended-skill-modal-emoji {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.recommended-skill-modal-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+.recommended-skill-modal-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.recommended-skill-modal-desc {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0 0 14px 0;
+  white-space: pre-line;
+}
+.recommended-skill-modal-tags {
+  margin-bottom: 14px;
+}
+.recommended-skill-modal-error {
+  margin-bottom: 14px;
+}
+.recommended-skill-modal-where {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  padding: 10px 12px;
+  background: var(--bg-elev-1, #14171c);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.recommended-skill-modal-where code {
+  background: rgba(255, 255, 255, 0.04);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 /* Banner shown when this pane is a non-first step of an enabled

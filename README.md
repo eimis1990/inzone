@@ -157,7 +157,7 @@ API key encrypted at rest in macOS keychain via Electron `safeStorage`. A three-
 
 ### Workers Tab — Agents + CLI Tools In One Place
 
-The middle sidebar tab houses both LLM agents and non-agent CLI tools. The **Other** section ships with presets for **Claude Code**, **Codex CLI**, **Aider**, **Gemini CLI**, **Printing Press** (browse / install / mint agent-native CLIs from [printingpress.dev](https://printingpress.dev/)), plus a plain **Terminal**. Drop one onto a pane and it flips from a chat surface into an embedded shell running that tool. Install detection shows a "not installed" pill with a one-click install path that types the right command into the bottom-bar terminal — no tab switching.
+The middle sidebar tab houses both LLM agents and non-agent CLI tools. The **Other** section ships with presets for **Claude Code**, **Codex CLI**, **Aider**, **Gemini CLI**, plus a plain **Terminal**. Drop one onto a pane and it flips from a chat surface into an embedded shell running that tool. Install detection shows a "not installed" pill with a one-click install path that types the right command into the bottom-bar terminal — no tab switching.
 
 ### MCP Server Support
 

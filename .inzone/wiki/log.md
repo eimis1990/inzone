@@ -48,6 +48,89 @@ context regardless of in-pane z-index. Fix: portal the menu to
 (agent panes) and TerminalPaneMenu (terminal panes). Updated
 [[gotchas]].
 
+## [2026-05-11] edit | Printing Press → Recommended Skills + h-scroll cards
+
+Reframed Printing Press from "Worker preset (terminal)" to
+"Recommended Skill (one-click install)". Conceptually each Press
+library entry IS a Claude Code skill with a CLI binary attached —
+the Worker-preset terminal-to-type-commands-in framing was the
+wrong fit and gave confusing first-run UX.
+
+What landed:
+
+1. **Workers** lost the Printing Press preset entry (and its
+   icon, install hint, and welcome constant).
+2. **`RecommendedSkill` extended** with `via: 'git' | 'printing-press'`
+   + `printingPressName` + `sourceUrl`. `repoUrl` became optional.
+3. **`installViaPrintingPress`** in
+   [src/main/skills-install.ts](../../src/main/skills-install.ts) shells out to
+   `npx -y @mvanhorn/printing-press install <name>`, verifies a
+   SKILL.md landed at `~/.claude/skills/pp-<name>/`. Added a
+   generic `runProcess` helper that augments PATH with common
+   Homebrew / node-bin locations.
+4. **Six seed entries**: Slack, Linear, Stripe, Notion,
+   Hacker News, Shopify. Picked across categories
+   (productivity / dev-tools / payments / knowledge-base /
+   research / commerce). Other 60+ library entries stay
+   accessible via the Press CLI directly.
+5. **Recommended Skills now scroll horizontally** with fixed-
+   width cards (~280px). The skills table below was getting
+   crowded; horizontal rail keeps the recommended row one-line
+   tall regardless of how many entries we add.
+
+## [2026-05-11] edit | Printing Press welcome + probeCommand override
+
+User dropped Printing Press on a pane and saw the bare CLI help
+dump — "what is this and what should I do next?" Replaced the
+preset's `command` with a chained-`echo` welcome that explains
+what the tool is, suggests three concrete first commands
+(`install starter-pack`, `search slack`, `list`), and shows both
+the global-install and npx invocation paths.
+
+Side effect: the welcome's first word is now `echo`, which would
+break the v1.12.2 first-word probe. Added an optional
+`probeCommand` override field on `WorkerPreset`, set to `'npx'`
+for Printing Press. `probeCommandFor()` checks the override
+before falling back to the first-word heuristic.
+
+## [2026-05-11] edit | Printing Press install detection + auto-bind
+
+Two related fixes after user testing on the v1.12.0 Printing Press
+preset.
+
+1. **Probe bug.** Install detection ran `command -v` on the full
+   `preset.command` — for Printing Press that's
+   `npx -y @mvanhorn/printing-press`, a multi-word command line
+   that's not a binary name. Added `probeCommandFor(preset)` in
+   [src/shared/worker-presets.ts](../../src/shared/worker-presets.ts) that returns the first
+   whitespace-separated token. All probe call sites in
+   AgentSidebar now use it. Filed [[gotchas]] (`command -v on a
+   multi-word command line is meaningless`).
+
+2. **Auto-bind after install.** User clicked an uninstalled
+   preset → confirmed install → watched it run → had to click the
+   card AGAIN to bind. Now `pendingAssignmentRef` captures
+   `{ paneId, presetId, probeKey, ts }` at install-confirm time;
+   an effect watching the `installed` map fires
+   `setPaneToTerminal` as soon as the probe flips to true.
+   Expires after 5 minutes so a failed install doesn't surprise-
+   bind later.
+
+## [2026-05-11] edit | friendlier update-check error for in-flight releases
+
+When the user hit "Check for updates" right after pushing v1.12.1
+(while CI was still building the macOS artifact), electron-updater
+404'd on `latest-mac.yml` and surfaced its raw error including the
+misleading "double-check your authentication token" line. GitHub
+releases are public; no auth involved.
+
+Added `friendlyUpdateError` in [src/main/about.ts](../../src/main/about.ts) that
+detects the manifest-404 case + network failures + signature
+errors and returns a plain one-liner instead. Raw error still
+logged to console.warn for diagnostics. Filed gotcha
+[[gotchas]] (`electron-updater's 404 message lies about
+authentication`).
+
 ## [2026-05-10] edit | bundled agents → Sonnet + per-turn cost delta
 
 Two cost-related changes for v1.12.0:

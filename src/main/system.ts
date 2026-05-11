@@ -673,8 +673,16 @@ function augmentPath(existing: string): string {
     }
     return parts.join(sep);
   }
-  // macOS / Linux — Homebrew + /usr/local/bin in front.
-  const extras = ['/opt/homebrew/bin', '/usr/local/bin'];
+  // macOS / Linux — Homebrew + /usr/local/bin + Go bin in front.
+  // ~/go/bin is where `printing-press install <name>` writes
+  // Press-installed CLIs; without it a `command -v` probe right
+  // after install comes back empty.
+  const home = process.env.HOME ?? '';
+  const extras = [
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    ...(home ? [`${home}/go/bin`] : []),
+  ];
   const parts = existing.split(':').filter(Boolean);
   for (const ex of extras) {
     if (!parts.includes(ex)) parts.unshift(ex);

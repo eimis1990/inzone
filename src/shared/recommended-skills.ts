@@ -21,6 +21,21 @@
  * skip the clone if `~/.claude/skills/<installAs>/SKILL.md` is
  * already present.
  */
+/**
+ * How a recommended skill gets onto the user's disk.
+ *
+ *  - `'git'` (default): shallow git clone of `repoUrl`, copy
+ *    `subPath` (or the whole repo) into ~/.claude/skills/<installAs>/.
+ *    Optionally generate a SKILL.md wrapper via `generateSkillMd`
+ *    when the source doesn't ship one.
+ *  - `'printing-press'`: invoke
+ *    `npx -y @mvanhorn/printing-press install <printingPressName>`.
+ *    The Press CLI itself handles the install: it drops the Go
+ *    binary on PATH and writes a SKILL.md into ~/.claude/skills/
+ *    pp-<name>/. No git clone, no manual file shuffling on our end.
+ */
+export type RecommendedSkillInstallMethod = 'git' | 'printing-press';
+
 export interface RecommendedSkill {
   /** Stable kebab-case identifier. Used for state tracking + as the
    *  fallback `installAs` folder name. */
@@ -31,9 +46,25 @@ export interface RecommendedSkill {
   emoji: string;
   /** One-paragraph description (~20–40 words). */
   description: string;
-  /** GitHub repo URL — used both for cloning and for the "View
-   *  source" link in the card. */
-  repoUrl: string;
+  /** SPDX licence identifier (e.g. "MIT", "Apache-2.0"). Shown in
+   *  the card so users know what they're installing. */
+  license: string;
+  /** Author / maintainer string for credit (org or individual). */
+  author: string;
+  /** Optional tags for future filtering. Not surfaced yet. */
+  tags?: string[];
+  /** How to install. Defaults to `'git'` for backwards compat with
+   *  pre-v1.12.2 entries that didn't have this field. */
+  via?: RecommendedSkillInstallMethod;
+  /** URL shown next to the card as "View source". Falls back to
+   *  `repoUrl` for git entries. For printing-press entries this
+   *  should point at the library entry (e.g. github.com/mvanhorn/
+   *  printing-press-library/tree/main/library/.../<name>). */
+  sourceUrl?: string;
+
+  // -- Git-clone fields (via === 'git') --------------------------------
+  /** GitHub repo URL — cloned at install time. Required for `'git'`. */
+  repoUrl?: string;
   /** Branch to clone. Defaults to 'main' when omitted. */
   branch?: string;
   /** Optional subdirectory inside the repo where the actual skill
@@ -43,13 +74,6 @@ export interface RecommendedSkill {
   /** Folder name created under `~/.claude/skills/`. Defaults to `id`
    *  when omitted. */
   installAs?: string;
-  /** SPDX licence identifier (e.g. "MIT", "Apache-2.0"). Shown in
-   *  the card so users know what they're installing. */
-  license: string;
-  /** Author / maintainer string for credit (org or individual). */
-  author: string;
-  /** Optional tags for future filtering. Not surfaced yet. */
-  tags?: string[];
   /**
    * Some repos ship raw resources (DESIGN.md collections, template
    * libraries, etc.) rather than pre-packaged Claude skills with
@@ -72,9 +96,110 @@ export interface RecommendedSkill {
      *  agents how to use the resources in the folder. */
     body: string;
   };
+
+  // -- Printing-Press fields (via === 'printing-press') ----------------
+  /** The Printing Press library entry name to pass to
+   *  `printing-press install <name>`. The Press CLI handles the
+   *  install (Go binary + SKILL.md) — we just shell out.
+   *  Required for `'printing-press'`. */
+  printingPressName?: string;
 }
 
+/**
+ * URL prefix for the Printing Press library repo, used to construct
+ * "View source" links for each library-entry recommended skill.
+ * Each entry is at `<prefix>/library/<category>/<name>/`.
+ */
+const PP_LIB_URL = 'https://github.com/mvanhorn/printing-press-library/tree/main/library';
+
 export const RECOMMENDED_SKILLS: RecommendedSkill[] = [
+  // --- Printing Press library entries -------------------------------
+  // Each becomes a one-click install of an agent-native CLI + the
+  // matching Claude skill, via `printing-press install <name>`.
+  // We seed with six high-signal entries covering different
+  // categories (productivity, dev tools, payments, design, news,
+  // commerce); the rest of the 60+-entry library stays accessible
+  // via the Press CLI directly for power users.
+  {
+    id: 'pp-slack',
+    name: 'Slack',
+    emoji: '💬',
+    description:
+      'Send messages, search conversations, monitor channels, and manage your Slack workspace from the terminal. Your agents can post status updates, summarise threads, and ping teammates as part of a workflow.',
+    via: 'printing-press',
+    printingPressName: 'slack',
+    sourceUrl: `${PP_LIB_URL}/productivity/slack`,
+    license: 'MIT',
+    author: 'Matt Van Horn · Printing Press',
+    tags: ['messaging', 'productivity'],
+  },
+  {
+    id: 'pp-linear',
+    name: 'Linear',
+    emoji: '📋',
+    description:
+      "Every Linear feature plus a local SQLite mirror — query 'blocked issues whose blocker hasn't moved in 7 days' in 50ms, work offline, and surface compound questions Linear's own API can't answer.",
+    via: 'printing-press',
+    printingPressName: 'linear',
+    sourceUrl: `${PP_LIB_URL}/productivity/linear`,
+    license: 'MIT',
+    author: 'Matt Van Horn · Printing Press',
+    tags: ['project-management', 'dev-tools'],
+  },
+  {
+    id: 'pp-stripe',
+    name: 'Stripe',
+    emoji: '💳',
+    description:
+      'Every Stripe feature plus a local SQLite mirror with full-text search, cross-entity SQL, and analytics no other Stripe tool ships. Your agents can debug failed charges, reconcile customers, and pull cohort revenue without round-tripping the API.',
+    via: 'printing-press',
+    printingPressName: 'stripe',
+    sourceUrl: `${PP_LIB_URL}/payments/stripe`,
+    license: 'MIT',
+    author: 'Chris Rodriguez · Printing Press',
+    tags: ['payments', 'analytics'],
+  },
+  {
+    id: 'pp-notion',
+    name: 'Notion',
+    emoji: '📓',
+    description:
+      'Every Notion database queryable offline — cross-workspace SQL joins, stale-page detection, relation graph traversal, and a local mirror so agents can answer "what changed in the engineering wiki this week" without hitting the rate limit.',
+    via: 'printing-press',
+    printingPressName: 'notion',
+    sourceUrl: `${PP_LIB_URL}/productivity/notion`,
+    license: 'MIT',
+    author: 'Nikica Jokic · Printing Press',
+    tags: ['knowledge-base', 'productivity'],
+  },
+  {
+    id: 'pp-hackernews',
+    name: 'Hacker News',
+    emoji: '📰',
+    description:
+      'Hacker News from your terminal — with a local SQLite store, snapshot history, and agent-native output no other HN tool has. Track a topic over time, surface trending domains, or have an agent draft your morning skim.',
+    via: 'printing-press',
+    printingPressName: 'hackernews',
+    sourceUrl: `${PP_LIB_URL}/media-and-entertainment/hackernews`,
+    license: 'MIT',
+    author: 'Trevin Chow · Printing Press',
+    tags: ['news', 'research'],
+  },
+  {
+    id: 'pp-shopify',
+    name: 'Shopify',
+    emoji: '🛒',
+    description:
+      'Operate a Shopify store from the terminal with curated Admin GraphQL commands, a local sync, analytics queries, and bulk exports. For solo founders running storefronts where agent-driven ops actually saves real time.',
+    via: 'printing-press',
+    printingPressName: 'shopify',
+    sourceUrl: `${PP_LIB_URL}/commerce/shopify`,
+    license: 'MIT',
+    author: 'Cathryn Lavery · Printing Press',
+    tags: ['commerce', 'solo-founder'],
+  },
+
+  // --- Git-clone entries --------------------------------------------
   {
     id: 'awesome-design',
     name: 'Awesome Design',

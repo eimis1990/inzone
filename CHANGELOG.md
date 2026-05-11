@@ -4,6 +4,64 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.2] — 2026-05-11
+
+### Changed
+
+- **Printing Press moved from Workers to Recommended Skills**, and
+  six of its highest-signal library entries — **Slack**, **Linear**,
+  **Stripe**, **Notion**, **Hacker News**, **Shopify** — are now
+  one-click installs in **Settings → Skills → Recommended skills**.
+  This is the right home for them: each Press library entry is
+  fundamentally a Claude Code skill (with a CLI binary attached),
+  not a terminal agent you talk to. Click Install, the Press CLI
+  drops the binary on your PATH and the SKILL.md into
+  `~/.claude/skills/pp-<name>/`, and your agents pick the skill up
+  via the watcher — no terminal required. The Printing Press
+  Worker preset (and its confusing welcome dump from v1.12.0) is
+  gone; users who want the generator directly can still run
+  `npx -y @mvanhorn/printing-press` from any terminal pane.
+- **Recommended Skills cards now scroll horizontally** instead of
+  stacking vertically. The user's own skills table below was
+  getting squeezed for vertical room — moving Recommended to a
+  horizontal rail with fixed-width cards keeps it always visible
+  in one row, with scroll for more. Card descriptions are
+  clamped at 4 lines on the rail; **click any card** to open a
+  detail modal with the full description, install location
+  explainer, and tags / source link / install button in one
+  place.
+- **Click an uninstalled worker preset → install → auto-bind to the
+  same pane.** Previously: click Printing Press (or any not-yet-
+  installed worker), confirm the install, watch it run in the
+  terminal panel, then have to click the card a second time to
+  actually bind it to the pane you started from. Now the original
+  pane + preset are remembered, and as soon as the next PATH probe
+  detects the binary is on disk, INZONE binds it for you. Intent
+  expires after 5 minutes so a failed install or a walked-away
+  user doesn't get a surprise binding much later.
+
+### Fixed
+
+- **Printing Press preset stayed "NOT INSTALLED" forever.** The
+  install probe ran `command -v 'npx -y @mvanhorn/printing-press'`,
+  which is meaningless — that's a multi-word command line, not a
+  binary name. Now probes the FIRST word of `command` (so `npx`
+  for Printing Press, which is always present when Node.js is
+  installed), giving the right answer. Other presets are
+  unaffected — their `command` IS the binary name.
+- **Friendlier message when "Check for updates" hits an in-flight
+  release.** Between a git-tag push and the macOS leg of CI
+  finishing, the GitHub Release exists but `latest-mac.yml`
+  (electron-updater's manifest) isn't uploaded yet — so a manual
+  update check 404s. The raw error included a misleading "Please
+  double check your authentication token" line (GitHub releases
+  are public; no token is involved) plus an HTTP response dump
+  and a stack trace. We now translate that into "A newer release
+  is being built. Try again in a few minutes." The full original
+  error is still logged to the main-process console for
+  diagnostics. Similar translations for network failures
+  (offline / DNS / proxy) and signature-verification problems.
+
 ## [1.12.1] — 2026-05-10
 
 ### Changed
