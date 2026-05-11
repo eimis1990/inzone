@@ -4,7 +4,7 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.12.0] — Unreleased
+## [1.12.1] — 2026-05-10
 
 ### Changed
 
@@ -29,6 +29,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   session totals are in a hover tooltip on the result row. The
   underlying `total_cost_usd` is still saved to the usage ledger
   for cross-session aggregation in Settings → Usage & cost.
+
+## [1.12.0] — 2026-05-10
 
 ### Added
 
