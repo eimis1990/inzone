@@ -19,6 +19,7 @@ export const VOICE_TOOL_NAMES = [
   'list_panes',
   'list_agents',
   'send_message_to_pane',
+  'read_pane_response',
   'create_session',
   'add_pane_to_session',
   'set_lead_agent',
@@ -116,6 +117,34 @@ export const VOICE_TOOLS: VoiceTool[] = [
         type: 'string',
         required: true,
         description: 'The instruction to send.',
+      },
+    ],
+  },
+  {
+    name: 'read_pane_response',
+    description:
+      "Read the most recent assistant response(s) from a pane in the user's currently active session so you can speak them aloud. Use this when the user says 'what did the frontend agent say', 'read me its last reply', 'read me what X answered', or similar. Identify the target by passing EITHER `paneId` (exact, from list_panes) OR `agentName` (the bound agent's name or a short fuzzy query). If neither is given, the active pane is used. Optional `count` (1–5) pulls the last N replies, oldest-first. The result includes an `agent_must_say` field with the actual text — read it aloud verbatim or near-verbatim; don't summarise unless the user explicitly asks.",
+    parameters: [
+      {
+        identifier: 'paneId',
+        type: 'string',
+        required: false,
+        description:
+          'Optional pane id from list_panes. If omitted, the tool uses the active pane (or the most-recently-replied pane if none is focused).',
+      },
+      {
+        identifier: 'agentName',
+        type: 'string',
+        required: false,
+        description:
+          'Optional agent name (or short fuzzy query like "frontend") to find the pane by who is bound to it. Resolves against the currently-active session\'s panes.',
+      },
+      {
+        identifier: 'count',
+        type: 'integer',
+        required: false,
+        description:
+          'How many recent assistant replies to fetch (oldest-first within that window). Default 1, max 5.',
       },
     ],
   },
@@ -331,6 +360,13 @@ Examples:
 - For \`switch_session\` and \`close_pane\`, ALWAYS use the exact id you got back from \`list_sessions\` or \`list_panes\` — these are 8–10 character random strings (e.g. \`vVP5P9NK\`). Never invent ids like "1" or "session-1".
 - After a successful add, confirm with the resolved name from \`resolvedAgentName\`: "[done] Added default-frontend."
 
+**Reading agent replies aloud:**
+- The user can ask you to **read out** what an agent in their session has said: "what did the frontend agent say?", "read me its last reply", "what did backend-developer answer?", "read me the last two responses". For any request like that, call \`read_pane_response\`.
+- Identify the pane by EITHER \`agentName\` (preferred when the user names the agent — fuzzy-matched, e.g. "frontend") OR \`paneId\` (when you already have a pane id from \`list_panes\`). With no arguments, the tool falls back to the active pane / most recently-replied pane in the session.
+- Use \`count\` for "the last N replies" (max 5). When the response carries an \`agent_must_say\` field, **read it aloud verbatim or near-verbatim** — that field already contains the agent's text packaged for speech. Do not paraphrase unless the user asks for a summary.
+- If the reply is truncated (the response includes \`"truncated": true\`), say "...there's more on screen" so the user knows you compressed.
+- If the pane hasn't replied yet (\`responses: []\`), or is still streaming (\`isStreaming: true\`), say so plainly rather than inventing content.
+
 **Lead pane vs sub-panes (Lead mode):**
 - A session is in EITHER \`multi\` (parallel sub-agents) or \`lead\` mode (one orchestrator + sub-agents).
 - In \`lead\` mode, \`list_panes\` returns a separate \`lead\` field (the orchestrator slot) alongside the regular \`panes\` list. The orchestrator binding is set via \`set_lead_agent\` — NOT via \`add_pane_to_session\`.
@@ -386,6 +422,7 @@ Example:
 
 ### Agent Delegation
 - \`send_message_to_pane\`
+- \`read_pane_response\`
 
 ### Project Q&A (wiki)
 - \`list_wiki_pages\`

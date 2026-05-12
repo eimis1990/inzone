@@ -4716,6 +4716,15 @@ code.voice-tool-card-value {
   margin-bottom: 18px;
 }
 .recommended-skills .tasks-section-title {
+  /* Match the left column's `.skills-section-head` height so the
+     two section titles baseline at the same vertical position and
+     the first card in each column lines up to the pixel. The left
+     section head is 38px tall (driven by the sort button); we
+     mirror that with min-height + flex-center here so the bare
+     title text on the right sits at the same center line. */
+  min-height: 38px;
+  display: flex;
+  align-items: center;
   margin-bottom: 10px;
 }
 /* Horizontal scroll rail. The user's own skills table below
@@ -4750,20 +4759,318 @@ code.voice-tool-card-value {
 .recommended-skills-list::-webkit-scrollbar-thumb:hover {
   background: var(--text-dim);
 }
+
+/* ─── Settings → Skills two-column layout ─────────────────────────
+   Skills table on the left, Recommended Skills rail on the right.
+   Card width inside the rail is unchanged (360px) — the rail just
+   stacks them vertically with the same widget surface scrolling
+   for overflow. Falls back to a single column on narrow drawer
+   widths so the rail doesn't squeeze the table to nothing. */
+.settings-pane-body.skills-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: stretch;
+  /* Hand scroll over to the two child columns instead of the body
+     itself. The base `.settings-pane-body` rule sets
+     `overflow-y: auto` so long Settings pages can scroll as a whole;
+     we override to `hidden` here so each column can own its own
+     scroll track. `min-height: 0` lets the grid row shrink to the
+     parent's bounded height (the `.settings-pane` parent already
+     pins the body row at `minmax(0, 1fr)`) so the columns have a
+     definite height to clamp against. */
+  min-height: 0;
+  overflow: hidden;
+}
+.skills-two-col-main {
+  /* Outer column container — flex column with NO scroll. The
+     section head sits at the top (always visible); the inner
+     `.skills-list-scroll` element underneath owns the scrolling.
+     Mirrors the right rail's structure where the title lives
+     outside `.recommended-skills-list`. */
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* The actual scroll surface for the skill list. Lives below the
+   section head so the head ("Your skills · count · Name") stays
+   pinned at the top of the column while the list scrolls under
+   it. 12px bottom padding matches the rail's inner padding so
+   both columns have the same overscroll room. */
+.skills-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* A bit of right padding so the scrollbar doesn't kiss the
+     list's right edge. */
+  padding: 0 4px 12px 0;
+}
+.skills-list-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.skills-list-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.skills-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+/* Section header sits inline with the scroll content — was sticky
+   in an earlier iteration but the `background: var(--bg-elev)`
+   needed for sticky to mask scrolled content underneath read as a
+   visible band against the column. Not-sticky is the cleaner UX
+   here: lists are short (typically <30 skills), and the toolbar
+   above (`+ New Skill` + search) is the real header — the row
+   below it is just a section label. */
+.skills-two-col-rail {
+  /* Rail width = card width (400px) plus a sliver of breathing
+     room for the scrollbar gutter. Bumped from 380→420 in v1.13
+     when the cards widened from 360→400. flex-shrink prevents
+     the rail from getting squeezed when the left column grows.
+     The rail inherits its height from the bounded
+     `.skills-two-col` grid track, so no explicit max-height is
+     needed — `min-height: 0` lets it shrink to the grid's
+     allowance and then the inner list scrolls. */
+  width: 420px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.skills-two-col-rail .recommended-skills {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 0;
+}
+/* Vertical-stack override for the cards when they live in the rail.
+   The base `.recommended-skills-list` is a horizontal rail; here we
+   flip it to column + vertical scroll. Card sizing inherits from
+   `.recommended-skill-card` so the per-card 360px width is kept. */
+.skills-two-col-rail .recommended-skills-list {
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  scroll-padding-left: 0;
+  padding: 4px 6px 12px 2px;
+  margin: -4px -6px -12px -2px;
+}
+.skills-two-col-rail .recommended-skills-list::-webkit-scrollbar {
+  /* Vertical now, so we want a width not a height. The base rule
+     above sets `height: 8px` for the horizontal track; this
+     overrides it for the rail. */
+  height: 0;
+  width: 8px;
+}
+.skills-two-col-rail .recommended-skill-card {
+  /* CRITICAL: the base rule sets `flex: 0 0 360px` to fix the card
+     width inside the horizontal rail. In a column-direction flex
+     container (our vertical rail), `flex-basis` applies to the MAIN
+     axis — which is height. The card was therefore being forced to
+     360px tall regardless of its content, leaving a big empty band
+     between the description and the card's bottom edge.
+     Override to `flex: 0 0 auto` here so the card's main-axis size
+     is content-driven; width stays pinned via the explicit
+     `width: 360px` declared in the base rule. */
+  flex: 0 0 auto;
+  min-height: 0;
+  scroll-snap-align: start;
+}
+
+/* Narrow viewport / drawer fallback: the rail wraps below the
+   table so the table never disappears. 1020px chosen because the
+   skills column needs roughly 540px to display # / Name / Scope
+   comfortably alongside the 420px-wide rail with gutter (was 980px
+   in v1.13 with a 380px rail; bumped here to track the rail bump). */
+@media (max-width: 1020px) {
+  .settings-pane-body.skills-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .skills-two-col-rail {
+    width: 100%;
+    max-height: none;
+  }
+  .skills-two-col-rail .recommended-skills-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+}
+
+/* Compact skills table — only #, Name, Scope. Scope hugs the right
+   edge and Name takes the rest of the row. (Kept for any legacy
+   call sites — the live Skills section uses `.skill-card` below.) */
+.skills-table-compact {
+  table-layout: auto;
+}
+.skills-table-compact .agents-th-num,
+.skills-table-compact .agents-td-num {
+  width: 36px;
+}
+.skills-table-compact .agents-th-scope,
+.skills-table-compact .agents-td-scope {
+  width: 80px;
+  text-align: right;
+}
+
+/* Section header for the user's own skills column — mirrors the
+   "Recommended skills" title on the right rail (`.tasks-section-
+   title` is reused for both). The inline sort button sits to the
+   right of the title since there's only one sortable field.
+   `min-height: 38px` is explicit (matches the sort button + the
+   recommended-skills title height) so when the sort button is
+   hidden or replaced, the header still baselines at the same
+   vertical position as the right column's title. */
+.skills-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  margin-bottom: 10px;
+}
+.skills-section-head .tasks-section-title {
+  margin-bottom: 0;
+}
+/* Title + numeric count pill grouped together on the left side of
+   the section head so the badge reads as part of the title rather
+   than a separate UI element. */
+.skills-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.skills-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  /* Slight letterspacing pulled back from the parent
+     .tasks-section-title which usually applies uppercase + tracking;
+     a number doesn't want either. */
+  text-transform: none;
+  letter-spacing: 0;
+}
+.skills-sort-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.skills-sort-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--text);
+}
+
+/* Vertical list of skill rows with hairline separators — NOT
+   individual cards. Each row is a flat slab that only signals
+   itself via the 1px bottom border underneath it. Reads as one
+   continuous list (which is what the user's skills actually are
+   conceptually), and visually distinguishes the left column from
+   the Recommended Skills rail on the right (which is genuinely
+   cards because each recommended entry is an independent
+   third-party thing to evaluate). */
+.skills-card-list {
+  display: flex;
+  flex-direction: column;
+  /* No gap — the separator is a border, not a spacing. */
+  gap: 0;
+}
+.skill-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  /* Hairline separator under each row except the last. Border-box
+     keeps the 1px from changing the row's effective height. */
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 120ms ease;
+  /* Pin row height so different name lengths don't change vertical
+     rhythm down the list. */
+  min-height: 44px;
+}
+.skill-card:last-child {
+  /* No separator under the last row — the bottom of the column
+     itself is the visual end. */
+  border-bottom: none;
+}
+.skill-card:hover {
+  /* Subtle tint instead of a border / shadow — the row is part of
+     a continuous list and shouldn't pop up like a card. */
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.skill-card:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.skill-card-index {
+  flex-shrink: 0;
+  width: 22px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.skill-card-emoji {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+.skill-card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  /* Truncate on narrow drawer widths so the scope pill always has
+     a home on the right edge. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.skill-card-spacer {
+  flex: 1;
+}
 .recommended-skill-card {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px 16px;
-  /* Fixed width keeps the row scannable. min-height anchors
-   * the cards visually so descriptions of different lengths
-   * don't make the rail look jagged. 360px gives enough room
-   * for multi-word tag chips ("project-management", "dev-tools")
-   * to sit on one row alongside the View source link. */
-  flex: 0 0 360px;
-  width: 360px;
-  min-height: 210px;
+  padding: 12px 16px 14px;
+  /* Fixed width keeps the row scannable. Bumped from 360px → 400px
+   * in v1.13 — the previous width felt squeezed once the cards
+   * stopped using a min-height (descriptions clamped at 2 lines
+   * read better with a touch more horizontal room before the
+   * ellipsis trips). Min-height removed for the vertical rail
+   * use case — cards size to their content there. */
+  flex: 0 0 400px;
+  width: 400px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -4887,25 +5194,39 @@ code.voice-tool-card-value {
 }
 .recommended-skill-desc {
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
   color: var(--text-dim);
-  /* Cap at ~4 lines so the card stays a predictable height —
-   * longer descriptions ellipsize. The fixed card height
-   * (200px in the rail) and the description-as-flex-grow ratio
-   * make this work naturally. */
+  /* Cap at 2 lines so the card stays compact. The full description
+   * is one click away in the recommended-skill detail modal, so
+   * truncation here is the right trade — visible-at-a-glance scan
+   * over wall-of-text.
+   * NB: `flex: 1` was removed in v1.13 — previously it stretched
+   * the description to fill any extra card height, which combined
+   * with the footer's `margin-top: auto` left a visible empty
+   * band between description and footer when the card had room.
+   * Now the description hugs its own content and the footer sits
+   * directly below. */
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  flex: 1;
 }
 .recommended-skill-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-top: 4px;
-  margin-top: auto;
+  /* Small breathing room between the clamped description and the
+   * View-source link / tags row. Was `padding-top: 4px` initially;
+   * bumped to 6px so the footer reads as a distinct row rather
+   * than running into the description's last line. */
+  padding-top: 6px;
+  /* `margin-top: auto` was removed in v1.13. It was pushing the
+   * footer to the card's bottom edge — desirable when the card
+   * had a fixed min-height (old horizontal rail), but with the
+   * v1.13 compact cards (no min-height, vertical rail) it just
+   * created phantom empty space between description and footer.
+   * The footer now sits naturally below the description. */
 }
 .recommended-skill-link {
   font-size: 11.5px;
@@ -5007,6 +5328,98 @@ code.voice-tool-card-value {
   background: var(--bg-elev-1, #14171c);
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+/* ─── Setup-guide chip (on card) + section (in detail modal) ─────
+   Surfaces when a recommended skill needs a credential before its
+   CLI is usable. Keeps the install flow honest: the user can see
+   the requirement BEFORE clicking Install. */
+.recommended-skill-setup-chip {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 4px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--warning, #f5a623) 80%, var(--text));
+  background: color-mix(
+    in srgb,
+    var(--warning, #f5a623) 12%,
+    transparent
+  );
+  border: 1px solid
+    color-mix(in srgb, var(--warning, #f5a623) 35%, transparent);
+  border-radius: 999px;
+  align-self: flex-start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.recommended-skill-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: color-mix(
+    in srgb,
+    var(--warning, #f5a623) 6%,
+    var(--bg-elev-1, #14171c)
+  );
+  border: 1px solid
+    color-mix(in srgb, var(--warning, #f5a623) 28%, transparent);
+  border-radius: 8px;
+}
+.recommended-skill-setup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+.recommended-skill-setup-head strong {
+  font-weight: 700;
+}
+.recommended-skill-setup-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.recommended-skill-setup-envvar code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 11.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.recommended-skill-setup-body {
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+/* Pull the Markdown component's outer wrapper margins back so the
+   instructions read as part of the setup card, not a separate
+   chat-style bubble. */
+.recommended-skill-setup-body .md-body {
+  margin: 0;
+}
+.recommended-skill-setup-body .md-body p:first-child {
+  margin-top: 0;
+}
+.recommended-skill-setup-body .md-body p:last-child {
+  margin-bottom: 0;
+}
+.recommended-skill-setup-body .md-body pre {
+  font-size: 11.5px;
 }
 .recommended-skill-modal-where code {
   background: rgba(255, 255, 255, 0.04);
@@ -5644,6 +6057,66 @@ code.voice-tool-card-value {
 .modal.modal-lg {
   width: min(1280px, 96vw);
   max-height: 94vh;
+}
+
+/* ─── Drawer variant of the modal ────────────────────────────────
+   Used by EditorModal when editing/creating a skill. The form
+   contents stay identical — only the wrapping chrome changes from
+   "centered popup" to "right-side panel" so the skill list behind
+   stays visible during edits.
+
+   Animation is transition-based (not keyframe) so the same CSS
+   handles both the slide-in (on mount, after the `.open` class
+   is applied on next frame) and the slide-out (when React clears
+   the `.open` class before unmounting via the EditorModal close
+   effect). No rounded corners — pure side panel attached to the
+   right edge of the window. */
+.modal-backdrop-drawer {
+  /* Override the grid centering of `.modal-backdrop` so we can
+     pin the surface to the right. Flex-end pushes the surface
+     to the right edge; stretch keeps it full height. */
+  place-items: stretch;
+  display: flex;
+  justify-content: flex-end;
+  /* Fade the dim backdrop in/out alongside the slide. */
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.modal-backdrop-drawer.open {
+  opacity: 1;
+}
+.modal.modal-drawer {
+  /* Bumped from 720px → 960px in v1.13 — the system-prompt
+     CodeMirror surface is the dominant element in the form and
+     was cramped at 720, with many lines wrapping that didn't
+     need to. 960px keeps the drawer comfortably under the 1280
+     limit of typical laptop screens while giving the editor
+     ~720px of horizontal text room. */
+  width: min(960px, 96vw);
+  max-width: 960px;
+  max-height: 100vh;
+  height: 100vh;
+  /* Pure side panel — no rounded corners. The base `.modal` rule
+     applies a 12px radius; we explicitly zero it here. Borders
+     on the top / bottom / right edges are also removed since the
+     panel meets the viewport edge on those sides. */
+  border-radius: 0;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  /* Soft inner shadow on the LEFT edge so the panel reads as a
+     layer floating above the dimmed page, not a flat block. */
+  box-shadow: -12px 0 32px -8px rgba(0, 0, 0, 0.45);
+  /* Slide animation via transition. Curve from material's
+     "decelerated" easing — feels snappier than ease-out at the
+     start and settles softly at the end. */
+  transform: translateX(100%);
+  transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  /* Override any leftover keyframe animation declared elsewhere. */
+  animation: none;
+}
+.modal.modal-drawer.open {
+  transform: translateX(0);
 }
 .field-row {
   display: flex;
@@ -8424,9 +8897,19 @@ select:focus {
   min-width: 0;
   height: 38px;
   border-radius: 10px;
+  /* Pin internal text alignment so the rendered cap-height sits at
+     the same vertical position as the button's label. Without
+     `line-height: 38px` the browser falls back to font-line-height
+     (~1.4) which centers slightly differently from the button. */
+  line-height: 38px;
+  box-sizing: border-box;
 }
 /* Action button sits on the left with normal horizontal padding —
-   width is determined by its label, not pinned to a fixed slot. */
+   width is determined by its label, not pinned to a fixed slot.
+   `line-height` and `box-sizing` here match the input above so the
+   two render at identical box geometry; the button's lack of a
+   visible border vs the input's 1px border is absorbed by
+   border-box, so the OUTER edges line up to the pixel. */
 .settings-toolbar-inline > button.primary.small,
 .settings-toolbar-inline > button.primary {
   height: 38px;
@@ -8435,6 +8918,14 @@ select:focus {
   border-radius: 10px;
   font-size: 13px;
   font-weight: 700;
+  line-height: 38px;
+  box-sizing: border-box;
+  /* Transparent 1px border so the box has the SAME border-box
+     accounting as the input next to it — without this, the button
+     reserves no pixels for a border and renders 2px taller in the
+     visual content area than the input, which the user perceives
+     as "the button is a bit smaller / off-center". */
+  border: 1px solid transparent;
   flex-shrink: 0;
   white-space: nowrap;
 }

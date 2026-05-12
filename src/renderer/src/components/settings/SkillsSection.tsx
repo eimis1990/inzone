@@ -5,6 +5,7 @@ import {
   type RecommendedSkill,
 } from '@shared/recommended-skills';
 import { humanizeAgentName, useStore } from '../../store';
+import { Markdown } from '../Markdown';
 
 type SortKey = 'name';
 type SortDir = 'asc' | 'desc';
@@ -17,12 +18,17 @@ interface SortState {
 /**
  * Settings → Skills.
  *
- * Same tabular layout as AgentsSection (and reuses its CSS classes
- * under the `.agents-table` family) so the two pages feel like
- * siblings. Skills have fewer dimensions to surface — just name,
- * description, and scope — so the table is correspondingly shorter.
- * Sortable by name; descriptions truncate to one line with the full
- * text in the tooltip, like the Agents table.
+ * Two-column layout: the user's own skills on the left ("Your
+ * skills"), Recommended Skills as a vertically-scrolling rail on
+ * the right. The left column renders skills as compact single-row
+ * cards (#, emoji, name, scope pill) so the visual treatment
+ * matches the right rail — border, radius, hover lift — but at a
+ * scannable row height. Description is intentionally not shown in
+ * the list: clicking a card opens the editor drawer where the full
+ * markdown body is visible.
+ *
+ * Sortable by name via the small inline button next to the section
+ * title. Filter via the toolbar search at the top of the pane.
  */
 export function SkillsSection() {
   const skills = useStore((s) => s.skills);
@@ -81,81 +87,95 @@ export function SkillsSection() {
           />
         </div>
       </div>
-      <div className="settings-pane-body">
-        <RecommendedSkillsSection installedSkills={skills} />
-
-        {sorted.length === 0 && (
-          <div className="settings-empty">
-            {query
-              ? 'No skills match that search.'
-              : 'No skills yet. Click "+ New Skill" to create one.'}
+      <div className="settings-pane-body skills-two-col">
+        {/* Left column: the user's own skills. Renders as compact
+            card rows (not a table) so the visual treatment matches
+            the Recommended Skills rail on the right — border, radius,
+            hover lift — but at single-row height. Description is
+            intentionally not shown here; click a card to open the
+            editor drawer for full details. */}
+        <div className="skills-two-col-main">
+          <div className="skills-section-head">
+            <div className="skills-section-title-wrap">
+              <div className="tasks-section-title">Your skills</div>
+              {/* Numeric count badge next to the title. Reflects the
+                  *filtered* count so a search like "design" shrinks
+                  the badge to the visible matches — the user can see
+                  immediately how many results their query produced.
+                  Hidden when there are zero skills at all, since the
+                  empty state below already communicates that. */}
+              {skills.length > 0 && (
+                <span
+                  className="skills-count-badge"
+                  title={
+                    sorted.length === skills.length
+                      ? `${skills.length} skill${skills.length === 1 ? '' : 's'}`
+                      : `${sorted.length} of ${skills.length} skill${
+                          skills.length === 1 ? '' : 's'
+                        } match your search`
+                  }
+                >
+                  {sorted.length}
+                </span>
+              )}
+            </div>
+            {/* Sort toggle is a small inline button rather than a
+                table header now that the table itself is gone. We
+                only have one sortable field (name) so a single
+                button is enough. */}
+            <button
+              type="button"
+              className="skills-sort-btn"
+              onClick={() => toggleSort('name')}
+              aria-sort={sort.dir === 'asc' ? 'ascending' : 'descending'}
+              title={`Sort by name (${sort.dir})`}
+            >
+              Name <span aria-hidden>{sort.dir === 'asc' ? '▲' : '▼'}</span>
+            </button>
           </div>
-        )}
 
-        {sorted.length > 0 && (
-          <div className="agents-table-wrap">
-            <table className="agents-table">
-              <thead>
-                <tr>
-                  <th className="agents-th agents-th-num">#</th>
-                  <SortableTh
-                    label="Skill"
-                    sortKey="name"
-                    state={sort}
-                    onToggle={toggleSort}
-                  />
-                  <th className="agents-th">Description</th>
-                  <th className="agents-th agents-th-scope">Scope</th>
-                </tr>
-              </thead>
-              <tbody>
+          {/* The scroll surface sits BELOW the section head so the
+              "Your skills · 20 · Name" row stays pinned while the
+              list scrolls under it — mirrors the right rail's
+              structure where the heading is outside the scroll
+              container. */}
+          <div className="skills-list-scroll">
+            {sorted.length === 0 && (
+              <div className="settings-empty">
+                {query
+                  ? 'No skills match that search.'
+                  : 'No skills yet. Click "+ New Skill" to create one.'}
+              </div>
+            )}
+
+            {sorted.length > 0 && (
+              <div className="skills-card-list">
                 {sorted.map((s, i) => (
-                  <SkillRow
+                  <SkillCard
                     key={s.filePath}
                     skill={s}
                     index={i + 1}
                     onOpen={() => openSkillEditor(s)}
                   />
                 ))}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Right rail: Recommended skills as a vertical scroll. Same
+            card width as before; the only change is direction. */}
+        <aside className="skills-two-col-rail">
+          <RecommendedSkillsSection installedSkills={skills} />
+        </aside>
       </div>
     </div>
   );
 }
 
-function SortableTh({
-  label,
-  sortKey,
-  state,
-  onToggle,
-}: {
-  label: string;
-  sortKey: SortKey;
-  state: SortState;
-  onToggle: (k: SortKey) => void;
-}) {
-  const active = state.key === sortKey;
-  return (
-    <th className={'agents-th agents-th-sortable' + (active ? ' active' : '')}>
-      <button
-        type="button"
-        className="agents-sort-btn"
-        onClick={() => onToggle(sortKey)}
-        aria-sort={
-          active ? (state.dir === 'asc' ? 'ascending' : 'descending') : 'none'
-        }
-      >
-        {label}
-        <span className="agents-sort-indicator" aria-hidden>
-          {active ? (state.dir === 'asc' ? '▲' : '▼') : '⇅'}
-        </span>
-      </button>
-    </th>
-  );
-}
+/* SortableTh removed — the skill list is no longer a table. The
+   single-field sort now lives in the section header as an inline
+   button next to the "Your skills" title. */
 
 /**
  * "Recommended" section above the user's own skills table. Renders
@@ -310,6 +330,21 @@ function RecommendedSkillsSection({
                   </div>
                 )}
               </div>
+              {/* "Needs setup" hint chip — surfaces when the skill
+                  requires an API key / token / OAuth flow before its
+                  CLI actually works. Clicking opens the detail modal,
+                  same as clicking the card body, but the explicit
+                  affordance helps users notice the requirement
+                  before they install and wonder why nothing works. */}
+              {skill.setupGuide && !isInstalled && (
+                <div
+                  className="recommended-skill-setup-chip"
+                  title={skill.setupGuide.shortLabel}
+                >
+                  <span aria-hidden>🔑</span>
+                  Needs setup · {skill.setupGuide.shortLabel}
+                </div>
+              )}
               {error && (
                 // Compact status indicator only — the full error +
                 // any "Install Go" action live inside the detail
@@ -434,6 +469,50 @@ function RecommendedSkillDetailModal({
               <MissingDependencyAction error={error} />
             </div>
           )}
+
+          {/* Setup instructions — surfaces when the skill needs a
+              credential (API key / OAuth token) before its CLI is
+              usable. We render the markdown body via the same
+              Markdown component the chat uses, so fenced code
+              blocks get syntax highlighting and links open in the
+              system browser. */}
+          {skill.setupGuide && (
+            <div className="recommended-skill-setup">
+              <div className="recommended-skill-setup-head">
+                <span aria-hidden>🔑</span>
+                <strong>After install:</strong>
+                {skill.setupGuide.shortLabel}
+              </div>
+              {(skill.setupGuide.signupUrl || skill.setupGuide.envVar) && (
+                <div className="recommended-skill-setup-meta">
+                  {skill.setupGuide.signupUrl && (
+                    <a
+                      href={skill.setupGuide.signupUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="recommended-skill-link"
+                    >
+                      Get credential ↗
+                    </a>
+                  )}
+                  {skill.setupGuide.envVar && (
+                    <span className="recommended-skill-setup-envvar">
+                      env:{' '}
+                      <code>
+                        {Array.isArray(skill.setupGuide.envVar)
+                          ? skill.setupGuide.envVar.join(', ')
+                          : skill.setupGuide.envVar}
+                      </code>
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="recommended-skill-setup-body">
+                <Markdown text={skill.setupGuide.instructions} />
+              </div>
+            </div>
+          )}
+
           <div className="recommended-skill-modal-where">
             {skill.via === 'printing-press' ? (
               <>
@@ -505,7 +584,7 @@ function RecommendedSkillDetailModal({
   );
 }
 
-function SkillRow({
+function SkillCard({
   skill,
   index,
   onOpen,
@@ -514,34 +593,43 @@ function SkillRow({
   index: number;
   onOpen: () => void;
 }) {
+  // Single-row card. Reuses the visual treatment of `.recommended-
+  // skill-card` (border / radius / hover lift) via a shared base
+  // class set in CSS, but lives at single-row height — the full
+  // description is one click away in the editor drawer. The card's
+  // `title` attribute carries the description for a hover tooltip
+  // recovery path.
   return (
-    <tr className="agents-row" onClick={onOpen} title="Click to edit">
-      <td className="agents-td agents-td-num">{index}</td>
-      <td className="agents-td agents-td-agent">
-        <div className="agents-agent-cell">
-          <div className="agents-avatar" aria-hidden>
-            <span className="agents-avatar-emoji">📚</span>
-          </div>
-          <div className="agents-name-block">
-            <div className="agents-name" title={skill.name}>
-              {humanizeAgentName(skill.name)}
-            </div>
-          </div>
-        </div>
-      </td>
-      <td className="agents-td agents-td-desc" title={skill.description}>
-        {skill.description ? (
-          skill.description
-        ) : (
-          <span className="agents-placeholder">—</span>
-        )}
-      </td>
-      <td className="agents-td agents-td-scope">
-        <span className={'agents-scope-pill agents-scope-' + skill.scope}>
-          {skill.scope}
-        </span>
-      </td>
-    </tr>
+    <div
+      className="skill-card"
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      title={skill.description || 'Click to edit'}
+    >
+      <span className="skill-card-index" aria-hidden>
+        {index}
+      </span>
+      <span className="skill-card-emoji" aria-hidden>
+        📚
+      </span>
+      <span className="skill-card-name">
+        {humanizeAgentName(skill.name)}
+      </span>
+      <span className="skill-card-spacer" />
+      <span
+        className={'agents-scope-pill agents-scope-' + skill.scope}
+        title={`Scope: ${skill.scope}`}
+      >
+        {skill.scope}
+      </span>
+    </div>
   );
 }
 

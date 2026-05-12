@@ -103,6 +103,33 @@ export interface RecommendedSkill {
    *  install (Go binary + SKILL.md) — we just shell out.
    *  Required for `'printing-press'`. */
   printingPressName?: string;
+
+  // -- Post-install setup -----------------------------------------------
+  /**
+   * Optional setup guide for skills whose CLI needs credentials (API
+   * key, OAuth token, etc.) before it can be used. When set:
+   *  - the card surfaces a small "Needs setup" chip so the user
+   *    knows there's a step beyond Install;
+   *  - the detail modal renders a "Setup instructions" section
+   *    with the signup link, the expected env-var name(s), and a
+   *    short step-by-step.
+   *
+   * Inzone doesn't manage the env var itself — agents read it from
+   * the shell that spawned them. The instructions tell the user
+   * where to put it (typically `~/.zshrc` / `~/.bashrc` so it
+   * survives a relaunch).
+   */
+  setupGuide?: {
+    /** Short label for the card chip (e.g. "Firecrawl API key"). */
+    shortLabel: string;
+    /** URL the user opens to get the credential. */
+    signupUrl?: string;
+    /** Env var name(s) the CLI looks for, e.g. "FIRECRAWL_API_KEY". */
+    envVar?: string | string[];
+    /** Free-form markdown body shown in the detail modal — should
+     *  walk the user through obtaining + exporting the credential. */
+    instructions: string;
+  };
 }
 
 /**
@@ -197,6 +224,157 @@ export const RECOMMENDED_SKILLS: RecommendedSkill[] = [
     license: 'MIT',
     author: 'Cathryn Lavery · Printing Press',
     tags: ['commerce', 'solo-founder'],
+  },
+
+  // --- v1.13 additions ---------------------------------------------
+  // Six more Printing Press entries spanning web scraping, registry
+  // search, social-data scraping, crypto, design tools, and X/Twitter.
+  // Two are zero-config (docker-hub, coingecko free tier); four need
+  // an API key — each carries a `setupGuide` so the detail modal
+  // walks the user through obtaining + exporting the credential.
+  {
+    id: 'pp-firecrawl',
+    name: 'Firecrawl',
+    emoji: '🕷️',
+    description:
+      'Web scraping + crawling for agents — render JavaScript-heavy pages, extract structured data, follow links, and pipe results to your Claude agent. Backed by the Firecrawl service; the CLI handles auth, pagination, and rate limits for you.',
+    via: 'printing-press',
+    printingPressName: 'firecrawl',
+    sourceUrl: `${PP_LIB_URL}/developer-tools/firecrawl`,
+    license: 'MIT',
+    author: 'Hiten Shah · Printing Press',
+    tags: ['scraping', 'web', 'data'],
+    setupGuide: {
+      shortLabel: 'Firecrawl API key',
+      signupUrl: 'https://www.firecrawl.dev/',
+      envVar: 'FIRECRAWL_API_KEY',
+      instructions: [
+        '**1.** Sign up at [firecrawl.dev](https://www.firecrawl.dev/) and create an API key from your dashboard. Firecrawl has a free tier suitable for small-scale scraping.',
+        '',
+        '**2.** Export the key in the shell that launches INZONE so agent Bash tool calls inherit it. Add this line to `~/.zshrc` (or your shell\'s rc file):',
+        '',
+        '```sh',
+        'export FIRECRAWL_API_KEY="fc-xxxxxxxxxxxxxxxx"',
+        '```',
+        '',
+        '**3.** Restart INZONE so the new environment is picked up by spawned agent processes. Verify by running `printenv FIRECRAWL_API_KEY` in any INZONE terminal pane.',
+      ].join('\n'),
+    },
+  },
+  {
+    id: 'pp-docker-hub',
+    name: 'Docker Hub',
+    emoji: '🐳',
+    description:
+      'Search the world\'s largest container registry from the terminal — find images, browse tags, check sizes, inspect Dockerfiles. No authentication needed for public repositories (rate limited to ~18 requests/min).',
+    via: 'printing-press',
+    printingPressName: 'docker-hub',
+    sourceUrl: `${PP_LIB_URL}/developer-tools/docker-hub`,
+    license: 'MIT',
+    author: 'Hiten Shah · Printing Press',
+    tags: ['dev-tools', 'containers', 'registry'],
+  },
+  {
+    id: 'pp-scrape-creators',
+    name: 'Scrape Creators',
+    emoji: '🎥',
+    description:
+      'Pull public social-media data from the terminal — profiles, posts, videos, comments, ads, and transcripts across TikTok, Instagram, YouTube, Twitter/X, LinkedIn, Facebook, Reddit, Threads, Bluesky, and 15+ creator services. One CLI, one credential, one schema.',
+    via: 'printing-press',
+    printingPressName: 'scrape-creators',
+    sourceUrl: `${PP_LIB_URL}/developer-tools/scrape-creators`,
+    license: 'MIT',
+    author: 'Adrian Horning · Printing Press',
+    tags: ['scraping', 'social', 'research'],
+    setupGuide: {
+      shortLabel: 'Scrape Creators API key',
+      signupUrl: 'https://scrapecreators.com/',
+      envVar: 'SCRAPE_CREATORS_API_KEY',
+      instructions: [
+        '**1.** Sign up at [scrapecreators.com](https://scrapecreators.com/) and copy your API key from the dashboard. Scrape Creators is a paid service with a free trial — pricing scales with request volume.',
+        '',
+        '**2.** Export the key in the shell that launches INZONE so spawned agent processes inherit it. Append to `~/.zshrc` (or your shell\'s rc file):',
+        '',
+        '```sh',
+        'export SCRAPE_CREATORS_API_KEY="sc_xxxxxxxxxxxxxxxx"',
+        '```',
+        '',
+        '**3.** Restart INZONE. Verify with `printenv SCRAPE_CREATORS_API_KEY` in an INZONE terminal pane.',
+      ].join('\n'),
+    },
+  },
+  {
+    id: 'pp-coingecko',
+    name: 'CoinGecko',
+    emoji: '🦎',
+    description:
+      'Cryptocurrency prices, market caps, exchanges, and on-chain data from CoinGecko\'s free public API. No key required for the basic endpoints. Agents can quote prices, build watchlists, and answer "what is BTC doing this week" without round-tripping a flaky web search.',
+    via: 'printing-press',
+    printingPressName: 'coingecko',
+    sourceUrl: `${PP_LIB_URL}/payments/coingecko`,
+    license: 'MIT',
+    author: 'Hiten Shah · Printing Press',
+    tags: ['crypto', 'finance', 'free-api'],
+  },
+  {
+    id: 'pp-figma',
+    name: 'Figma',
+    emoji: '🎨',
+    description:
+      'Every Figma endpoint plus codegen-ready frame extracts, comments audit, orphans finder, design-tokens diff, and webhook management. Your agents can pull a Figma frame, generate matching JSX, and verify it back against the live design.',
+    via: 'printing-press',
+    printingPressName: 'figma',
+    sourceUrl: `${PP_LIB_URL}/productivity/figma`,
+    license: 'MIT',
+    author: 'Giuliano Giacaglia · Printing Press',
+    tags: ['design', 'codegen', 'productivity'],
+    setupGuide: {
+      shortLabel: 'Figma personal access token',
+      signupUrl: 'https://www.figma.com/developers/api#access-tokens',
+      envVar: 'FIGMA_TOKEN',
+      instructions: [
+        '**1.** Open [Figma → Settings → Personal access tokens](https://www.figma.com/developers/api#access-tokens). Click "Create new token" and grant the scopes the CLI needs — at minimum **File content (read)** and **Comments (read/write)** for the full toolset.',
+        '',
+        '**2.** Copy the token (Figma only shows it once). Export it in the shell that launches INZONE by appending to `~/.zshrc` (or your shell\'s rc file):',
+        '',
+        '```sh',
+        'export FIGMA_TOKEN="figd_xxxxxxxxxxxxxxxx"',
+        '```',
+        '',
+        '**3.** Restart INZONE so the new environment lands in spawned agent processes. Verify with `printenv FIGMA_TOKEN` in any INZONE terminal pane.',
+      ].join('\n'),
+    },
+  },
+  {
+    id: 'pp-x-twitter',
+    name: 'X (Twitter)',
+    emoji: '𝕏',
+    description:
+      'Read and write to X (Twitter) from the terminal — combined CLI fronting the v2 API + supporting services. Pull a user\'s recent posts, search by keyword, monitor mentions, or have an agent draft replies — with one shared credential and consistent output shape.',
+    via: 'printing-press',
+    printingPressName: 'x-twitter',
+    sourceUrl: `${PP_LIB_URL}/social-and-messaging/x-twitter`,
+    license: 'MIT',
+    author: 'Cathryn Lavery · Printing Press',
+    tags: ['social', 'messaging', 'api'],
+    setupGuide: {
+      shortLabel: 'X (Twitter) API bearer token',
+      signupUrl: 'https://developer.x.com/en/portal/dashboard',
+      envVar: 'X_BEARER_TOKEN',
+      instructions: [
+        '**1.** Go to the [X Developer Portal](https://developer.x.com/en/portal/dashboard) → create a project + app (free tier supports limited read endpoints; paid Basic/Pro tiers unlock the full surface). Generate a **Bearer Token** under your app\'s Keys & Tokens tab.',
+        '',
+        '**2.** Export the token in the shell that launches INZONE by appending to `~/.zshrc` (or your shell\'s rc file):',
+        '',
+        '```sh',
+        'export X_BEARER_TOKEN="AAAAAAAAAAAAAAAAAAAAxxxxxxxxxxxxxxxxxxxxxxx"',
+        '```',
+        '',
+        '**3.** Restart INZONE so spawned agent processes inherit the credential. Verify with `printenv X_BEARER_TOKEN` in an INZONE terminal pane.',
+        '',
+        '_Note: the X API\'s rate limits are tier-dependent and aggressive. If an agent reports 429s, you may need to upgrade to Basic ($100/month) for higher quotas._',
+      ].join('\n'),
+    },
   },
 
   // --- Git-clone entries --------------------------------------------

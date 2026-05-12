@@ -543,6 +543,215 @@ function buildClientTools(
       }
     },
 
+    // Read the most recent assistant text(s) from a pane so the voice
+    // agent can speak them aloud. Three accepted shapes:
+    //   - {} — use the active pane in the current session
+    //   - { paneId } — explicit pane
+    //   - { agentName } — fuzzy-match an active agent in this session
+    // Defaults to the latest 1 message; caller can ask for up to 5
+    // recent messages. Each message body is truncated to ~3KB so the
+    // voice LLM gets a digestible chunk (the user can always ask to
+    // open the pane on screen for the full thing).
+    read_pane_response: async (params: Record<string, unknown>) => {
+      const s = useStore.getState();
+      const session = s.sessions.find((x) => x.id === s.windowId) ?? null;
+      if (!session) {
+        return JSON.stringify({
+          ok: false,
+          error: 'No active session.',
+          agent_must_say:
+            "There's no active session — switch to one first.",
+        });
+      }
+
+      // Build the candidate set of pane ids for THIS session only.
+      // The pool of panes is global, so we filter by leafs in the
+      // active session's tree (+ Lead pane if present).
+      const validPaneIds = new Set<string>(
+        collectLeafIds(session.tree as { kind: string; children?: unknown[] }),
+      );
+      const leadPaneId = s.leadPaneId;
+      if (leadPaneId) validPaneIds.add(leadPaneId);
+
+      // Resolve the target pane.
+      let targetPaneId: string | null = null;
+      let resolutionNote = '';
+
+      const explicitPaneId = params.paneId
+        ? String(params.paneId).trim()
+        : '';
+      const agentNameRaw = params.agentName
+        ? String(params.agentName).trim()
+        : '';
+
+      if (explicitPaneId) {
+        if (!validPaneIds.has(explicitPaneId)) {
+          return JSON.stringify({
+            ok: false,
+            error: `No pane "${explicitPaneId}" in the active session.`,
+            agent_must_say:
+              "I can't find that pane in the current session. Want me to list the panes again?",
+          });
+        }
+        targetPaneId = explicitPaneId;
+      } else if (agentNameRaw) {
+        // Find a live pane in this session whose bound agent matches.
+        // Reuse `resolveAgentName` against the panes' agent names so a
+        // query like "frontend" still works.
+        const liveAgents = [...validPaneIds]
+          .map((id) => ({
+            paneId: id,
+            name: s.panes[id]?.agentName ?? '',
+          }))
+          .filter((e) => e.name);
+        const resolution = resolveAgentName(
+          liveAgents.map((e) => ({ name: e.name })),
+          agentNameRaw,
+        );
+        if (resolution.kind === 'none') {
+          const did = resolution.suggestion;
+          return JSON.stringify({
+            ok: false,
+            error: `No active agent matches "${agentNameRaw}".`,
+            agent_must_say: did
+              ? `I don't see "${agentNameRaw}" running here. Did you mean ${did}?`
+              : `I don't see "${agentNameRaw}" running here. The active agents are: ${liveAgents
+                  .map((e) => e.name)
+                  .join(', ') || '(none yet)'}. Which one?`,
+            next_action: 'ASK_USER_THEN_RETRY',
+          });
+        }
+        if (resolution.kind === 'ambiguous') {
+          const names = resolution.candidates.map((a) => a.name);
+          return JSON.stringify({
+            ok: false,
+            error: `Multiple active agents match "${agentNameRaw}".`,
+            agent_must_say: `Multiple agents match — ${names.join(' and ')}. Which one?`,
+            next_action: 'ASK_USER_THEN_RETRY_WITH_EXACT_NAME',
+          });
+        }
+        const matchedName = resolution.agent.name;
+        targetPaneId =
+          liveAgents.find((e) => e.name === matchedName)?.paneId ?? null;
+        if (!targetPaneId) {
+          return JSON.stringify({
+            ok: false,
+            error: `Resolved agent "${matchedName}" but couldn't find its pane.`,
+          });
+        }
+        resolutionNote = `Matched "${agentNameRaw}" → ${matchedName}.`;
+      } else {
+        // No identifier — fall back to the user's currently-focused
+        // pane. If the active pane has no agent yet, scan for the
+        // most-recently-updated pane in the session with assistant
+        // text and use that instead so "read me the last response"
+        // works after the user has clicked elsewhere.
+        const active = s.activePaneId;
+        if (active && validPaneIds.has(active) && s.panes[active]?.agentName) {
+          targetPaneId = active;
+        } else {
+          let bestId: string | null = null;
+          let bestTs = -1;
+          for (const id of validPaneIds) {
+            const pane = s.panes[id];
+            if (!pane) continue;
+            const lastAssistant = lastAssistantTextItem(pane.items);
+            if (lastAssistant && lastAssistant.ts > bestTs) {
+              bestTs = lastAssistant.ts;
+              bestId = id;
+            }
+          }
+          targetPaneId = bestId;
+        }
+        if (!targetPaneId) {
+          return JSON.stringify({
+            ok: false,
+            error: 'No pane in this session has produced any responses yet.',
+            agent_must_say:
+              "None of the agents here have replied yet. Ask one of them something first.",
+          });
+        }
+      }
+
+      const pane = s.panes[targetPaneId];
+      if (!pane) {
+        return JSON.stringify({
+          ok: false,
+          error: `Pane "${targetPaneId}" has no runtime state.`,
+        });
+      }
+
+      // Pull the most-recent N assistant_text items. Cap requested
+      // `count` at 5 — the voice agent's audio output gets unwieldy
+      // beyond that, and any deep history dive is better served by
+      // looking at the pane on screen.
+      const requested = Number(params.count ?? 1);
+      const count = Number.isFinite(requested)
+        ? Math.max(1, Math.min(5, Math.floor(requested)))
+        : 1;
+      const assistantItems = pane.items
+        .filter(
+          (it): it is Extract<typeof it, { kind: 'assistant_text' }> =>
+            it.kind === 'assistant_text',
+        )
+        .slice(-count);
+
+      if (assistantItems.length === 0) {
+        const isStreaming = pane.status === 'streaming';
+        return JSON.stringify({
+          ok: true,
+          paneId: targetPaneId,
+          agentName: pane.agentName ?? null,
+          responses: [],
+          isStreaming,
+          agent_must_say: isStreaming
+            ? `${pane.agentName ?? 'That agent'} is still working — no reply yet.`
+            : `${pane.agentName ?? 'That agent'} hasn't replied yet.`,
+        });
+      }
+
+      // Per-message cap. 3000 chars ≈ 750 tokens; comfortable for the
+      // voice LLM to read aloud or summarize. Longer responses get
+      // truncated and the response carries a `truncated` flag so the
+      // model can mention there's more on screen.
+      const PER_MSG_CAP = 3000;
+      const now = Date.now();
+      let anyTruncated = false;
+      const responses = assistantItems.map((it) => {
+        const truncated = it.text.length > PER_MSG_CAP;
+        if (truncated) anyTruncated = true;
+        return {
+          text: truncated
+            ? it.text.slice(0, PER_MSG_CAP) + '…'
+            : it.text,
+          ts: it.ts,
+          ageSeconds: Math.max(0, Math.round((now - it.ts) / 1000)),
+          truncated,
+        };
+      });
+
+      return JSON.stringify({
+        ok: true,
+        paneId: targetPaneId,
+        agentName: pane.agentName ?? null,
+        // Surface stream status so the LLM can hedge: "...and it's
+        // still typing more" if the agent is mid-turn.
+        isStreaming: pane.status === 'streaming',
+        responses,
+        truncated: anyTruncated,
+        note: resolutionNote || undefined,
+        // Encourage the voice agent to READ the text aloud rather than
+        // describe it abstractly. The user asked for the response, not
+        // a summary.
+        agent_must_say:
+          responses.length === 1
+            ? `Reading ${pane.agentName ?? 'the agent'}'s reply: ${responses[0].text}`
+            : `Reading ${pane.agentName ?? 'the agent'}'s last ${responses.length} replies (oldest first): ${responses
+                .map((r, i) => `${i + 1}. ${r.text}`)
+                .join(' ')}`,
+      });
+    },
+
     close_pane: async (params: Record<string, unknown>) => {
       const paneId = String(params.paneId ?? '');
       if (!paneId) {
@@ -900,6 +1109,29 @@ function pickSplitDirection(
   const parent = findParent(tree as Node, activeId, null);
   if (!parent || parent.kind !== 'split') return 'horizontal';
   return parent.direction === 'horizontal' ? 'vertical' : 'horizontal';
+}
+
+/**
+ * Walk a pane's items array from the end looking for the most-recent
+ * `assistant_text` entry. Used by `read_pane_response` to find the
+ * "best" pane when the user didn't specify one — we prefer panes
+ * that have actually produced output over empty / freshly-bound
+ * panes. Returns null if the pane has never said anything.
+ *
+ * Typed loosely against ChatItem to avoid pulling the full union
+ * type into this file — the only field we read is `ts` plus the
+ * `kind` discriminator.
+ */
+function lastAssistantTextItem(
+  items: Array<{ kind: string; ts?: number }>,
+): { ts: number } | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (it.kind === 'assistant_text' && typeof it.ts === 'number') {
+      return { ts: it.ts };
+    }
+  }
+  return null;
 }
 
 function sessionDefaultName(cwd: string): string {

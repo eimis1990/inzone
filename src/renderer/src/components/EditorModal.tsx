@@ -10,7 +10,20 @@ import { AGENT_COLORS, AGENT_TOOL_CHOICES, MODEL_CHOICES } from '@shared/palette
 import type { McpServerEntry } from '@shared/types';
 
 export function EditorModal() {
-  const editor = useStore((s) => s.editor);
+  // Two sources of truth:
+  //  - `storeEditor`  : the Zustand source-of-truth. Going `null`
+  //                     means "the editor should be closed".
+  //  - `localEditor`  : a render snapshot that OUTLIVES the store
+  //                     clearing by ~260ms so the slide-out
+  //                     animation has time to play before we
+  //                     actually unmount. Without this, hitting
+  //                     Esc would yank the drawer off the DOM
+  //                     mid-transition.
+  // `isOpen` drives the `.open` CSS class. Initial false →
+  // next-frame true on mount triggers the slide-in transition.
+  // Closing flips it back to false; an effect waits 260ms then
+  // drops `localEditor` so React unmounts.
+  const storeEditor = useStore((s) => s.editor);
   const saving = useStore((s) => s.editorSaving);
   const error = useStore((s) => s.editorError);
   const update = useStore((s) => s.updateEditor);
@@ -20,6 +33,57 @@ export function EditorModal() {
   const allSkills = useStore((s) => s.skills);
   const cwd = useStore((s) => s.cwd);
   const { vimMode } = useEditorPreferences();
+
+  const [localEditor, setLocalEditor] = useState(storeEditor);
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Drive the open/close lifecycle off the store editor changing.
+  // Three transitions handled:
+  //  1. null → editor : mount + next-frame open. Saves the
+  //     snapshot for use during the eventual slide-out.
+  //  2. editor → editor (different): just refresh the snapshot.
+  //     Mostly a no-op since we usually close before opening a
+  //     different one, but defensive.
+  //  3. editor → null : keep rendering the snapshot, drop the
+  //     `.open` class so CSS transitions back out, then ~260ms
+  //     later drop the snapshot so the component unmounts.
+  // Drawer mode (skill kind) drives a 260ms slide; agent kind
+  // uses the centered modal which doesn't need the local-snapshot
+  // dance — clearing the store unmounts it directly. We still
+  // hold the snapshot for both for code-path uniformity; for
+  // agents the transition is invisible (no `.open` class effect).
+  useEffect(() => {
+    if (storeEditor) {
+      setLocalEditor(storeEditor);
+      if (!isOpen) {
+        // Double `requestAnimationFrame` is intentional. With a
+        // single RAF, React 18's batching can land the initial
+        // mount (isOpen=false → off-screen) and the open flip
+        // (isOpen=true → in position) in the SAME paint, which
+        // means the browser never sees the off-screen state and
+        // skips the transition — the drawer appears instantly.
+        // Two RAFs guarantee a paint between the two states so
+        // CSS sees `translateX(100%)` first and `translateX(0)`
+        // second, kicking the transition in. (`setTimeout 0`
+        // works too but is less precise about when it fires.)
+        let raf2: number | null = null;
+        const raf1 = requestAnimationFrame(() => {
+          raf2 = requestAnimationFrame(() => setIsOpen(true));
+        });
+        return () => {
+          cancelAnimationFrame(raf1);
+          if (raf2 !== null) cancelAnimationFrame(raf2);
+        };
+      }
+      return;
+    }
+    if (localEditor) {
+      setIsOpen(false);
+      const t = setTimeout(() => setLocalEditor(null), 260);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeEditor]);
 
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -34,35 +98,47 @@ export function EditorModal() {
   // Load configured MCP servers when the editor opens so the agent can
   // opt into them. Refresh whenever cwd changes (different project file).
   useEffect(() => {
-    if (!editor) return;
+    if (!storeEditor) return;
     if (!window.cowork?.mcp) return; // preload not yet refreshed
     void window.cowork.mcp
       .list(cwd ?? undefined)
       .then(setAllMcps)
       .catch(() => setAllMcps([]));
-  }, [editor, cwd]);
+  }, [storeEditor, cwd]);
 
   // Focus the name field ONLY when a new editor session opens — not on
   // every keystroke. We key off kind + original file path, which only
   // changes when a different entity is opened.
-  const editorKey = editor
-    ? `${editor.kind}:${editor.draft.originalFilePath ?? 'new'}`
+  const editorKey = storeEditor
+    ? `${storeEditor.kind}:${storeEditor.draft.originalFilePath ?? 'new'}`
     : null;
   useEffect(() => {
     if (editorKey) firstFieldRef.current?.focus();
   }, [editorKey]);
 
   useEffect(() => {
-    if (!editor) return;
+    // Keyboard listeners track the STORE editor — they should
+    // detach as soon as the user closes (even if we're still
+    // rendering the local snapshot during the slide-out
+    // animation, we don't want Esc to re-fire close on the way
+    // out, and we don't want Cmd+Enter to save a half-closed
+    // panel).
+    if (!storeEditor) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void save();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editor, close, save]);
+  }, [storeEditor, close, save]);
 
-  if (!editor) return null;
+  if (!localEditor) return null;
+  // From here on, the render uses the snapshot so the slide-out
+  // animation has stable data to display. The user's click on
+  // Close fires `close` (store), which sets storeEditor=null;
+  // our effect above then animates the snapshot out before
+  // dropping it.
+  const editor = localEditor;
 
   const isAgent = editor.kind === 'agent';
   const isNew = !editor.draft.originalFilePath;
@@ -103,10 +179,30 @@ export function EditorModal() {
     update({ mcpServers: [...next] });
   };
 
+  // Skills render as a right-side drawer (Settings → Skills design
+  // ask, v1.13). Agents stay as a centered modal for now — they have
+  // significantly more form surface (tools / skills / MCPs / colour
+  // / vibe pickers) and benefit from the wider centered footprint.
+  // Branching the wrapper keeps both flows on the SAME form contents
+  // below; only the chrome changes.
+  //
+  // The `.open` class drives the slide-in / slide-out CSS transition
+  // on the backdrop + surface. It's set on next-frame after mount
+  // (so the browser sees the initial off-screen state), and cleared
+  // by our close effect ~260ms before the snapshot is dropped.
+  const useDrawer = !isAgent;
+  const openMod = isOpen ? ' open' : '';
+  const backdropClass = useDrawer
+    ? `modal-backdrop modal-backdrop-drawer${openMod}`
+    : 'modal-backdrop';
+  const surfaceClass = useDrawer
+    ? `modal modal-drawer editor-drawer${openMod}`
+    : 'modal modal-lg';
+
   return (
-    <div className="modal-backdrop" onMouseDown={close}>
+    <div className={backdropClass} onMouseDown={close}>
       <div
-        className="modal modal-lg"
+        className={surfaceClass}
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal
