@@ -223,11 +223,16 @@ export function getAppVersion(): string {
  * page can render a clean "no release notes available" empty state
  * rather than crashing.
  */
-export async function getReleaseNotes(limit = 5): Promise<ReleaseEntry[]> {
+export async function getReleaseNotes(limit = 100): Promise<ReleaseEntry[]> {
   try {
     const md = await readChangelogFile();
     if (!md) return [];
-    return parseChangelog(md, Math.max(1, Math.min(limit, 20)));
+    // Cap at 100 entries — sufficient for any realistic project
+    // CHANGELOG, prevents pathological parses (e.g. a CHANGELOG.md
+    // accidentally containing matching headers a thousand times)
+    // from inflating the IPC payload. Was 20 in v1.13; bumped so
+    // the About page can show the full history.
+    return parseChangelog(md, Math.max(1, Math.min(limit, 100)));
   } catch (err) {
     console.warn('[about] release notes parse failed:', err);
     return [];

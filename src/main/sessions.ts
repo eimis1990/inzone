@@ -280,6 +280,16 @@ export class SessionController implements IAgentSession {
       settingSources: ['user', 'project'],
       includePartialMessages: false,
       abortController: this.abort,
+      // Ban the Claude Code built-in `AskUserQuestion` tool. That
+      // tool is a Cowork-mode bridge — outside Cowork it falls back
+      // to returning a placeholder ("Answer questions?") instead of
+      // actually asking the user, and the agent's call surfaces as
+      // an error in the pane. We provide our own version via the
+      // in-process MCP server `AskUserQuestion` (callable as
+      // `mcp__AskUserQuestion__ask`), which DOES render the form
+      // and wait for an answer. Disallowing the built-in forces
+      // every agent down the working path.
+      disallowedTools: ['AskUserQuestion'],
       systemPrompt: {
         type: 'preset',
         preset: 'claude_code',

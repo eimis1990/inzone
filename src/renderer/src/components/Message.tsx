@@ -271,6 +271,15 @@ function ToolBlock({ item }: { item: ToolBlockView }) {
     resultText.length < 4000 &&
     /(^|\n)(#|\*|-|\d+\.|>) |```/.test(resultText);
 
+  // Detect a wiki op so we can replace the generic done/error pill
+  // with an accent-coloured "Wiki read" / "Wiki updated" badge. Looks
+  // at the file_path-style input fields (file_path / path) and matches
+  // anything under `.inzone/wiki/`. Read → "Wiki read"; Write / Edit /
+  // MultiEdit → "Wiki updated". Only applies on success — a failed
+  // wiki op still surfaces the red error pill so the user notices.
+  const wikiKind = detectWikiOp(item.name, item.input);
+  const showWikiBadge = wikiKind && status === 'ok';
+
   return (
     <details className={`msg tool-block status-${status}`}>
       <summary className="tool-summary">
@@ -280,16 +289,28 @@ function ToolBlock({ item }: { item: ToolBlockView }) {
         <span className="tool-name">{item.name}</span>
         {summary && <span className="tool-input-preview">{summary}</span>}
         <span className="tool-spacer" />
-        {status === 'running' && (
-          <span className="tool-status running">running…</span>
-        )}
-        {status === 'ok' && <span className="tool-status ok">done</span>}
-        {status === 'error' && (
-          <span className="tool-status error">error</span>
-        )}
+        {/* tool-id sits on the LEFT side of the status badge so the
+            status pill is always the rightmost element in the row.
+            Without this re-order, AskUserQuestion (no summary text)
+            renders the badge stuck to the tool name on the left. */}
         <span className="tool-id" title={item.toolUseId}>
           #{item.toolUseId.slice(0, 6)}
         </span>
+        {showWikiBadge ? (
+          <span className="tool-status wiki" title="Wiki operation">
+            {wikiKind === 'read' ? 'Wiki read' : 'Wiki updated'}
+          </span>
+        ) : (
+          <>
+            {status === 'running' && (
+              <span className="tool-status running">running…</span>
+            )}
+            {status === 'ok' && <span className="tool-status ok">done</span>}
+            {status === 'error' && (
+              <span className="tool-status error">error</span>
+            )}
+          </>
+        )}
       </summary>
       <div className="tool-body">
         <div className="tool-section-label">Input</div>
@@ -343,6 +364,50 @@ function summarizeInput(toolName: string, input: unknown): string {
   // (toolName is unused for now, but kept in the signature so we can
   //  branch on it later if individual tools want bespoke summaries.)
   void toolName;
+}
+
+/**
+ * Detect whether a tool call is a wiki Read / Write / Edit. Returns:
+ *  - 'read'    : Read against a `.inzone/wiki/` path
+ *  - 'updated' : Write / Edit / MultiEdit / NotebookEdit against same
+ *  - null      : not a wiki op
+ *
+ * Used by ToolBlock to swap the generic "done" pill for an accented
+ * "Wiki read" / "Wiki updated" badge so wiki activity is visible at
+ * a glance in long agent transcripts — the user explicitly wanted a
+ * signal here because they're tracking whether agents are actually
+ * maintaining the wiki as instructed.
+ */
+function detectWikiOp(
+  toolName: string,
+  input: unknown,
+): 'read' | 'updated' | null {
+  if (!input || typeof input !== 'object') return null;
+  const o = input as Record<string, unknown>;
+  const candidatePath =
+    (typeof o.file_path === 'string' && o.file_path) ||
+    (typeof o.path === 'string' && o.path) ||
+    (typeof o.notebook_path === 'string' && o.notebook_path) ||
+    '';
+  if (!candidatePath) return null;
+  // Match either a leading-absolute or repo-relative path that
+  // contains the wiki folder segment. We don't require a specific
+  // project root because the cwd is opaque to the renderer; the
+  // `/.inzone/wiki/` segment is distinctive enough on its own.
+  if (!/(^|\/)\.inzone\/wiki\//.test(candidatePath)) return null;
+  // Strip the `mcp__server__` prefix so MCP-wrapped file ops (rare
+  // but possible) match by their suffix too.
+  const bareName = toolName.replace(/^mcp__[^_]+__/, '');
+  if (bareName === 'Read' || bareName === 'NotebookRead') return 'read';
+  if (
+    bareName === 'Write' ||
+    bareName === 'Edit' ||
+    bareName === 'MultiEdit' ||
+    bareName === 'NotebookEdit'
+  ) {
+    return 'updated';
+  }
+  return null;
 }
 
 function shortPath(p: string): string {

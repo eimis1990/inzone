@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
+import { EditorView } from '@codemirror/view';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { vim } from '@replit/codemirror-vim';
-import type { MemoryScope } from '@shared/types';
+import type { MemoryScope, WikiStatus } from '@shared/types';
 import { useEditorPreferences } from '../../hooks/useEditorPreferences';
 import { useStore } from '../../store';
 
@@ -57,6 +58,32 @@ export function MemorySection() {
   const [savingProject, setSavingProject] = useState(false);
   const [savingGlobal, setSavingGlobal] = useState(false);
   const [status, setStatus] = useState<string | undefined>();
+
+  // Bundled Inzone Wiki Protocol + live wiki-init status for the
+  // active project. We fetch the protocol once (it's a static
+  // string from the app binary) and probe wiki status whenever
+  // `cwd` changes so the "Active for this project" indicator is
+  // honest. Both fall back to safe defaults on IPC failure so the
+  // section never crashes the page.
+  const [wikiProtocol, setWikiProtocol] = useState<string>('');
+  const [wikiStatus, setWikiStatus] = useState<WikiStatus | null>(null);
+  const [protocolOpen, setProtocolOpen] = useState(false);
+  useEffect(() => {
+    void window.cowork.wiki
+      .getProtocol()
+      .then(setWikiProtocol)
+      .catch(() => setWikiProtocol(''));
+  }, []);
+  useEffect(() => {
+    if (!cwd) {
+      setWikiStatus(null);
+      return;
+    }
+    void window.cowork.wiki
+      .status(cwd)
+      .then(setWikiStatus)
+      .catch(() => setWikiStatus(null));
+  }, [cwd]);
 
   useEffect(() => {
     if (!cwd) {
@@ -128,6 +155,79 @@ export function MemorySection() {
       </div>
 
       <div className="settings-pane-body">
+        {/* Bundled Inzone Wiki Protocol — read-only viewer. Always
+            rendered (the protocol is bundled with the app, not
+            project-scoped) but the "active" pill only lights up
+            when this workspace has a wiki initialised. Collapsed
+            by default — the protocol is long-form and the user
+            mostly just needs to know it exists and is active. */}
+        <section className="settings-section memory-wiki-protocol">
+          <div className="memory-editor-head">
+            <h3>
+              Inzone Wiki Protocol
+              <span className="memory-protocol-tag">bundled</span>
+            </h3>
+            <span
+              className={
+                'memory-protocol-status ' +
+                (wikiStatus?.initialized
+                  ? 'memory-protocol-status-active'
+                  : 'memory-protocol-status-idle')
+              }
+            >
+              {!cwd
+                ? 'Pick a project to see status'
+                : wikiStatus?.initialized
+                  ? '✓ Active for this project'
+                  : 'Inactive · initialize the wiki to activate'}
+            </span>
+          </div>
+          <p className="settings-section-sub">
+            INZONE ships with a non-editable agent contract that
+            auto-injects into every agent's system prompt the moment
+            a project initialises <code>.inzone/wiki/</code>. It lives
+            in the app binary — not on disk, not editable from
+            CLAUDE.md, not overridable from git. It OVERRIDES any
+            softer wiki-related guidance in CLAUDE.md so agents stay
+            consistent across collaborators and reinstalls.
+          </p>
+          <div className="memory-editor-actions">
+            <button
+              type="button"
+              className="ghost small"
+              onClick={() => setProtocolOpen((v) => !v)}
+            >
+              {protocolOpen ? 'Hide protocol text' : 'View protocol text'}
+            </button>
+          </div>
+          {protocolOpen && (
+            <div className="memory-editor-wrap memory-protocol-viewer">
+              <CodeMirror
+                value={wikiProtocol || 'Loading protocol…'}
+                theme={oneDark}
+                editable={false}
+                extensions={[
+                  ...(vimMode ? [vim()] : []),
+                  markdown({
+                    base: markdownLanguage,
+                    codeLanguages: languages,
+                  }),
+                  // Soft-wrap long lines so the viewer is comfortable
+                  // to read without horizontal scroll.
+                  EditorView.lineWrapping,
+                ]}
+                basicSetup={{
+                  lineNumbers: true,
+                  highlightActiveLine: false,
+                  foldGutter: true,
+                }}
+                minHeight="220px"
+                maxHeight="48vh"
+              />
+            </div>
+          )}
+        </section>
+
         <section className="settings-section">
           <h3>Scope for this workspace</h3>
           <div className="memory-scope-grid">

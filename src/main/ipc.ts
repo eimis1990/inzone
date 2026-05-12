@@ -99,6 +99,7 @@ import {
   appendLogEntry,
   deletePage as wikiDeletePage,
   getWikiStatus,
+  INZONE_WIKI_PROTOCOL,
   initWiki,
   listAllPages as listWikiPages,
   readPage as readWikiPage,
@@ -564,6 +565,10 @@ export function registerIpcHandlers(): void {
       args: { cwd: string; query: string; limit?: number },
     ) => searchWiki(args.cwd, args.query, { limit: args.limit }),
   );
+  // Static bundled-in protocol text. Returned as-is so the renderer
+  // can render it read-only in Settings → CLAUDE.md. No cwd needed
+  // — the protocol doesn't vary per project.
+  ipcMain.handle(IPC.WIKI_GET_PROTOCOL, async () => INZONE_WIKI_PROTOCOL);
 
   ipcMain.handle(
     IPC.SKILLS_INSTALL_RECOMMENDED,

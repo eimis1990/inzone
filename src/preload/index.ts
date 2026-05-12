@@ -433,6 +433,11 @@ const api: CoworkApi = {
       Array<{ path: string; count: number; snippets: string[] }>
     > =>
       ipcRenderer.invoke(IPC.WIKI_SEARCH, { cwd, query, limit }),
+    /** Read the bundled Inzone Wiki Protocol text — read-only, the
+     *  same string that's auto-injected into agent system prompts
+     *  whenever a project has its wiki initialised. */
+    getProtocol: (): Promise<string> =>
+      ipcRenderer.invoke(IPC.WIKI_GET_PROTOCOL),
   },
   state: {
     get: (): Promise<AppState> => ipcRenderer.invoke(IPC.STATE_GET),

@@ -521,32 +521,136 @@ export async function buildWikiContextBlock(
     index = '_(index.md is missing — recreate it on the next ingest)_';
   }
 
-  // Build the wrapped block. We use an XML-style envelope so the
-  // agent's training prior treats it as a structured system context
-  // rather than free-form prose. Same convention we use for skills /
-  // coordination blocks in this project.
+  // Build the wrapped block. XML-style envelope so the agent's
+  // training prior treats it as structured system context rather
+  // than free-form prose. Same convention used for skills /
+  // coordination blocks.
+  //
+  // The protocol below is INZONE's bundled wiki guide — version-
+  // controlled with the app, NOT editable from a project's
+  // CLAUDE.md or git history. It gets injected automatically the
+  // moment a project initialises a wiki and is mandatory from
+  // that point on. The user can't override it; that's the point.
+  // The schema + curated index follow as reference material.
   return [
-    '<wiki_context>',
-    'This project has an LLM-maintained knowledge wiki at `.inzone/wiki/` (committed to the repo, shared with the team). It is the primary, authoritative knowledge base for the project — prefer it over re-reading raw source code when answering questions.',
+    '<inzone_wiki_protocol>',
+    INZONE_WIKI_PROTOCOL,
     '',
-    '## How to USE the wiki',
-    '- **Read first.** When a question or task touches project knowledge, consult the index below to find the relevant page, then Read that page. Cite it with `[[wikilink]]` syntax in your answer.',
-    '- **Update inline.** When you learn something worth recording during your turn — an architectural insight, a gotcha, a new term, a decision — update the relevant wiki page in place as part of your work. Append a short `## [YYYY-MM-DD] ingest | <change>` entry to `log.md` listing every page you touched.',
-    '- **Read the schema before any wiki write.** `wiki-schema.md` (full text below) is the contract — folder layout, page conventions, log format, ADR template. Follow it.',
-    '- **Cite sources.** Every content page has a `## Sources` section listing the files / commits / pages it draws from. Keep it accurate when you edit.',
-    "- **Don't invent.** If something isn't in the code or in existing pages, leave it for a future ingest rather than fabricating.",
-    '- **Cross-link.** Use `[[wikilink]]` between wiki pages, regular markdown links into source code.',
-    '',
-    '## wiki-schema.md (the contract)',
+    '## wiki-schema.md (the contract — read before any wiki write)',
     '',
     schema.trim(),
     '',
     '## index.md (curated table of contents)',
     '',
     index.trim(),
-    '</wiki_context>',
+    '</inzone_wiki_protocol>',
   ].join('\n');
 }
+
+/**
+ * The Inzone Wiki Protocol — non-negotiable instructions for any
+ * agent operating in a project that has a wiki initialised. Bundled
+ * with the app (not on disk, not editable from CLAUDE.md) so it can't
+ * be diluted by a project's git history or a softer per-project
+ * guide. Lands in every agent's system prompt AFTER the project /
+ * global CLAUDE.md, so the model's "most-recent instruction wins"
+ * heuristic plus the explicit "OVERRIDES" language below make this
+ * the authoritative wiki contract.
+ *
+ * Written to fail loudly: imperative tone, explicit triggers (not
+ * "when you learn"), required output structure with concrete file
+ * paths, and a pre-response checklist that's hard to skip. The
+ * previous version's "When NOT to update" hedge gave agents an
+ * always-available escape hatch — agents would decide their current
+ * task wasn't worth documenting and ship without an update.  This
+ * version inverts that: updates are mandatory under named triggers,
+ * with a narrow, explicit exception list at the end.
+ */
+export const INZONE_WIKI_PROTOCOL = `# Mandatory wiki protocol (INZONE-managed)
+
+This project is configured to use \`.inzone/wiki/\` (committed to git, shared across collaborators) as the authoritative institutional memory layer for every agent that touches it — including you. **This protocol is non-negotiable and OVERRIDES any softer wiki-related guidance you may have inherited from CLAUDE.md, your system prompt body, or other instructions.** If those say "consider updating", treat that as "must update under the triggers below".
+
+## Rule of priority
+
+- Wiki disagrees with your training → **trust the wiki**.
+- Wiki disagrees with the current code → **trust the code, fix the wiki on this turn**.
+- Two wiki pages disagree → **flag in \`log.md\` as a \`lint\` entry, ask the user**.
+
+## Mandatory read protocol
+
+Before doing ANY work that touches the codebase or answers a project-specific question:
+
+1. Read \`.inzone/wiki/index.md\` (always).
+2. Read every page whose topic matches your task. Typical pages: \`architecture.md\`, \`conventions/*.md\`, \`glossary.md\`, \`gotchas.md\`, \`decisions/*.md\`. If a subsystem has a dedicated page (e.g. \`auth.md\`, \`sessions.md\`), read it.
+3. End your reply with a \`Wiki refs:\` line listing the pages you consulted, verbatim relative paths. Example: \`Wiki refs: architecture.md, decisions/auth.md\`.
+
+Skipping the read step is a protocol violation.
+
+## Mandatory update protocol
+
+After EVERY task that did any of the following, you MUST update at least one wiki page AND append an entry to \`log.md\` **before sending your final response**:
+
+- You read code in a subsystem and learned something the wiki didn't already document.
+- You made (or proposed) a design / architectural decision: which library, which pattern, what NOT to do.
+- You discovered a non-obvious pattern, gotcha, constraint, or sharp edge.
+- You wrote, edited, or restructured a non-trivial piece of code (anything beyond a typo / lint fix).
+- You answered a project-specific question by synthesizing information across files.
+
+"At least one page" must be a substantive content update — a paragraph or more, with a citation back to source. Not "I bumped a timestamp" or "I touched the file."
+
+The ONLY narrow exceptions where you may skip the update:
+
+- Pure typo / lint / formatting fixes with no behaviour change.
+- The user explicitly said "do not document this" or "do not commit yet".
+- A single-file variable rename with no external implication.
+
+When in doubt, update.
+
+## Update format
+
+For every wiki edit:
+
+1. Use the \`Write\` or \`Edit\` tool — wiki updates must be **visible in the transcript**. Never modify the wiki silently or via shell redirects.
+2. Cite specific files + line ranges in the page body when you can: \`See src/main/sessions.ts:200-450\`.
+3. Cross-link other pages with \`[[wikilink]]\` syntax (Obsidian-compatible), e.g. \`[[architecture]]\` or \`[[decisions/auth]]\`.
+4. Append exactly ONE entry to \`.inzone/wiki/log.md\` per task — even if you touched multiple pages — using this header format:
+
+   \`\`\`
+   ## [YYYY-MM-DD] <type> | <one-line title>
+
+   <2–4 lines: what changed, why, refs to the pages you touched.>
+   \`\`\`
+
+   Types:
+   - \`edit\`   — ordinary content update on existing pages.
+   - \`decide\` — architectural / design decision filed under \`decisions/\`.
+   - \`ingest\` — full ingest pass (multiple pages updated from a source).
+   - \`lint\`   — health check / inconsistency flagged.
+   - \`query\`  — synthesis answer worth preserving as a new page.
+
+   Use **today's date** in YYYY-MM-DD format (use \`date -u +%Y-%m-%d\` via the Bash tool if you're unsure).
+
+## Don't-fabricate rule
+
+The wiki has authority over every future agent. **NEVER write a fact you haven't verified** by one of:
+1. Reading source code (cite file + line range), OR
+2. Running a command (cite the command + observed output), OR
+3. Being explicitly told by the user (cite the conversation).
+
+If you're unsure, mark it explicitly: \`TODO: confirm whether X is required or just convention.\` Never copy boilerplate from training into a wiki page. Never speculate to fill out a page.
+
+## Pre-response checklist
+
+**Before sending your final response on ANY non-trivial turn**, run this checklist mentally and answer honestly:
+
+1. Did I read \`.inzone/wiki/index.md\` and at least one content page? → If no, do it now.
+2. Did I include \`Wiki refs:\` in my reply? → If no, add it.
+3. If I read code or made a decision: did I update at least one page with what I learned? → If no, update it now.
+4. If I touched the wiki: did I append a \`log.md\` entry with today's date and a clear type? → If no, append it now.
+
+If any answer is "no" and you can't defend it under the narrow exceptions above, you are violating the protocol. **Update the wiki before responding** — the user is relying on you to maintain it.
+
+This is the entire contract. Read the schema below for layout conventions, then the curated index for what already exists.`;
 
 // ── Starter content ────────────────────────────────────────────────
 

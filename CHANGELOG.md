@@ -4,6 +4,93 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] — 2026-05-12
+
+### Added
+
+- **Settings → Skills redesigned** as a two-column layout. The
+  user's own skills live on the left as a separated list
+  (hairline row separators, hover tint, no individual card
+  chrome) with the section title + count badge + sort button
+  pinned at the top while the list scrolls under it.
+  Recommended Skills sit on the right as a vertically-scrolling
+  rail. Both columns scroll independently.
+- **Six new Printing Press recommended skills**: pp-firecrawl,
+  pp-docker-hub, pp-scrape-creators, pp-coingecko, pp-figma,
+  pp-x-twitter. One-click install via the existing Press
+  pipeline.
+- **`setupGuide` field on RecommendedSkill** — surfaces an
+  "After install" block in the detail modal with signup link,
+  env-var name, and step-by-step instructions for skills that
+  need an API key. 🔑 "Needs setup" chip on the card before
+  install. Wired for Firecrawl, Scrape Creators, Figma, and X.
+- **Skill editor + new-skill form as a right-side drawer.** No
+  rounded corners, 960px wide, 260ms cubic-bezier slide-in and
+  slide-out (double-RAF so the open animation actually plays
+  on mount). Form contents identical to the previous modal.
+- **`read_pane_response` voice client tool.** Lets the
+  ElevenLabs voice agent read assistant replies aloud when the
+  user asks "what did the frontend agent say?". Identifies the
+  pane by agentName fuzzy match, paneId, or active-pane
+  fallback. Optional count (1–5). Each message truncated to
+  3KB for voice-readability; result packages the text in
+  `agent_must_say` for verbatim reading.
+- **Wiki Read / Wiki updated badges** in tool-call rows.
+  When an agent's Read/Write/Edit/MultiEdit targets a
+  `.inzone/wiki/` path, the tool block renders a yellow accent
+  pill ("Wiki read" or "Wiki updated") instead of the generic
+  done badge — surfaces wiki activity at a glance in long
+  transcripts.
+- **About → Release history** now shows the **full
+  CHANGELOG** (up to 100 entries, was 5). Most-recent release
+  auto-expands; the rest are click-to-expand. New count chip
+  next to the section title.
+- **Inzone Wiki Protocol** — a bundled, non-editable agent
+  contract that auto-injects into every agent's system prompt
+  the moment a project initialises `.inzone/wiki/`. Lives in
+  the app binary (not on disk, not editable from a project's
+  CLAUDE.md, not overridable from git), and OVERRIDES any
+  softer wiki guidance in CLAUDE.md. Rewritten to be
+  imperative with explicit triggers ("after EVERY task that
+  read code → update at least one page") and a pre-response
+  checklist — fixes the previous "When NOT to update" hedge
+  that let agents skip updates on most turns. The earlier
+  "How to USE the wiki" section is removed; the new protocol
+  replaces it.
+- **Wiki protocol viewer in Settings → CLAUDE.md.** New
+  read-only section above the Project / Global editors with a
+  `BUNDLED` chip on the heading and a live status line:
+  `✓ Active for this project` when the workspace has a wiki
+  initialised, or `Inactive · initialize the wiki to activate`
+  otherwise. Click "View protocol text" to expand a read-only
+  CodeMirror viewer with the full protocol — so you can see
+  exactly what gets injected, without being able to edit it.
+
+### Changed
+
+- **Recommended Skills cards** widened (360 → 400 px), tighter
+  vertical padding, 2-line description clamp, no min-height so
+  cards hug content. Description's `flex: 1` + footer's
+  `margin-top: auto` removed — they were creating phantom
+  empty space at the bottom of each card.
+- **Tool-block row layout fix.** `.tool-spacer` was
+  `flex: 0 0 auto` so the status badge wasn't being pushed to
+  the right — most visible on `AskUserQuestion` rows where
+  there's no input preview. Now `flex: 1 1 auto`, and the
+  `#toolu_id` chip sits to the left of the status pill so the
+  pill is always the rightmost element.
+
+### Fixed
+
+- **AskUserQuestion form failing silently** in agent panes.
+  Agents were hitting the Claude Code Cowork-mode built-in
+  `AskUserQuestion` (which returns a "Answer questions?"
+  placeholder outside Cowork) instead of our in-process MCP
+  tool `mcp__AskUserQuestion__ask`. The SDK options now carry
+  `disallowedTools: ['AskUserQuestion']` so the built-in is
+  banned and every call routes to the working MCP version
+  that actually renders the inline form.
+
 ## [1.13.0] — 2026-05-11
 
 ### Added

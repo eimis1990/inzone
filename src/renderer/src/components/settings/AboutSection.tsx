@@ -12,9 +12,11 @@ import type {
  *  2. Let the user trigger a manual update check that delegates to
  *     electron-updater (so a found update lands at the same Restart
  *     now/Later dialog as the background poll).
- *  3. Render the last 5 CHANGELOG entries as collapsible release
- *     notes — Added/Changed/Fixed sections with bullets parsed
- *     server-side from the same markdown the project ships.
+ *  3. Render the full CHANGELOG (up to 100 entries) as collapsible
+ *     release notes — Added/Changed/Fixed sections with bullets
+ *     parsed server-side from the same markdown the project ships.
+ *     Only the most recent release is auto-expanded; the rest are
+ *     click-to-expand so a long history doesn't dominate the page.
  */
 export function AboutSection() {
   const [version, setVersion] = useState<string>('—');
@@ -31,8 +33,13 @@ export function AboutSection() {
     void window.cowork.about.version().then(setVersion).catch(() => {
       setVersion('unknown');
     });
+    // Pull the full changelog (server-side cap is 100). Was 5 in
+    // v1.13 — users wanted to scroll back further than the last
+    // handful of releases. The list is collapsed by default
+    // (except the most recent) so the page doesn't become a wall
+    // of bullets on first open.
     void window.cowork.about
-      .releaseNotes({ limit: 5 })
+      .releaseNotes({ limit: 100 })
       .then((entries) => {
         setNotes(entries);
         // Default to expanding the most recent entry — gives the
@@ -95,7 +102,14 @@ export function AboutSection() {
         </section>
 
         <section className="about-section">
-          <div className="about-section-title">Recent releases</div>
+          <div className="about-section-title">
+            Release history
+            {notes && notes.length > 0 && (
+              <span className="about-section-count">
+                {notes.length}
+              </span>
+            )}
+          </div>
           {notes === null && (
             <div className="about-empty">Loading release notes…</div>
           )}

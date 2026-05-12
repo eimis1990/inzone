@@ -4304,7 +4304,13 @@ code.voice-tool-card-value {
   min-width: 0;
   opacity: 0.85;
 }
-.msg.tool-block .tool-spacer { flex: 0 0 auto; }
+/* Flex-grow on the spacer so it actually fills the available space
+   and pushes the status badge + tool-id to the right edge. Was
+   `flex: 0 0 auto` — that resolves to width:0 in this row, leaving
+   the status and id glued to the input preview on the left side
+   instead of the right (which is what the AskUserQuestion error
+   row showed). */
+.msg.tool-block .tool-spacer { flex: 1 1 auto; }
 .msg.tool-block .tool-status {
   font-size: 10px;
   text-transform: uppercase;
@@ -4327,6 +4333,16 @@ code.voice-tool-card-value {
   background: rgba(242, 109, 122, 0.16);
   border-color: rgba(242, 109, 122, 0.36);
   color: var(--danger);
+}
+/* Accent (yellow) variant for wiki Read/Write/Edit operations. Same
+   shape as the other status pills but uses the brand accent so wiki
+   activity is visually distinct from generic done/error. Solid fill
+   with dark text for readability against the bright yellow. */
+.msg.tool-block .tool-status.wiki {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on, #18181a);
+  font-weight: 700;
 }
 .msg.tool-block.status-error {
   border-color: rgba(242, 109, 122, 0.35);
@@ -9036,6 +9052,51 @@ select:focus {
 }
 .memory-editor-head h3 {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Pill next to the section title — signals that this section's
+   content is bundled with the app (not editable from disk). */
+.memory-protocol-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+/* Active / idle status line for the wiki protocol section. The
+   active variant uses the success colour so the user can confirm
+   at a glance that the protocol IS firing for this project. */
+.memory-protocol-status {
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  margin-left: auto;
+}
+.memory-protocol-status-active {
+  color: var(--ok, #5fce8f);
+}
+.memory-protocol-status-idle {
+  color: var(--text-dim);
+}
+/* Read-only CodeMirror viewer for the protocol — visually distinct
+   from the editable Project / Global panes underneath. A subtle
+   accent-tinted border tells the user "this is reference, not
+   editable." */
+.memory-protocol-viewer {
+  border: 1px solid
+    color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 6px;
+  overflow: hidden;
 }
 .memory-path {
   font-family: var(--font-mono);
@@ -14150,6 +14211,9 @@ select:focus {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 4px;
 }
 .about-empty {
@@ -14159,6 +14223,28 @@ select:focus {
   border: 1px dashed var(--border);
   color: var(--muted, var(--text-dim));
   font-size: 12.5px;
+}
+/* Small numeric pill next to "Release history" — same pattern as
+   the YOUR SKILLS count badge. Tells the user at a glance how many
+   releases they're scrolling through. Drops the parent
+   `.about-section-title` uppercase + tracking treatment because
+   pure digits don't want either. */
+.about-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  text-transform: none;
+  letter-spacing: 0;
 }
 .about-release-list {
   list-style: none;

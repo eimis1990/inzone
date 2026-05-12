@@ -153,6 +153,11 @@ export const IPC = {
   WIKI_DELETE_PAGE: 'wiki:deletePage',
   /** Voice agent — case-insensitive search across every wiki page. */
   WIKI_SEARCH: 'wiki:search',
+  /** Read the bundled, non-editable Inzone Wiki Protocol — the
+   *  imperative agent contract that auto-injects whenever a project
+   *  has `.inzone/wiki/` initialised. Exposed read-only so the user
+   *  can view it from Settings → CLAUDE.md. */
+  WIKI_GET_PROTOCOL: 'wiki:getProtocol',
 
   /** Install a curated recommended skill into ~/.claude/skills/. */
   SKILLS_INSTALL_RECOMMENDED: 'skills:installRecommended',

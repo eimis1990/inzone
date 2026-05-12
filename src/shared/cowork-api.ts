@@ -478,6 +478,12 @@ export interface CoworkApi {
     ): Promise<
       Array<{ path: string; count: number; snippets: string[] }>
     >;
+    /** Return the bundled Inzone Wiki Protocol — the imperative
+     *  agent contract that auto-injects whenever a project has
+     *  its wiki initialised. Read-only; lives in the app binary,
+     *  not on disk. Used by Settings → CLAUDE.md to render the
+     *  protocol so users can see what gets injected. */
+    getProtocol(): Promise<string>;
   };
   state: {
     get(): Promise<AppState>;
