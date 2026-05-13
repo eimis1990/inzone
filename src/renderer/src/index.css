@@ -93,32 +93,50 @@ textarea {
   background: transparent;
 }
 
+/* Outer container — provides the 20px inset around the framed band
+   and hosts the INZONE wordmark (which sits OUTSIDE the frame on the
+   right so the brand reads as the app's signature). Background is
+   the page color; the frame inside owns the visible chrome. The
+   bottom border was dropped in v1.15 — the framed band + rounded
+   pane host below already provide enough visual separation. */
 .workspace-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 16px;
+  gap: 16px;
+  padding: 20px;
   background: var(--bg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
-  min-height: 56px;
+}
+/* Inner framed band — holds every control button. 60px tall, 12px
+   corner radius, 1px #353536 border, transparent fill so the
+   buttons (filled #1C1C1E) read as inset modules within the band.
+   The 10px horizontal padding combined with the 40px-tall buttons
+   gives the 10px vertical centring the design ask called for. */
+.workspace-bar-frame {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid #353536;
+  border-radius: 12px;
+  min-width: 0;
 }
 .wb-group {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
 }
-/* Right-hand clusters get a touch more internal spacing so the chip
-   and switches don't crowd each other. */
-.wb-group-state {
-  gap: 12px;
-}
+/* Right-hand utilities cluster — same 10px gap rhythm as the other
+   groups now that everything inside the frame is on the same grid. */
 .wb-group-utils {
   gap: 10px;
 }
 .wb-divider {
   width: 1px;
-  height: 22px;
+  height: 28px;
   background: rgba(255, 255, 255, 0.07);
   flex-shrink: 0;
 }
@@ -126,32 +144,83 @@ textarea {
   flex: 1;
 }
 
-/* Icon-only buttons */
+/* Icon-only buttons — square 40x40, 6px corner radius, filled with
+   #1C1C1E so they sit as opaque tiles inside the frame's band. */
 .wb-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
   color: var(--text-dim);
-  background: transparent;
+  background: #1c1c1e;
   border: 1px solid transparent;
-  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+  flex-shrink: 0;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
 }
 .wb-icon-btn:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
+  background: #232325;
 }
+/* `active` and `framed` share the same chrome — both flag a button
+   that should read as "on" or "tinted" inside the bar. v1.15
+   design ask dropped the accent-tinted border on square buttons;
+   active state now relies on icon colour alone (icons inherit
+   `var(--text)` instead of `var(--text-dim)`). */
 .wb-icon-btn.active {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: #1c1c1e;
 }
 .wb-icon-btn.disabled,
 .wb-icon-btn:disabled {
   color: var(--muted);
   cursor: default;
-  background: transparent;
+  background: #1c1c1e;
+  opacity: 0.55;
+}
+
+/* Flow square button — chrome matches the sound toggle so the
+   right-side group reads as a consistent row of on/off square
+   actions. When the board view is open ("active"), the button
+   takes on the same accent-fill + black-icon look as `.wb-switch.on`
+   — same visual language as the sound toggle's armed state.
+   When Flow is ENABLED (chains firing) but the board isn't open,
+   a tiny accent dot in the top-right corner signals "live" without
+   recolouring the whole button. */
+.wb-icon-btn.wb-flow-btn {
+  position: relative;
+}
+/* Active = board view is showing. Override `.wb-icon-btn.active`
+   chrome with accent fill + black icon to match `.wb-switch.on`. */
+.wb-icon-btn.wb-flow-btn.active {
+  background: var(--accent);
+  color: #000000;
+  border-color: transparent;
+}
+.wb-icon-btn.wb-flow-btn.active:hover {
+  background: color-mix(in srgb, var(--accent) 92%, #000);
+}
+.wb-icon-btn.wb-flow-btn .wb-flow-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  /* Subtle accent halo so the dot reads as "live" without being
+     loud. Hidden when the button itself is already accent-filled
+     (active state) — the fill already conveys "on", no need for
+     a dot on top of it. */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  pointer-events: none;
+}
+.wb-icon-btn.wb-flow-btn.active .wb-flow-dot {
+  display: none;
 }
 
 /* Labeled pills (folder, workspaces) */
@@ -170,15 +239,15 @@ textarea {
 .wb-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  height: 30px;
+  gap: 8px;
+  padding: 0 14px;
+  height: 40px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  /* Subtle accent-tinted border by default — unifies all the wb-pill
-     buttons (Workspaces, Preview, Review, Usage) into one visual
-     family. Hover deepens the border to full accent. */
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: #1c1c1e;
+  /* No visible border by default — the v1.15 frame redesign asked
+     for clean #1C1C1E fills without an accent tint. Hover still
+     lights up the border so interactive feedback survives. */
+  border: 1px solid transparent;
   color: var(--text);
   font-size: 12px;
   font-weight: 500;
@@ -187,7 +256,7 @@ textarea {
     color 120ms ease;
 }
 .wb-pill:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: #232325;
   border-color: var(--accent);
 }
 .wb-pill:disabled {
@@ -264,15 +333,11 @@ textarea {
   display: inline-flex;
   align-items: center;
   /* Sized to match `.wb-pill` (Preview / Workspaces / Usage etc.) so
-     the workspace bar reads as one row of equal-height pills. */
-  height: 30px;
-  padding: 3px;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.04) 0%,
-      rgba(255, 255, 255, 0.015) 100%
-    );
+     the workspace bar reads as one row of equal-height pills.
+     Bumped from 30px → 40px in v1.15 alongside the frame redesign. */
+  height: 40px;
+  padding: 4px;
+  background: #1c1c1e;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 999px;
   box-shadow:
@@ -300,14 +365,15 @@ textarea {
     var(--accent) 0%,
     color-mix(in srgb, var(--accent) 88%, #000) 100%
   );
+  /* v1.15: dropped the accent-tinted outer glow shadow. The thumb
+     now relies on its solid fill against the dark track for visual
+     pop — keeps the bar reading flat without a yellow halo. The
+     inner highlight + bottom shadow inside the thumb stay for
+     a touch of dimensional polish that doesn't bleed outside. */
   box-shadow:
-    0 4px 14px color-mix(in srgb, var(--accent) 28%, transparent),
-    0 1px 2px rgba(0, 0, 0, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
     inset 0 -1px 0 rgba(0, 0, 0, 0.08);
-  transition:
-    transform 360ms cubic-bezier(0.32, 0.72, 0, 1),
-    box-shadow 240ms ease;
+  transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
   pointer-events: none;
   will-change: transform;
 }
@@ -522,46 +588,81 @@ textarea {
 }
 
 /* Sound switch — smaller, cleaner */
+/* Sound toggle — converted in v1.15 from a horizontal pill toggle
+   (42×22 with a sliding knob) into a 40×40 square button that
+   matches the rest of the workspace bar's icon-button rhythm.
+   Off state: dark fill (#1c1c1e) with a dim bell icon. On state:
+   accent fill with a dark bell icon. The .wb-switch-track + knob
+   nested spans are reused as a clean container for the icon so
+   the TSX surface stays the same. */
 .wb-switch {
-  width: 42px;
-  height: 22px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  background: transparent;
-  border: none;
+  background: #1c1c1e;
+  border: 1px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+  color: var(--text-dim);
 }
-.wb-switch-track {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  position: relative;
-  transition: background 180ms ease, border-color 180ms ease;
+.wb-switch:hover {
+  background: #232325;
+  color: var(--text);
 }
-.wb-switch.on .wb-switch-track {
+.wb-switch.on {
   background: var(--accent);
-  border-color: var(--accent);
+  /* Filled-black bell on the yellow accent fill. White was tried
+     first but didn't read well against the bright yellow — black
+     gives much higher contrast and matches the standard "on" look
+     of macOS toggles. */
+  color: #000000;
+}
+.wb-switch.on:hover {
+  /* Slightly darker on hover so the on-state still has interactive
+     feedback without losing the brand-accent identity. */
+  background: color-mix(in srgb, var(--accent) 92%, #000);
+}
+/* Inner track/knob nodes are kept for markup compatibility but
+   reduced to layout-only containers — they no longer carry the
+   old toggle chrome. The bell icon inside .wb-switch-knob is the
+   only visual element. */
+.wb-switch-track {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  position: static;
 }
 .wb-switch-knob {
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 18px;
-  height: 18px;
-  background: #ffffff;
-  color: #0a0d0b;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  position: static;
+  width: auto;
+  height: auto;
+  background: transparent;
+  color: inherit;
+  border-radius: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: none;
+  transition: none;
+  box-shadow: none;
 }
 .wb-switch.on .wb-switch-knob {
-  transform: translateX(18px);
-  color: var(--accent-on);
+  /* Override the legacy translateX so the icon stays centred in
+     the 40×40 box. */
+  transform: none;
 }
 
 /* Brand — wordmark + logo */
@@ -1303,9 +1404,12 @@ textarea {
 
 .body {
   display: grid;
-  /* 350px gives the three tabs (Projects / Agents / Voice) a bit more
-     breathing room than 312px did — same content, less crowding. */
-  grid-template-columns: 350px 1fr;
+  /* 370px — a 20px bump over the original 350px so the framed
+     sidebar's internal content (project paths, branch label at the
+     bottom) doesn't ellipsize as soon as it used to. Was briefly
+     390px in this iteration; tightened to 370 once the visual
+     looked too wide for typical content. */
+  grid-template-columns: 370px 1fr;
   min-height: 0;
   transition: grid-template-columns 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
@@ -1317,9 +1421,18 @@ textarea {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-right: 1px solid var(--border);
   position: relative;
   background: var(--bg);
+  /* v1.15 frame redesign — same rounded chrome as the pane-host on
+     the right, so the body reads as two parallel framed panels
+     under the workspace bar. Three-sided margin: 0 top (workspace
+     bar above handles spacing), 0 right so the pane-host's existing
+     `margin-left: 20px` is the single source of the channel between
+     the two frames (no doubling), 20 bottom + 20 left to keep the
+     frame inset symmetric with the workspace bar above. */
+  margin: 0 0 20px 20px;
+  border: 1px solid #353536;
+  border-radius: 12px;
 }
 /* Brick-staggered brand pattern. The SVG tile contains four glyphs in
    two offset rows with alternating yellow/white tints; tiling at the
@@ -3047,6 +3160,15 @@ code.voice-tool-card-value {
      lives in absolute positioning so it can hover over the panes. */
   display: grid;
   grid-template-rows: 1fr auto;
+  /* v1.15 frame design — round the OUTER pane container to match
+     the workspace-bar frame. Border matches `#353536` from the
+     workspace bar, 12px radius. Margin around three edges so the
+     rounded corners are visible against the page bg (left edge sits
+     flush against the sidebar so there's no double gap). overflow:
+     hidden above already clips internal panes to the rounded shape. */
+  margin: 0 20px 20px 20px;
+  border: 1px solid #353536;
+  border-radius: 12px;
 }
 
 /* ─── Terminal dock (bottom of pane host) ────────────────────────────── */
@@ -3626,10 +3748,13 @@ code.voice-tool-card-value {
   flex-direction: column;
   height: 100%;
   background: var(--bg-elev);
-  /* Selection used to be a coloured pane border — the header itself is
-     now the selection indicator, so we keep the border subtle and
-     unchanging. Remove the active-state inset glow too. */
-  border: 1px solid var(--border);
+  /* v1.15: dropped the per-pane 1px border. The pane-host above now
+     provides the outer rounded frame (#353536), and resize handles
+     between panes (`.resize-handle`, 4px) draw the internal
+     separators — so the pane's own border was just doubling the
+     outer frame's line and reading as a thicker rule. Selection
+     uses the header's accent stripe alone. */
+  border: none;
   overflow: hidden;
   transition: background 160ms ease;
   container-type: inline-size;

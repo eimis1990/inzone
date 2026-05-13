@@ -4,7 +4,6 @@ import { useStore } from '../store';
 import { primeAudio } from '../chime';
 import { LayoutsModal } from './LayoutsModal';
 import { TasksModal } from './TasksModal';
-import { fmt } from './UsageModal';
 import { SettingsDrawer } from './SettingsDrawer';
 import type { SettingsSection } from './settings/types';
 import { AppLogo } from './AppLogo';
@@ -45,7 +44,6 @@ export function WorkspaceBar() {
   const toggleSidebarCollapsed = useStore((s) => s.toggleSidebarCollapsed);
   const soundEnabled = useStore((s) => s.soundEnabled);
   const toggleSound = useStore((s) => s.toggleSound);
-  const usage = useStore((s) => s.usage);
   const setMissionControlOpen = useStore((s) => s.setMissionControlOpen);
   const [showPresets, setShowPresets] = useState(false);
   const [renamingWorkspaceId, setRenamingWorkspaceId] = useState<string | null>(
@@ -131,6 +129,13 @@ export function WorkspaceBar() {
 
   return (
     <div className="workspace-bar">
+      {/* All control buttons live inside the framed band. The frame
+          itself is 60px tall with a 1px #353536 border and 12px
+          corner radius; the surrounding `.workspace-bar` provides the
+          20px inset around all four edges. The INZONE wordmark sits
+          OUTSIDE the frame on the right so the brand reads as the
+          app's signature, not a button in the row. */}
+      <div className="workspace-bar-frame">
       {/* Left cluster: sidebar toggle + folder + workspaces */}
       <div className="wb-group">
         <IconButton
@@ -429,24 +434,17 @@ export function WorkspaceBar() {
 
       <div className="wb-spacer" />
 
-      {/* Right cluster: state */}
-      <div className="wb-group wb-group-state">
-        <button
-          className="wb-pill wb-cost"
-          onClick={() => setDrawerSection('usage')}
-          title={`Today ${fmt(usage?.todayCostUsd ?? 0)} · Lifetime ${fmt(usage?.totalCostUsd ?? 0)}`}
-        >
-          <span className="wb-cost-amount">
-            {fmt(usage?.todayCostUsd ?? 0)}
-          </span>
-          <span className="wb-cost-label">today</span>
-        </button>
-      </div>
+      {/* Cost chip (`$X.XX TODAY`) removed in v1.15 — running cost
+          still lives in Settings → Usage & cost; the bar focuses on
+          control surfaces, not telemetry. */}
 
-      <div className="wb-divider" aria-hidden />
-
-      {/* Utilities cluster: sound first, then settings */}
+      {/* Utilities cluster: Flow (when applicable), sound, mission
+          control, settings. Flow renders itself null when the active
+          session isn't in Multi mode with ≥2 panes, so the row
+          collapses cleanly to just sound + mission control + settings
+          when Flow isn't relevant. */}
       <div className="wb-group wb-group-utils">
+        <FlowSquareButton />
         <button
           type="button"
           className={'wb-switch' + (soundEnabled ? ' on' : ' off')}
@@ -465,9 +463,25 @@ export function WorkspaceBar() {
           <span className="wb-switch-track">
             <span className="wb-switch-knob" aria-hidden>
               {soundEnabled ? (
-                <BellIcon size={12} stroke={2} />
+                // Filled white bell when on — solid silhouette gives
+                // a stronger "armed" signal than a hollow stroke, and
+                // the white-on-accent contrast pops against the
+                // surrounding dark icon buttons. Inline SVG (not the
+                // stroke-based BellIcon) so we can `fill="currentColor"`
+                // and have CSS drive the colour to white via the
+                // `.wb-switch.on` rule.
+                <svg
+                  width={20}
+                  height={20}
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden
+                >
+                  <path d="M12 2.5a5.5 5.5 0 0 0-5.5 5.5v3.4c0 1.2-.42 2.36-1.18 3.27L4 16.4v1.1h16v-1.1l-1.32-1.74A5.04 5.04 0 0 1 17.5 11.4V8A5.5 5.5 0 0 0 12 2.5Z" />
+                  <path d="M9.4 19.5a2.7 2.7 0 0 0 5.2 0Z" />
+                </svg>
               ) : (
-                <BellOffIcon size={12} stroke={2} />
+                <BellOffIcon size={18} stroke={1.75} />
               )}
             </span>
           </span>
@@ -494,13 +508,18 @@ export function WorkspaceBar() {
           <SettingsIcon />
         </IconButton>
       </div>
-
+      {/* Brand sits at the right end of the framed band so its
+          right edge lines up with the pane-host's frame (both
+          anchored 20px from the viewport). Was outside the frame
+          in the first v1.15 iteration; moved inside for visual
+          alignment. */}
       <div className="wb-brand" title="INZONE">
         <span className="wb-wordmark" aria-hidden>
           INZONE
         </span>
         <AppLogo size={30} />
       </div>
+      </div>{/* /.workspace-bar-frame */}
 
       <LayoutsModal open={showLayouts} onClose={() => setShowLayouts(false)} />
       <TasksModal open={showTasks} onClose={() => setShowTasks(false)} />
@@ -558,45 +577,19 @@ function IconButton({
 }
 
 /**
- * Multi Agents / Lead Agent segmented control. Modern variant — the
- * two segments share a frosted track and a sliding accent thumb that
- * glides between them when you switch. The "Flow" sub-button lives
- * just outside the track; it slides in from the left when you're in
- * Multi Agents mode with ≥2 panes (and slides back out when you flip
- * to Lead Agent), so the chrome only shows up when it's relevant.
- *
- * Why outside the track instead of nested in the active pill: keeping
- * the segmented control symmetrical (two equal segments, one sliding
- * thumb) makes the mode-toggle interaction predictable, and gives the
- * Flow affordance its own room to breathe. The two read as related
- * (gap stays tight, both share the same height + radius) without
- * Flow stealing the pill's geometry mid-animation.
+ * Multi Agents / Lead Agent segmented control. Two equal segments
+ * share a frosted track with a sliding accent thumb that glides
+ * between them on switch. The Flow affordance was originally nested
+ * inside this shell as a sliding chip next to the Multi segment;
+ * in v1.15 it moved out into the right-hand utilities group as a
+ * standalone square icon button (`FlowSquareButton`) — symmetrical
+ * with the other right-side controls (sound, mission control,
+ * settings), and the pane-count + mode gate lives in that component
+ * directly so this control stays focused on mode selection only.
  */
 function ModeSwitch() {
   const mode = useStore((s) => s.windowMode);
   const setWindowMode = useStore((s) => s.setWindowMode);
-  // Pane count gate: Flow needs at least two AGENT panes to be useful.
-  // Terminal-kind panes (Claude Code, Codex, Aider, Gemini, plain
-  // shell) aren't part of the chain — they appear as info-only cards
-  // on the board if the chip is shown, but they don't satisfy the
-  // gate on their own. We also include the Lead pane in the count
-  // when present (it's outside the tree but a real participant).
-  const paneCount = useStore((s) => {
-    const tree = s.tree;
-    let n = 0;
-    const walk = (node: typeof s.tree): void => {
-      if (node.kind === 'leaf') {
-        if (node.workerKind !== 'terminal') n += 1;
-      } else for (const c of node.children) walk(c);
-    };
-    walk(tree);
-    if (s.leadPaneId) n += 1;
-    return n;
-  });
-  // Flow is only meaningful in Multi mode and when at least two panes
-  // exist. We render the chip whenever those conditions hold; CSS
-  // handles the slide-in/out so the transition is always smooth.
-  const showFlow = mode === 'multi' && paneCount >= 2;
 
   return (
     <div className="mode-switch-shell" aria-label="Window mode">
@@ -605,12 +598,9 @@ function ModeSwitch() {
         role="tablist"
         aria-label="Window mode"
       >
-        {/* Sliding accent thumb — its position is purely a function of
-            the parent's `mode-multi` / `mode-lead` class, so the
-            transition runs entirely in CSS without any JS measurement.
-            Note: Lead is the LEFT segment now, Multi is on the RIGHT,
-            sitting closer to the Flow slot since Flow is an extension
-            of Multi mode — visual hint that the two belong together. */}
+        {/* Sliding accent thumb — position driven purely by the
+            parent's `mode-multi` / `mode-lead` class, so the
+            transition runs entirely in CSS. */}
         <span className="mode-switch-thumb" aria-hidden />
         <button
           role="tab"
@@ -633,61 +623,58 @@ function ModeSwitch() {
           <span>Multi Agents</span>
         </button>
       </div>
-
-      {/* Flow slot — animates max-width / opacity / translateX so it
-          slides in from the left of its slot when Multi Agents mode is
-          active (with ≥2 panes), and slides back out otherwise. We
-          render the chip unconditionally and let the slot's CSS hide
-          it; that way the FlowChip's store subscriptions don't churn
-          on every mode switch. */}
-      <div
-        className={'mode-flow-slot' + (showFlow ? ' visible' : '')}
-        aria-hidden={!showFlow}
-      >
-        <FlowChip />
-      </div>
     </div>
   );
 }
 
 /**
- * The "Flow" sub-button embedded inside the active Multi Agents pill.
- * Toggles the pipeline-board view in place of the panes view.
- *
- * Lives as its own component so we can stop click propagation —
- * clicking the chip should toggle the view without re-firing the
- * Multi Agents tab selector.
+ * Square 40×40 Flow toggle that lives in the right-hand utilities
+ * group (alongside sound / mission control / settings). Shows only
+ * when the active session is in Multi mode with ≥2 agent panes —
+ * Flow chains sends across panes, so it's not meaningful for a
+ * single pane or for Lead mode. Active = pipeline board view;
+ * inactive = panes view. A small accent dot appears in the corner
+ * when Flow is ENABLED (chains are firing), regardless of which
+ * view is showing — visible reminder that sends are being routed
+ * through the chain.
  */
-function FlowChip() {
+function FlowSquareButton() {
+  const mode = useStore((s) => s.windowMode);
+  // Pane count gate: Flow needs at least two AGENT panes to be
+  // useful. Terminal-kind panes (Claude Code, Codex, Aider,
+  // Gemini, plain shell) aren't part of the chain — they appear
+  // as info-only cards on the board if the button is shown, but
+  // they don't satisfy the gate on their own. The Lead pane
+  // counts when present (Lead is a real participant even though
+  // it sits outside the tree).
+  const paneCount = useStore((s) => {
+    const tree = s.tree;
+    let n = 0;
+    const walk = (node: typeof s.tree): void => {
+      if (node.kind === 'leaf') {
+        if (node.workerKind !== 'terminal') n += 1;
+      } else for (const c of node.children) walk(c);
+    };
+    walk(tree);
+    if (s.leadPaneId) n += 1;
+    return n;
+  });
   const view = useStore((s) => s.pipelineView);
   const setView = useStore((s) => s.setPipelineView);
   const flowEnabled = useStore((s) => s.pipeline?.enabled === true);
-  // Two pieces of state for the chip: which view is showing (board vs.
-  // panes), and whether flow is enabled. The chip is "active-look" only
-  // when board view is open. The little glowing dot indicates flow is
-  // ON regardless of which view you're in — visible reminder that
-  // sends are being chained behind the scenes.
+
+  if (mode !== 'multi' || paneCount < 2) return null;
+
   const showingBoard = view === 'board';
   return (
-    <span
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       className={
-        'mode-flow-chip' +
+        'wb-icon-btn wb-flow-btn' +
         (showingBoard ? ' active' : '') +
-        (flowEnabled ? ' enabled' : '')
+        (flowEnabled ? ' wb-flow-enabled' : '')
       }
-      onClick={(e) => {
-        e.stopPropagation();
-        setView(showingBoard ? 'panes' : 'board');
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          e.stopPropagation();
-          setView(showingBoard ? 'panes' : 'board');
-        }
-      }}
+      onClick={() => setView(showingBoard ? 'panes' : 'board')}
       title={
         showingBoard
           ? 'Back to panes view'
@@ -695,21 +682,15 @@ function FlowChip() {
             ? 'Flow is ON — sends to one pane chain to the next.'
             : 'Open Flow to chain panes into a sync sequence.'
       }
+      aria-label="Toggle Flow board view"
+      aria-pressed={showingBoard}
     >
-      {/* Inline icon — fill-only shapes (no strokes) so the visual
-          weight matches the text when both inherit currentColor.
-          Idle: a 2×2 panes grid (this is what the chip lets you go
-          BACK to, and reads as "multiple panes"). Active: a stepped
-          diagonal flow that maps to the Flow board's bezier-line
-          visual. The geometry swap reinforces the view transition. */}
+      {/* Inline flow icon — stepped diagonal chain when idle (the
+          board view), 2×2 panes grid when board is active (signals
+          "go back to panes"). Geometry swap mirrors the previous
+          pill version. */}
       {showingBoard ? (
-        <svg
-          width="20"
-          height="12"
-          viewBox="0 0 24 14"
-          fill="currentColor"
-          aria-hidden
-        >
+        <svg width="20" height="14" viewBox="0 0 24 14" fill="currentColor" aria-hidden>
           <circle cx="3" cy="3.5" r="2.4" />
           <rect x="5" y="2.6" width="6" height="1.8" rx="0.9" />
           <circle cx="13" cy="3.5" r="2.4" />
@@ -718,13 +699,7 @@ function FlowChip() {
           <circle cx="21" cy="10.5" r="2.4" />
         </svg>
       ) : (
-        <svg
-          width="22"
-          height="10"
-          viewBox="0 0 26 8"
-          fill="currentColor"
-          aria-hidden
-        >
+        <svg width="22" height="10" viewBox="0 0 26 8" fill="currentColor" aria-hidden>
           <circle cx="3" cy="4" r="2.2" />
           <rect x="5" y="3.1" width="6" height="1.8" rx="0.9" />
           <circle cx="13" cy="4" r="2.2" />
@@ -732,11 +707,15 @@ function FlowChip() {
           <circle cx="23" cy="4" r="2.2" />
         </svg>
       )}
-      <span>Flow</span>
-      {flowEnabled && <span className="mode-flow-dot" aria-hidden />}
-    </span>
+      {flowEnabled && <span className="wb-flow-dot" aria-hidden />}
+    </button>
   );
 }
+
+/* FlowChip pill (was nested inside the Multi Agents segment shell)
+   was removed in v1.15. Its replacement, `FlowSquareButton` above,
+   renders a 40×40 square icon button in the utilities group and
+   owns its own mode + pane-count gating. */
 
 /**
  * "Review" chip — sits in the left cluster (replacing the old
