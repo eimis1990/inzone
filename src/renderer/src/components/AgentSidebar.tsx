@@ -513,12 +513,25 @@ function WorkersTab() {
                     if (!activePaneId) return;
                     const activePane = panes[activePaneId];
                     if (activePane?.agentName === a.name) return;
+                    // Agent → agent swap: warn about lost
+                    // conversation context.
                     if (
                       activePane?.agentName &&
                       activePane.agentName !== a.name
                     ) {
                       const ok = confirm(
                         `Replace ${activePane.agentName} with ${a.name} in this pane? The current conversation will end and any unsaved context will be lost.`,
+                      );
+                      if (!ok) return;
+                    }
+                    // Terminal → agent swap: setPaneAgent destroys
+                    // the PTY (no memory leak — verified) but the
+                    // user should still confirm since the running
+                    // shell + any in-progress process get killed.
+                    // Symmetric with the agent-swap confirm above.
+                    else if (activePane?.workerKind === 'terminal') {
+                      const ok = confirm(
+                        `Replace the terminal in this pane with ${a.name}? The running shell and any in-progress process will be terminated, and scrollback is not preserved.`,
                       );
                       if (!ok) return;
                     }

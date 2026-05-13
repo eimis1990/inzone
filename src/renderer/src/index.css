@@ -2,7 +2,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Squada+One&display=swap');
 
 :root {
-  --bg: #0C0E12;
+  /* v1.15.1 (final shape): bumped from #0C0E12 to #0A0D0B so the
+     base background tone matches the formerly-Lead-only darker
+     shade. The previous `.lead-slot > .pane.active { background:
+     #0a0d0b }` override gave Lead panes a distinctly deeper look
+     than sub-panes that the user preferred; rolling that into the
+     base var makes every framed surface (panes, sidebar, workspace
+     bar frame, lead pane) share the same deeper tone. Small 1-7
+     unit drop per channel — visually subtle elsewhere, no breakage
+     across modals / dropdowns. */
+  --bg: #0A0D0B;
   --bg-elev: #14171C;
   /* Alias matching the naming scheme used across newer components.
      `--bg-elev-1` is the first elevation step above the base bg —
@@ -42,7 +51,12 @@ body,
   height: 100%;
   margin: 0;
   padding: 0;
-  background: var(--bg);
+  /* Canvas — the colour that shows in the gaps between the three
+     framed views (workspace-bar frame, sidebar frame, pane-host
+     frame). Matches the square-button fill so the canvas + buttons
+     read as one surface family; the frame borders (#1F1F1F) provide
+     the visual seams. */
+  background: #1c1c1e;
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 13px;
@@ -94,9 +108,11 @@ textarea {
 }
 
 /* Outer container — provides the 20px inset around the framed band
-   and hosts the INZONE wordmark (which sits OUTSIDE the frame on the
-   right so the brand reads as the app's signature). Background is
-   the page color; the frame inside owns the visible chrome. The
+   and hosts the INZONE wordmark inside the frame on the right end.
+   Background matches the page canvas (#1C1C1E) so the 20px inset
+   between the frame and the viewport edges reads as part of the
+   same surface as the gaps around the sidebar and pane-host below
+   — one consistent canvas color throughout the empty space. The
    bottom border was dropped in v1.15 — the framed band + rounded
    pane host below already provide enough visual separation. */
 .workspace-bar {
@@ -104,12 +120,14 @@ textarea {
   align-items: center;
   gap: 16px;
   padding: 20px;
-  background: var(--bg);
+  background: #1c1c1e;
   position: relative;
 }
 /* Inner framed band — holds every control button. 60px tall, 12px
-   corner radius, 1px #353536 border, transparent fill so the
-   buttons (filled #1C1C1E) read as inset modules within the band.
+   corner radius, 1px #1F1F1F border. Fill matches the pane-host's
+   internal background (`var(--bg)`) so the workspace bar and the
+   pane window read as the same surface family — both framed dark
+   panels floating on the dark-grey page canvas.
    The 10px horizontal padding combined with the 40px-tall buttons
    gives the 10px vertical centring the design ask called for. */
 .workspace-bar-frame {
@@ -119,8 +137,8 @@ textarea {
   gap: 10px;
   height: 60px;
   padding: 0 10px;
-  background: transparent;
-  border: 1px solid #353536;
+  background: var(--bg);
+  border: 1px solid #1f1f1f;
   border-radius: 12px;
   min-width: 0;
 }
@@ -175,6 +193,16 @@ textarea {
   color: var(--text);
   background: #1c1c1e;
 }
+/* v1.15.1: hover lift also fires when the button is in its
+   active/framed state. The earlier rules let `.wb-icon-btn:hover`
+   apply only to idle buttons because `.wb-icon-btn.active` has
+   higher specificity — so toggled buttons (Settings, Mission
+   Control, Split H/V, Layouts, Tasks, sidebar collapse) felt
+   "dead" on hover compared to Sound + Flow. This rule restores
+   the +6% lift universally. */
+.wb-icon-btn.active:hover {
+  background: #232325;
+}
 .wb-icon-btn.disabled,
 .wb-icon-btn:disabled {
   color: var(--muted);
@@ -194,15 +222,17 @@ textarea {
 .wb-icon-btn.wb-flow-btn {
   position: relative;
 }
-/* Active = board view is showing. Override `.wb-icon-btn.active`
-   chrome with accent fill + black icon to match `.wb-switch.on`. */
+/* Active = board view is showing. Same shape as `.wb-switch.on`:
+   keep the dark square fill and tint the icon to the brand accent.
+   The whole right-side group now has a uniform "lit pilot light"
+   active language — calmer than the previous accent-fill block,
+   and consistent across Sound + Flow. */
 .wb-icon-btn.wb-flow-btn.active {
-  background: var(--accent);
-  color: #000000;
-  border-color: transparent;
+  background: #1c1c1e;
+  color: var(--accent);
 }
 .wb-icon-btn.wb-flow-btn.active:hover {
-  background: color-mix(in srgb, var(--accent) 92%, #000);
+  background: #232325;
 }
 .wb-icon-btn.wb-flow-btn .wb-flow-dot {
   position: absolute;
@@ -618,17 +648,18 @@ textarea {
   color: var(--text);
 }
 .wb-switch.on {
-  background: var(--accent);
-  /* Filled-black bell on the yellow accent fill. White was tried
-     first but didn't read well against the bright yellow — black
-     gives much higher contrast and matches the standard "on" look
-     of macOS toggles. */
-  color: #000000;
+  /* v1.15.1 (final shape): the "on" state keeps the dark square
+     fill (same as every other icon button) but tints the bell icon
+     itself to the brand accent. Reads as a lit pilot light rather
+     than a bright tile — calmer in the row's overall composition,
+     and matches the Flow button's active treatment for consistency. */
+  background: #1c1c1e;
+  color: var(--accent);
 }
 .wb-switch.on:hover {
-  /* Slightly darker on hover so the on-state still has interactive
-     feedback without losing the brand-accent identity. */
-  background: color-mix(in srgb, var(--accent) 92%, #000);
+  /* Same +6% lift as the off-state hover so the on/off variants
+     share their interactive feedback rhythm. */
+  background: #232325;
 }
 /* Inner track/knob nodes are kept for markup compatibility but
    reduced to layout-only containers — they no longer carry the
@@ -891,13 +922,18 @@ textarea {
 .lead-slot > .pane {
   flex: 1;
   min-height: 0;
-  /* Match the regular pane border treatment — selection now lives on
-     the header background, not a coloured pane outline. */
-  border: 1px solid var(--border);
+  /* v1.15.1: dropped the explicit 1px var(--border) outline that
+     `.lead-slot > .pane` used to carry — consistent with the
+     regular `.pane` rule which is now border:none. The pane-host's
+     outer #1F1F1F frame draws the visible container outline;
+     resize handles between panes (where applicable) draw internal
+     separators. */
+  border: none;
 }
-.lead-slot > .pane.active {
-  background: #0a0d0b;
-}
+/* `.lead-slot > .pane.active` background override (formerly #0a0d0b)
+   removed in v1.15.1. The base `.pane` background now uses the
+   same shade via `var(--bg)`, so the Lead pane doesn't need a
+   special-case rule any more. */
 .lead-badge {
   display: inline-flex;
   align-items: center;
@@ -1431,7 +1467,7 @@ textarea {
      the two frames (no doubling), 20 bottom + 20 left to keep the
      frame inset symmetric with the workspace bar above. */
   margin: 0 0 20px 20px;
-  border: 1px solid #353536;
+  border: 1px solid #1f1f1f;
   border-radius: 12px;
 }
 /* Brick-staggered brand pattern. The SVG tile contains four glyphs in
@@ -1445,7 +1481,11 @@ textarea {
   background-image: url('./assets/sidebar-pattern.svg');
   background-repeat: repeat;
   background-size: 180px 140px;
-  opacity: 0.10;
+  /* Bumped 0.10 → 0.18 in v1.15.1 — the pattern was almost
+     imperceptible against the panel's dark fill; ~80% brighter
+     gives the brick layout a subtle but recognizable texture
+     without crowding the content. */
+  opacity: 0.18;
   pointer-events: none;
 }
 .sidebar-inner {
@@ -2881,7 +2921,13 @@ code.voice-tool-card-value {
   gap: 10px;
   padding: 10px 12px;
   text-align: left;
-  background: rgba(20, 23, 28, 0.55);
+  /* v1.15.1: solid neutral grey (#1c1c1e) matching the
+     workspace-bar's square-button fill. Was a semi-transparent
+     blue-tinted `rgba(20, 23, 28, 0.55)` that let the sidebar's
+     brick pattern bleed through and read as bluish — the user
+     asked for a flat greyish fill consistent with the rest of the
+     chrome family. */
+  background: #1c1c1e;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   cursor: pointer;
@@ -2894,7 +2940,7 @@ code.voice-tool-card-value {
     box-shadow 140ms ease;
 }
 .agent-card:hover:not(:disabled) {
-  background: rgba(28, 32, 38, 0.7);
+  background: #232325;
   border-color: rgba(255, 255, 255, 0.10);
 }
 .agent-card:disabled {
@@ -3161,13 +3207,13 @@ code.voice-tool-card-value {
   display: grid;
   grid-template-rows: 1fr auto;
   /* v1.15 frame design — round the OUTER pane container to match
-     the workspace-bar frame. Border matches `#353536` from the
+     the workspace-bar frame. Border matches `#1F1F1F` from the
      workspace bar, 12px radius. Margin around three edges so the
      rounded corners are visible against the page bg (left edge sits
      flush against the sidebar so there's no double gap). overflow:
      hidden above already clips internal panes to the rounded shape. */
   margin: 0 20px 20px 20px;
-  border: 1px solid #353536;
+  border: 1px solid #1f1f1f;
   border-radius: 12px;
 }
 
@@ -3747,9 +3793,15 @@ code.voice-tool-card-value {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-elev);
+  /* v1.15.1: pane background is ALWAYS the deeper `var(--bg)` shade
+     (was `var(--bg-elev)` for idle + `var(--bg)` for active). The
+     header accent stripe + composer border picked up by the active
+     pane already provide a clear selection indicator; the
+     background-shift on click read as noisy. Keep the transition
+     declaration so other future tint shifts can still animate. */
+  background: var(--bg);
   /* v1.15: dropped the per-pane 1px border. The pane-host above now
-     provides the outer rounded frame (#353536), and resize handles
+     provides the outer rounded frame (#1F1F1F), and resize handles
      between panes (`.resize-handle`, 4px) draw the internal
      separators — so the pane's own border was just doubling the
      outer frame's line and reading as a thicker rule. Selection
@@ -3760,9 +3812,10 @@ code.voice-tool-card-value {
   container-type: inline-size;
   container-name: pane;
 }
-.pane.active {
-  background: var(--bg);
-}
+/* .pane.active background override removed in v1.15.1 — the pane
+   bg is now constant across selection states. Selection lives in
+   the header stripe + composer border-color + send-button accent
+   fill below. */
 
 /* Inactive headers use the deep app background (same value as the
    workspace bar at the top of the window and as the active pane body),
@@ -5638,24 +5691,28 @@ code.voice-tool-card-value {
   gap: 8px;
   padding: 10px 12px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background: var(--bg-elev);
+  /* v1.15.1: always the deeper `var(--bg)` shade. Pane body is now
+     also constant `var(--bg)` so the composer surrounds blend into
+     the pane below with no seam. */
+  background: var(--bg);
   transition: background 160ms ease;
 }
-/* Active pane gets a deeper composer background to match the body
-   tint shift on `.pane.active`. Without this, the chat area gets
-   darker when you click into a pane but the message field below
-   stays the same — making it ambiguous which pane you're typing
-   into when several are visible. */
-.pane.active .pane-composer {
-  background: var(--bg);
-}
+/* `.pane.active .pane-composer` background override removed in
+   v1.15.1 — composer surround is now constant. */
 .composer-row {
   display: flex;
   align-items: stretch;
   gap: 8px;
   padding: 6px;
   border: 1px solid var(--border);
-  background: var(--bg-elev-2);
+  /* v1.15.1 (final shape): solid neutral grey #1c1c1e — same
+     square-button fill used across the workspace bar and the
+     agent-cards in the sidebar. Earlier iterations used
+     `var(--bg-elev-2)` / `var(--bg-elev)` which leaned bluish
+     against the new canvas; the message field now matches the
+     rest of the chrome family. Selection still surfaces via the
+     accent border-color when the pane is active (rule below). */
+  background: #1c1c1e;
   /* Soft rounded corners that match the agent / worker cards in
      the sidebar (12px radius) so the composer reads as part of
      the same family. Was a fully-rounded pill (22px) before. */
@@ -5663,16 +5720,11 @@ code.voice-tool-card-value {
   transition: border-color 160ms ease, box-shadow 160ms ease,
     background 160ms ease;
 }
-/* Active pane: tint the composer row down so the active state feels
-   continuous from the chat scroller through to the message field.
-   Border picks up the agent's colour via `--pane-accent` (set on
-   the pane root by Pane.tsx whenever the bound agent has a colour
-   assigned) so the field reads as "this belongs to <agent>" the
-   same way the chips and gradient bloom in the header do.
-   Note: we deliberately use `--pane-accent` (root-scoped) rather
-   than `--pane-active-stripe` (header-scoped only). */
+/* Active pane: keep the agent-coloured border as the field's
+   selection indicator. Background no longer shifts on active in
+   v1.15.1 — the deeper shade is now the default for every pane,
+   so all the active-pane treatment does is tint the border. */
 .pane.active .composer-row {
-  background: var(--bg-elev);
   border-color: color-mix(
     in srgb,
     var(--pane-accent, var(--accent)) 55%,
@@ -11650,7 +11702,13 @@ select:focus {
   gap: 10px;
   padding: 10px 12px;
   text-align: left;
-  background: rgba(20, 23, 28, 0.55);
+  /* v1.15.1: terminal-worker cells get their own deep-purple base
+     (#1B152A) instead of the neutral-grey fill the agent-cards use.
+     Same family as the active state's purple-tinted border + bloom,
+     just dialled WAY down — gives the Other / CLI section a quiet
+     visual identifier so it reads as a different category from the
+     LLM agents above without needing a heading divider. */
+  background: #1b152a;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   cursor: pointer;
@@ -11663,7 +11721,11 @@ select:focus {
     box-shadow 140ms ease;
 }
 .preset-card:hover:not(:disabled) {
-  background: rgba(28, 32, 38, 0.7);
+  /* Hover lift — ~6% brighter than the new deep-purple base,
+     keeping the tone family while signalling interactivity.
+     Border picks up the same `--accent-2` (purple) tint it
+     always did. */
+  background: #251d38;
   border-color: rgba(183, 138, 255, 0.35);
 }
 .preset-card:disabled,

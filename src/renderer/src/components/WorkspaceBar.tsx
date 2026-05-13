@@ -130,7 +130,7 @@ export function WorkspaceBar() {
   return (
     <div className="workspace-bar">
       {/* All control buttons live inside the framed band. The frame
-          itself is 60px tall with a 1px #353536 border and 12px
+          itself is 60px tall with a 1px #1F1F1F border and 12px
           corner radius; the surrounding `.workspace-bar` provides the
           20px inset around all four edges. The INZONE wordmark sits
           OUTSIDE the frame on the right so the brand reads as the
