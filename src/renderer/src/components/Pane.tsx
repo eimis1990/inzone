@@ -737,22 +737,21 @@ export function Pane({ id }: PaneProps) {
             <PaneMoreMenu
               canClear={!!pane.agentName}
               canClose={!isLead}
-              onClear={() => {
-                // `safeConfirm` instead of native `confirm` to fix the
-                // Windows-specific "phantom focus" bug: after the
-                // native dialog dismisses, the renderer can lose
-                // keyboard routing to the active textarea until some
-                // other native dialog (file picker, etc.) unsticks
-                // it. See `src/renderer/src/lib/safeConfirm.ts`.
-                const ok = safeConfirm(
+              onClear={async () => {
+                // React-based safeConfirm — never hands keyboard
+                // focus to an OS dialog, so the Windows
+                // 'phantom focus' bug (every pane's textarea
+                // freezing until a file picker is opened+closed)
+                // can't trigger. See lib/safeConfirm.ts.
+                const ok = await safeConfirm(
                   `Clear the conversation in ${pane.agentName}'s pane? The transcript will be erased and a new session will start. This cannot be undone.`,
                 );
                 if (!ok) return;
                 void clearPane(id);
               }}
-              onClose={() => {
+              onClose={async () => {
                 if (pane.agentName) {
-                  const ok = safeConfirm(
+                  const ok = await safeConfirm(
                     `Close the ${pane.agentName} pane? This will stop its session.`,
                   );
                   if (!ok) return;
@@ -845,9 +844,9 @@ export function Pane({ id }: PaneProps) {
           <button
             type="button"
             className="pane-recovery-restart"
-            onClick={() => {
+            onClick={async () => {
               if (
-                safeConfirm(
+                await safeConfirm(
                   `Restart ${pane.agentName}'s session? The conversation history will be cleared.`,
                 )
               ) {

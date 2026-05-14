@@ -11,6 +11,7 @@ import { WorkspaceBar } from './components/WorkspaceBar';
 import { PaneTree } from './components/PaneTree';
 import { PaneTabs } from './components/PaneTabs';
 import { Pane } from './components/Pane';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { EditorModal } from './components/EditorModal';
 import { AppLogo } from './components/AppLogo';
 import { PreviewModal } from './components/PreviewModal';
@@ -239,6 +240,11 @@ export function App() {
         <PrModal />
         <WelcomeModal />
         <VoiceSetupWizard />
+        {/* Single React-based confirm modal for the whole app —
+            replaces native window.confirm() to avoid the Windows
+            renderer focus bug. Mounted once, renders itself only
+            when a request is in flight. */}
+        <ConfirmDialog />
       </div>
     </ConversationProvider>
   );

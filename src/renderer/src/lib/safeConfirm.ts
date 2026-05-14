@@ -1,51 +1,110 @@
 /**
- * Drop-in replacement for `window.confirm()` that fixes a
- * Windows-specific focus bug in Electron.
+ * In-renderer confirm dialog — replacement for `window.confirm()`.
  *
- * # The bug
+ * # Why not native confirm?
  *
- * After a native `confirm()` dialog dismisses on Windows, the
- * renderer can end up in a "phantom focus" state — `document.
- * activeElement` points at some element, but the OS-level keyboard
- * focus isn't actually routed to it, so keystrokes go nowhere.
+ * On Windows, after a native `confirm()` dismisses, the renderer's
+ * OS-level keyboard routing gets stuck. The first iteration of this
+ * helper tried to blur + window.focus() on the next animation frame
+ * to unstick it; that worked for some flows but not the one the
+ * user kept hitting:
  *
- * Reproducer:
- *   1. Type into Pane A's composer textarea.
- *   2. Click into Pane B.
- *   3. ⋮ → "Clear conversation" → confirm.
- *   4. Click back into Pane A.
- *   5. Pane A's textarea won't take any keystrokes.
+ *   1. Type into Pane A's composer.
+ *   2. Open ⋮ on Pane B → "Clear conversation" → native confirm →
+ *      confirm.
+ *   3. Every textarea in every pane (4 panes in the report) stops
+ *      accepting keystrokes until the user opens + dismisses any
+ *      other native dialog (e.g. the attachment file picker).
  *
- * Workaround the user found: open the file-picker (attachment
- * button) and dismiss it — that native dialog "unsticks" the
- * focus state, and keystrokes start working again.
+ * The root cause: native confirm() is owned by the OS; on Windows
+ * the renderer's keyboard-routing state gets corrupted when the OS
+ * dialog hands focus back. The reliable fix is to never use a
+ * native dialog — keep everything inside the renderer where React
+ * controls the focus lifecycle and the OS never sees a separate
+ * dialog window.
  *
- * # The fix
+ * # API
  *
- * Right after `confirm()` returns, blur whatever document.
- * activeElement is (releasing its phantom claim) and nudge
- * `window.focus()` to make sure the renderer is the OS-focused
- * window. The next click / focus event then routes correctly.
+ * `safeConfirm(message)` returns a Promise<boolean>. Caller awaits
+ * the user's choice:
  *
- * macOS / Linux aren't affected by the bug but the helper is a
- * no-op on those platforms — blurring nothing is harmless.
+ *   const ok = await safeConfirm('Discard the draft?');
+ *   if (!ok) return;
+ *
+ * The dialog is rendered by `<ConfirmDialog />` mounted at the App
+ * root. The two communicate via a singleton-pending request that
+ * `useConfirmRequest()` subscribes to with `useSyncExternalStore`.
+ * Multiple overlapping calls would clobber each other; we only
+ * support one in-flight confirm at a time (same as the native
+ * confirm()).
  */
-export function safeConfirm(message: string): boolean {
-  const ok = window.confirm(message);
-  // Schedule the focus restore on the NEXT animation frame so any
-  // React state updates queued by the confirming click have a chance
-  // to commit first. Without the RAF, blurring fires while the
-  // active element is still mid-flux and the workaround misses.
-  requestAnimationFrame(() => {
-    try {
-      const ae = document.activeElement;
-      if (ae && ae !== document.body && ae instanceof HTMLElement) {
-        ae.blur();
-      }
-      window.focus();
-    } catch {
-      // Best-effort; never throw out of a workaround.
+
+import { useSyncExternalStore } from 'react';
+
+export interface ConfirmRequest {
+  /** The message shown to the user. */
+  message: string;
+  /** Callback to resolve the awaiting Promise. */
+  resolve: (value: boolean) => void;
+}
+
+let current: ConfirmRequest | null = null;
+const listeners = new Set<() => void>();
+
+function notify(): void {
+  for (const l of listeners) l();
+}
+
+/**
+ * Show a confirm dialog. Returns a Promise that resolves to `true`
+ * if the user clicks OK / presses Enter, or `false` if they cancel
+ * (Cancel button, backdrop click, or Esc).
+ *
+ * If a confirm is already in flight, the new call replaces it —
+ * the previous Promise resolves to `false` so callers awaiting it
+ * don't hang.
+ */
+export function safeConfirm(message: string): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    // Pre-empt any in-flight confirm — the new request supersedes
+    // the old one. Caller of the old one gets a `false` so their
+    // promise unblocks (treat as Cancel — they can't be sure the
+    // old prompt is still relevant once a new one came up).
+    if (current) {
+      const prev = current;
+      current = null;
+      prev.resolve(false);
     }
+    current = { message, resolve };
+    notify();
   });
-  return ok;
+}
+
+/**
+ * Called by `<ConfirmDialog />` when the user picks OK / Cancel /
+ * presses Esc / clicks the backdrop. Resolves the pending Promise
+ * and clears the in-flight request so the dialog unmounts.
+ */
+export function resolveConfirm(value: boolean): void {
+  if (!current) return;
+  const { resolve } = current;
+  current = null;
+  notify();
+  resolve(value);
+}
+
+/**
+ * Hook for the modal component — subscribes to the singleton's
+ * pending request so the modal re-renders when a new confirm
+ * arrives or the current one is resolved.
+ */
+export function useConfirmRequest(): ConfirmRequest | null {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => current,
+    () => null,
+  );
 }

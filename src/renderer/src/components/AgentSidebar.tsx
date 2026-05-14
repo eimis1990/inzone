@@ -510,7 +510,7 @@ function WorkersTab() {
                     (!activePaneId ? ' disabled' : '')
                   }
                   disabled={!activePaneId}
-                  onClick={() => {
+                  onClick={async () => {
                     if (!activePaneId) return;
                     const activePane = panes[activePaneId];
                     if (activePane?.agentName === a.name) return;
@@ -520,7 +520,7 @@ function WorkersTab() {
                       activePane?.agentName &&
                       activePane.agentName !== a.name
                     ) {
-                      const ok = safeConfirm(
+                      const ok = await safeConfirm(
                         `Replace ${activePane.agentName} with ${a.name} in this pane? The current conversation will end and any unsaved context will be lost.`,
                       );
                       if (!ok) return;
@@ -531,7 +531,7 @@ function WorkersTab() {
                     // shell + any in-progress process get killed.
                     // Symmetric with the agent-swap confirm above.
                     else if (activePane?.workerKind === 'terminal') {
-                      const ok = safeConfirm(
+                      const ok = await safeConfirm(
                         `Replace the terminal in this pane with ${a.name}? The running shell and any in-progress process will be terminated, and scrollback is not preserved.`,
                       );
                       if (!ok) return;
@@ -680,7 +680,7 @@ function WorkersTab() {
                         'Press OK to install. INZONE will automatically assign ' +
                           `${preset.name} to this pane once the install finishes.`,
                       ];
-                      const ok = safeConfirm(lines.join('\n'));
+                      const ok = await safeConfirm(lines.join('\n'));
                       if (ok) {
                         // Remember which pane the user wanted this on
                         // so we can auto-assign as soon as the probe
@@ -715,7 +715,7 @@ function WorkersTab() {
                       current?.agentName &&
                       current.workerKind !== 'terminal'
                     ) {
-                      const ok = safeConfirm(
+                      const ok = await safeConfirm(
                         `Replace ${current.agentName} with ${preset.name} in this pane? The current conversation will end and any unsaved context will be lost.`,
                       );
                       if (!ok) return;

@@ -6259,6 +6259,40 @@ code.voice-tool-card-value {
   max-height: 94vh;
 }
 
+/* In-renderer confirm dialog — replaces native window.confirm() to
+   avoid the Windows OS-level keyboard-routing bug that froze every
+   textarea after the native dialog dismissed. Compact, no header,
+   message in the body, two buttons in the footer. */
+.modal.confirm-dialog {
+  width: min(420px, 92vw);
+  max-height: 90vh;
+}
+.confirm-dialog-body {
+  padding: 22px 22px 6px;
+}
+.confirm-dialog-message {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+  /* Preserve line breaks the caller embeds in the message — the
+     install-flow prompts on terminal worker presets use multi-line
+     messages with command snippets. */
+  white-space: pre-wrap;
+}
+.confirm-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 22px 18px;
+  border-top: none;
+  background: transparent;
+}
+.confirm-dialog-footer button {
+  min-width: 88px;
+}
+
 /* ─── Drawer variant of the modal ────────────────────────────────
    Used by EditorModal when editing/creating a skill. The form
    contents stay identical — only the wrapping chrome changes from
