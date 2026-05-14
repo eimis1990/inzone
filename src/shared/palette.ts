@@ -74,15 +74,29 @@ export const AGENT_TOOL_CHOICES = [
 ] as const;
 export type AgentToolChoice = (typeof AGENT_TOOL_CHOICES)[number];
 
-/** Models surfaced in the editor dropdown. Users can pick a specific
- *  dated id or an alias that always tracks the latest. */
+/** Models surfaced in the editor dropdown.
+ *
+ *  Last two versions of each family, dated IDs only — NO `sonnet` /
+ *  `opus` / `haiku` aliases. The aliases worked in theory ("always
+ *  track latest") but in practice they were resolving to a stale
+ *  default several versions behind the actual latest, so an agent
+ *  picked as "Opus (alias — latest)" would self-report as Opus 4.5
+ *  even though Opus 4.7 was out. Explicit IDs remove the ambiguity:
+ *  what you pick is what runs.
+ *
+ *  When a new model version lands, append the new dated ID to the
+ *  top of each family and drop the oldest from this list — the file
+ *  is the source of truth, no runtime resolution involved.
+ */
 export const MODEL_CHOICES: { value: string; label: string }[] = [
   { value: '', label: 'Default (inherit)' },
-  /* Specific dated/version IDs first, then aliases for "always latest". */
-  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-  { value: 'sonnet', label: 'Sonnet (alias — latest)' },
+  // Opus — most capable, slowest, $$$.
+  { value: 'claude-opus-4-7', label: 'Opus 4.7' },
   { value: 'claude-opus-4-6', label: 'Opus 4.6' },
-  { value: 'opus', label: 'Opus (alias — latest)' },
+  // Sonnet — balanced default; what most agents should use.
+  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+  { value: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
+  // Haiku — fastest, cheapest, light-touch tasks.
   { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-  { value: 'haiku', label: 'Haiku (alias — latest)' },
+  { value: 'claude-haiku-3-5-20241022', label: 'Haiku 3.5' },
 ];

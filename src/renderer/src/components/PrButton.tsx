@@ -60,18 +60,17 @@ export function PrButton() {
     >
       <PrIcon />
       <span className="wb-pill-label">{label}</span>
-      {/* While we're talking to gh, show a spinner instead of the
-          health dot — the dot's colour (red/amber/green) reflects
-          a snapshot, which is stale during the fetch. Spinner
-          unambiguously says "fresh data is on its way." */}
-      {inbox?.syncing ? (
-        <span className="pr-pill-spinner" aria-hidden />
-      ) : count > 0 && health !== 'none' ? (
+      {/* Sync-state spinner removed in v1.15.3 — the bar polled gh
+          every 5 minutes and the brief spinner flicker was visually
+          noisy. The health dot stays put; users see fresh state
+          when the poll completes, with no transient indicator in
+          between. */}
+      {count > 0 && health !== 'none' && (
         <span
           className={`pr-pill-dot pr-pill-dot-${health}`}
           aria-hidden
         />
-      ) : null}
+      )}
     </button>
   );
 }

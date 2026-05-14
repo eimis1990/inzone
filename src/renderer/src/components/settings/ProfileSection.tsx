@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useStore } from '../../store';
-import { fmt } from '../UsageModal';
 import type { ClaudeAuthInfo } from '@shared/types';
 
 /**
@@ -19,13 +17,13 @@ import type { ClaudeAuthInfo } from '@shared/types';
  * subscription-as-SDK auth path.
  */
 export function ProfileSection() {
-  const usage = useStore((s) => s.usage);
-  const refreshUsage = useStore((s) => s.refreshUsage);
   const [claudeAuth, setClaudeAuth] = useState<ClaudeAuthInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Usage totals are no longer surfaced here (v1.15.1) — they live
+  // at Settings → Usage & cost. We removed the `usage` store read
+  // and the `refreshUsage` call that fed it from this section.
   useEffect(() => {
-    void refreshUsage();
     let cancelled = false;
     setLoading(true);
     void window.cowork.profile
@@ -43,7 +41,7 @@ export function ProfileSection() {
     return () => {
       cancelled = true;
     };
-  }, [refreshUsage]);
+  }, []);
 
   return (
     <div className="settings-pane">
@@ -56,7 +54,7 @@ export function ProfileSection() {
 
       <div className="settings-pane-body">
         <div className="profile-cards">
-          <ClaudeCard auth={claudeAuth} loading={loading} usage={usage} />
+          <ClaudeCard auth={claudeAuth} loading={loading} />
         </div>
         <button
           type="button"
@@ -82,10 +80,9 @@ export function ProfileSection() {
 interface ClaudeCardProps {
   auth: ClaudeAuthInfo | null;
   loading: boolean;
-  usage: ReturnType<typeof useStore.getState>['usage'];
 }
 
-function ClaudeCard({ auth, loading, usage }: ClaudeCardProps) {
+function ClaudeCard({ auth, loading }: ClaudeCardProps) {
   const method = auth?.method ?? 'unknown';
   const isApiKey = method === 'api-key';
   const isSubscription = method === 'subscription';
@@ -202,22 +199,12 @@ function ClaudeCard({ auth, loading, usage }: ClaudeCardProps) {
 
         <ApiKeyForm />
 
-        <div className="profile-card-divider" />
-
-        {/* Usage — pulled from our cost ledger, same numbers as the
-            workspace bar's $X today pill + the Usage tab. Lets the
-            user see their plan's burn rate at a glance. */}
-        <div className="profile-card-usage">
-          <UsageTile label="Today" value={fmt(usage?.todayCostUsd ?? 0)} />
-          <UsageTile
-            label="Last 7 days"
-            value={fmt(usage?.last7DaysCostUsd ?? 0)}
-          />
-          <UsageTile
-            label="Lifetime"
-            value={fmt(usage?.totalCostUsd ?? 0)}
-          />
-        </div>
+        {/* Usage totals (Today / Last 7 days / Lifetime) removed
+            from the Profile card in v1.15.1 — the dedicated
+            Settings → Usage & cost section already surfaces the
+            same numbers (plus per-day, per-agent, per-model
+            breakdowns). Keeping them on Profile duplicated the
+            information without adding context. */}
       </div>
     </div>
   );
@@ -472,11 +459,7 @@ function Row({
   );
 }
 
-function UsageTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="profile-usage-tile">
-      <div className="profile-usage-tile-label">{label}</div>
-      <div className="profile-usage-tile-value">{value}</div>
-    </div>
-  );
-}
+/* UsageTile component removed in v1.15.1 along with the Today /
+   Last 7 days / Lifetime totals at the bottom of the Profile
+   card — the dedicated Settings → Usage & cost section is the
+   single place those numbers live now. */

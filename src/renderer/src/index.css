@@ -12,7 +12,14 @@
      unit drop per channel — visually subtle elsewhere, no breakage
      across modals / dropdowns. */
   --bg: #0A0D0B;
-  --bg-elev: #14171C;
+  /* v1.15.3 (final shape): elevated surfaces moved to the
+     neutral-grey family (#1C1C1E / #232325) to match the
+     square-button fill used across the workspace bar. The
+     previous values (#14171C / #23252E) leaned bluish and read
+     as a separate cool-tone surface family inside Settings,
+     agent cards, and dropdowns. Single-variable change cascades
+     to ~50 elevated-surface call sites throughout the app. */
+  --bg-elev: #1c1c1e;
   /* Alias matching the naming scheme used across newer components.
      `--bg-elev-1` is the first elevation step above the base bg —
      same value as `--bg-elev`. Without this alias, every reference
@@ -21,8 +28,8 @@
      across modal cards, sticky table headers, hover backgrounds,
      etc. Keep `--bg-elev` as the canonical name; this is just the
      newer alias. */
-  --bg-elev-1: #14171C;
-  --bg-elev-2: #23252E;
+  --bg-elev-1: #1c1c1e;
+  --bg-elev-2: #232325;
   --border: #2a2d36;
   --border-strong: #383b46;
   --text: #e6e8ee;
@@ -10404,13 +10411,19 @@ select:focus {
 .profile-card {
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: var(--bg-elev);
+  /* v1.15.1: matches the square-button surface family (#1C1C1E)
+     instead of the bluish var(--bg-elev). Profile cards now feel
+     consistent with the workspace-bar buttons, agent cards in
+     the sidebar, and the composer-row — all grey, no blue tint. */
+  background: #1c1c1e;
   overflow: hidden;
   transition: border-color 160ms ease;
 }
-.profile-card-claude {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-}
+/* `.profile-card-claude` accent-tinted border removed in v1.15.1.
+   The Claude provider used to carry an accent-yellow outline as
+   the "primary" treatment, but the ACTIVE pill on the right
+   already signals which provider is in use. The yellow ring read
+   as decorative rather than informative. */
 .profile-card-stub {
   border-color: var(--stub-border, var(--border));
   background: color-mix(in srgb, var(--stub-tint, transparent) 30%, var(--bg-elev));

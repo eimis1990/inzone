@@ -18,6 +18,7 @@ import {
   isSupportedImage,
   type PendingAttachment,
 } from '../attachments';
+import { safeConfirm } from '../lib/safeConfirm';
 import {
   CloseIcon,
   ExpandIcon,
@@ -737,7 +738,13 @@ export function Pane({ id }: PaneProps) {
               canClear={!!pane.agentName}
               canClose={!isLead}
               onClear={() => {
-                const ok = confirm(
+                // `safeConfirm` instead of native `confirm` to fix the
+                // Windows-specific "phantom focus" bug: after the
+                // native dialog dismisses, the renderer can lose
+                // keyboard routing to the active textarea until some
+                // other native dialog (file picker, etc.) unsticks
+                // it. See `src/renderer/src/lib/safeConfirm.ts`.
+                const ok = safeConfirm(
                   `Clear the conversation in ${pane.agentName}'s pane? The transcript will be erased and a new session will start. This cannot be undone.`,
                 );
                 if (!ok) return;
@@ -745,7 +752,7 @@ export function Pane({ id }: PaneProps) {
               }}
               onClose={() => {
                 if (pane.agentName) {
-                  const ok = confirm(
+                  const ok = safeConfirm(
                     `Close the ${pane.agentName} pane? This will stop its session.`,
                   );
                   if (!ok) return;
@@ -840,7 +847,7 @@ export function Pane({ id }: PaneProps) {
             className="pane-recovery-restart"
             onClick={() => {
               if (
-                confirm(
+                safeConfirm(
                   `Restart ${pane.agentName}'s session? The conversation history will be cleared.`,
                 )
               ) {
