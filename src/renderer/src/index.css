@@ -1,7 +1,56 @@
 /* Brand wordmark font (INZONE in the top-right and empty-state hero). */
 @import url('https://fonts.googleapis.com/css2?family=Squada+One&display=swap');
 
+/* v1.16 — Light theme typography. Inter (UI body), Source Serif Pro
+   (display headings + section titles in light mode), JetBrains Mono
+   (code / paths / mono blocks). Loaded for every theme so switching
+   light↔dark doesn't trigger a font-fetch flash; the system stack
+   in --font-ui / --font-mono falls through to these when present. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+Pro:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
+  /* ─── Light-theme palette (the "warm paper ledger" tokens) ─────
+     Stored as RGB triples so `rgb(var(--paper-50) / <alpha>)` works
+     for the per-component alpha mixes the spec calls for. Both
+     `:root` (dark) and `:root.theme-light` re-define these triples
+     — same names, different values. */
+
+  /* Paper palette — neutral surfaces. Dark variant: leather-bound
+     espresso. Light variant overrides below in `.theme-light`. */
+  --paper-50:  54 46 34;       /* card surface, raised tiles */
+  --paper-100: 28 24 18;       /* primary background */
+  --paper-200: 41 35 26;       /* hover surface, kanban list cols */
+  --paper-300: 66 57 43;       /* borders, dividers */
+  --paper-400: 92 80 60;       /* muted emphasis, status dots */
+
+  /* Ink palette — text and high-contrast foregrounds. */
+  --ink-50:  152 142 124;
+  --ink-100: 180 170 152;
+  --ink-200: 215 207 191;
+  --ink-300: 244 237 222;
+
+  /* Accent — terracotta in light, warm orange in dark. */
+  --accent-rgb:      228 116 73;
+  --accent-soft-rgb: 107 51 25;
+
+  /* Moss — calm success indicators. */
+  --moss-rgb:      166 184 102;
+  --moss-soft-rgb:  65 79 38;
+
+  /* Soft brown shadow tokens. Dark uses pure black; light bloom is
+     warmer to read as paper, not card-on-grey. */
+  --shadow-paper:    0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-paper-lg: 0 4px 16px rgba(0, 0, 0, 0.32);
+
+  /* Grain dot colors used only when light theme is active. */
+  --paper-grain-dot-1: rgba(244, 237, 222, 0.04);
+  --paper-grain-dot-2: rgba(244, 237, 222, 0.025);
+
+  /* ─── Legacy semantic vars (existing component CSS reads these) ─
+     The rest of the app uses --bg, --text, --accent, etc. directly.
+     Light theme keeps the same names and just remaps the values
+     under `.theme-light` further down. */
+
   /* v1.15.1 (final shape): bumped from #0C0E12 to #0A0D0B so the
      base background tone matches the formerly-Lead-only darker
      shade. The previous `.lead-slot > .pane.active { background:
@@ -43,9 +92,122 @@
   --ok: #3ddc97;
   --danger: #f26d7a;
   --warn: #f2c56d;
-  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue',
-    sans-serif;
-  --font-mono: 'SF Mono', Menlo, Consolas, monospace;
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+    'Helvetica Neue', sans-serif;
+  --font-serif: 'Source Serif Pro', ui-serif, Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Surface tokens — semantic names used by component CSS so the
+     theme switch flows through. These read `var(--bg)` /
+     `var(--bg-elev)` under the hood for dark; the `.theme-light`
+     block remaps them to paper colors. Pre-cached as named tokens
+     so a single var() lookup covers most surface decisions. */
+  --canvas-bg: #1c1c1e;     /* page canvas (gaps between frames) */
+  --frame-border: #1f1f1f;  /* workspace-bar / sidebar / pane-host frames */
+  --surface-tile: #1c1c1e;  /* agent cards, composer, profile cards */
+  --surface-tile-hover: #232325;
+  /* Workspace-bar buttons specifically — they MATCH the frame
+     interior (#0A0D0B in dark, paper-50 in light) so they read
+     as flush controls inside the bar rather than tiles sitting
+     on top. Hover lifts to `--surface-tile-hover` so they still
+     have interactive feedback. Was sharing `--surface-tile` in
+     the v1.15 design, but the user asked in v1.16 to have the
+     bar feel unified — buttons same colour as the band they
+     live in. */
+  --wb-btn-bg: var(--bg);
+  --terminal-card-bg: #1b152a;
+  --terminal-card-hover: #251d38;
+  --modal-overlay: rgba(0, 0, 0, 0.55);
+  /* Matches the xterm canvas colour set in TerminalPanel.tsx
+     `terminalThemeFor()` so the host wrapper's padding doesn't
+     read as a contrasting frame around the terminal output. */
+  --terminal-canvas-bg: #0c0e12;
+  /* Soft-blur scrim shown above the panes when the terminal panel
+     opens. Dark theme uses a near-black tint; light theme uses
+     warm-paper white at the same alpha. */
+  --terminal-scrim-bg: rgba(0, 0, 0, 0.55);
+}
+
+/* ─── Light theme override ──────────────────────────────────────
+   Toggling `.theme-light` on the document element remaps every
+   semantic variable to the warm-paper palette. The rest of the
+   app's CSS keeps reading `var(--bg)` / `var(--text)` / etc.
+   unchanged — only the values flip. */
+:root.theme-light {
+  color-scheme: light;
+
+  /* Paper palette — warm cream, light → dark emphasis. */
+  --paper-50:  253 250 240;   /* #FDFAF0 */
+  --paper-100: 249 244 230;   /* #F9F4E6 */
+  --paper-200: 241 233 210;   /* #F1E9D2 */
+  --paper-300: 230 219 184;   /* #E6DBB8 */
+  --paper-400: 201 185 138;   /* #C9B98A */
+
+  /* Ink palette — warm dark browns. */
+  --ink-50:  111 102 90;      /* #6F665A */
+  --ink-100:  90 81 69;       /* #5A5145 */
+  --ink-200:  62 55 45;       /* #3E372D */
+  --ink-300:  42 38 32;       /* #2A2620 */
+
+  --accent-rgb:      182 85 43;     /* #B6552B terracotta */
+  --accent-soft-rgb: 232 184 154;   /* #E8B89A */
+
+  --moss-rgb:      107 122 63;      /* #6B7A3F */
+  --moss-soft-rgb: 199 207 168;     /* #C7CFA8 */
+
+  --shadow-paper:    0 1px 2px rgba(58, 50, 38, 0.035);
+  --shadow-paper-lg: 0 4px 16px rgba(58, 50, 38, 0.06);
+
+  --paper-grain-dot-1: rgba(58, 50, 38, 0.04);
+  --paper-grain-dot-2: rgba(58, 50, 38, 0.025);
+
+  /* Remap legacy semantic vars to paper / ink values. Every
+     component CSS rule below this block keeps using var(--bg),
+     var(--text), var(--border), etc. — they just resolve to the
+     warm-paper values now.
+     IMPORTANT (v1.16): light theme INVERTS the elevation stack
+     relative to dark. In dark, --bg is the deepest surface and
+     --bg-elev steps lighter. In light, the framed views
+     (workspace bar interior, sidebar, panes) want to be the
+     RAISED, BRIGHTER paper-50 (#FDFAF0) and the canvas around
+     them stays paper-100 (#F9F4E6). So `--bg` resolves to
+     paper-50 (matching --bg-elev) — the chrome reads as
+     elevated paper-cards floating on a slightly darker canvas,
+     same visual relationship as the dark theme (deeper frames
+     on a lighter canvas, just inverted brightness). */
+  --bg: #FDFAF0;                /* paper-50 — framed interiors */
+  --bg-elev: #FDFAF0;           /* paper-50 — cards, raised tiles */
+  --bg-elev-1: #FDFAF0;
+  --bg-elev-2: #F1E9D2;         /* paper-200 — hover surfaces */
+  --border: #E6DBB8;            /* paper-300 */
+  --border-strong: #C9B98A;     /* paper-400 */
+  --text: #2A2620;              /* ink-300 — primary text */
+  --text-dim: #5A5145;          /* ink-100 — body text */
+  --muted: #6F665A;             /* ink-50 — captions, labels */
+  --accent: #B6552B;            /* terracotta */
+  --accent-on: #FDFAF0;         /* paper-50 — readable on terracotta */
+  /* --accent-2 (purple, used by terminal worker cards) — kept dim
+     terracotta-adjacent so the worker-card identity stays. */
+  --accent-2: #8a5e3e;
+  --ok: #6B7A3F;                /* moss */
+  --danger: #b04340;
+  --warn: #b87a2b;
+
+  /* Surface tokens for the v1.15.x hardcoded-color sweep. */
+  --canvas-bg: #F9F4E6;         /* paper-100 — canvas matches base bg */
+  --frame-border: #E6DBB8;      /* paper-300 — hairline border, no harsh black */
+  --surface-tile: #FDFAF0;      /* paper-50 — raised tile color */
+  --surface-tile-hover: #F1E9D2;
+  --terminal-card-bg: #F1E9D2;       /* paper-200 — terminal cards lean paper */
+  --terminal-card-hover: #E6DBB8;
+  --modal-overlay: rgba(58, 50, 38, 0.32);
+  /* Match the xterm canvas (paper-200) so the host wrapper's
+     padding blends with the terminal output area. */
+  --terminal-canvas-bg: #F1E9D2;
+  /* Cream-white scrim instead of near-black so opening the
+     terminal in light mode doesn't dump a dark slab over the
+     paper UI. Same alpha as dark so the blur effect feels equal. */
+  --terminal-scrim-bg: rgba(249, 244, 230, 0.55);
 }
 
 * {
@@ -60,10 +222,10 @@ body,
   padding: 0;
   /* Canvas — the colour that shows in the gaps between the three
      framed views (workspace-bar frame, sidebar frame, pane-host
-     frame). Matches the square-button fill so the canvas + buttons
-     read as one surface family; the frame borders (#1F1F1F) provide
-     the visual seams. */
-  background: #1c1c1e;
+     frame). Theme-aware via `--canvas-bg` so light mode swaps the
+     dark grey for warm paper-100 cream without code changes
+     elsewhere. */
+  background: var(--canvas-bg);
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 13px;
@@ -127,7 +289,7 @@ textarea {
   align-items: center;
   gap: 16px;
   padding: 20px;
-  background: #1c1c1e;
+  background: var(--canvas-bg);
   position: relative;
 }
 /* Inner framed band — holds every control button. 60px tall, 12px
@@ -145,7 +307,7 @@ textarea {
   height: 60px;
   padding: 0 10px;
   background: var(--bg);
-  border: 1px solid #1f1f1f;
+  border: 1px solid var(--frame-border);
   border-radius: 12px;
   min-width: 0;
 }
@@ -179,7 +341,7 @@ textarea {
   height: 40px;
   border-radius: 6px;
   color: var(--text-dim);
-  background: #1c1c1e;
+  background: var(--wb-btn-bg);
   border: 1px solid transparent;
   flex-shrink: 0;
   transition:
@@ -189,7 +351,7 @@ textarea {
 }
 .wb-icon-btn:hover {
   color: var(--text);
-  background: #232325;
+  background: var(--surface-tile-hover);
 }
 /* `active` and `framed` share the same chrome — both flag a button
    that should read as "on" or "tinted" inside the bar. v1.15
@@ -198,7 +360,7 @@ textarea {
    `var(--text)` instead of `var(--text-dim)`). */
 .wb-icon-btn.active {
   color: var(--text);
-  background: #1c1c1e;
+  background: var(--wb-btn-bg);
 }
 /* v1.15.1: hover lift also fires when the button is in its
    active/framed state. The earlier rules let `.wb-icon-btn:hover`
@@ -208,13 +370,13 @@ textarea {
    "dead" on hover compared to Sound + Flow. This rule restores
    the +6% lift universally. */
 .wb-icon-btn.active:hover {
-  background: #232325;
+  background: var(--surface-tile-hover);
 }
 .wb-icon-btn.disabled,
 .wb-icon-btn:disabled {
   color: var(--muted);
   cursor: default;
-  background: #1c1c1e;
+  background: var(--wb-btn-bg);
   opacity: 0.55;
 }
 
@@ -235,11 +397,11 @@ textarea {
    active language — calmer than the previous accent-fill block,
    and consistent across Sound + Flow. */
 .wb-icon-btn.wb-flow-btn.active {
-  background: #1c1c1e;
+  background: var(--wb-btn-bg);
   color: var(--accent);
 }
 .wb-icon-btn.wb-flow-btn.active:hover {
-  background: #232325;
+  background: var(--surface-tile-hover);
 }
 .wb-icon-btn.wb-flow-btn .wb-flow-dot {
   position: absolute;
@@ -280,7 +442,7 @@ textarea {
   padding: 0 14px;
   height: 40px;
   border-radius: 999px;
-  background: #1c1c1e;
+  background: var(--wb-btn-bg);
   /* No visible border by default — the v1.15 frame redesign asked
      for clean #1C1C1E fills without an accent tint. Hover still
      lights up the border so interactive feedback survives. */
@@ -293,7 +455,7 @@ textarea {
     color 120ms ease;
 }
 .wb-pill:hover {
-  background: #232325;
+  background: var(--surface-tile-hover);
   border-color: var(--accent);
 }
 .wb-pill:disabled {
@@ -374,7 +536,7 @@ textarea {
      Bumped from 30px → 40px in v1.15 alongside the frame redesign. */
   height: 40px;
   padding: 4px;
-  background: #1c1c1e;
+  background: var(--wb-btn-bg);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 999px;
   box-shadow:
@@ -636,7 +798,7 @@ textarea {
   width: 40px;
   height: 40px;
   padding: 0;
-  background: #1c1c1e;
+  background: var(--wb-btn-bg);
   border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
@@ -651,7 +813,7 @@ textarea {
   color: var(--text-dim);
 }
 .wb-switch:hover {
-  background: #232325;
+  background: var(--surface-tile-hover);
   color: var(--text);
 }
 .wb-switch.on {
@@ -660,13 +822,13 @@ textarea {
      itself to the brand accent. Reads as a lit pilot light rather
      than a bright tile — calmer in the row's overall composition,
      and matches the Flow button's active treatment for consistency. */
-  background: #1c1c1e;
+  background: var(--wb-btn-bg);
   color: var(--accent);
 }
 .wb-switch.on:hover {
   /* Same +6% lift as the off-state hover so the on/off variants
      share their interactive feedback rhythm. */
-  background: #232325;
+  background: var(--surface-tile-hover);
 }
 /* Inner track/knob nodes are kept for markup compatibility but
    reduced to layout-only containers — they no longer carry the
@@ -1474,7 +1636,7 @@ textarea {
      the two frames (no doubling), 20 bottom + 20 left to keep the
      frame inset symmetric with the workspace bar above. */
   margin: 0 0 20px 20px;
-  border: 1px solid #1f1f1f;
+  border: 1px solid var(--frame-border);
   border-radius: 12px;
 }
 /* Brick-staggered brand pattern. The SVG tile contains four glyphs in
@@ -2241,6 +2403,60 @@ textarea {
   pointer-events: none;
 }
 
+/* ─── Voice orb — light theme override ─────────────────────────
+   The base orb mixes saturated blobs (pink / blue / purple /
+   yellow) on a near-black core with `mix-blend-mode: screen` —
+   reads beautifully on dark backgrounds but inverts to a muddy
+   purple smudge on light. Light theme remaps the core to warm
+   paper tones, swaps the blobs to terracotta / moss / amber on
+   the warm-paper axis, and switches the blend mode to
+   `multiply` so the blobs DARKEN the paper rather than brighten
+   it. */
+:root.theme-light .voice-orb-core {
+  background:
+    radial-gradient(
+      circle at 30% 25%,
+      rgba(255, 255, 255, 0.4),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      #fdfaf0,
+      #f1e9d2 75%
+    );
+  box-shadow:
+    inset 0 0 30px color-mix(in srgb, var(--accent) 28%, transparent),
+    inset 0 0 60px rgba(58, 50, 38, 0.08),
+    0 12px 40px rgba(58, 50, 38, 0.10);
+}
+:root.theme-light .voice-orb-blob {
+  /* `multiply` on light surfaces deepens hues without washing
+     them out the way `screen` does. Slight opacity drop keeps
+     each blob from reading as a hard stain. */
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+  filter: blur(20px);
+}
+:root.theme-light .voice-orb-blob-a {
+  /* Soft terracotta — picks up the brand accent. */
+  background: radial-gradient(circle, #e8a07a 0%, transparent 60%);
+}
+:root.theme-light .voice-orb-blob-b {
+  /* Warm gold — the daytime sister to the cool blue blob. */
+  background: radial-gradient(circle, #d8a44a 0%, transparent 60%);
+}
+:root.theme-light .voice-orb-blob-c {
+  /* Moss — calm green that maps to the success palette. */
+  background: radial-gradient(circle, #a8b878 0%, transparent 60%);
+}
+:root.theme-light .voice-orb-blob-d {
+  /* Dusty rose — paper-friendly pink replacement. */
+  background: radial-gradient(circle, #d68a92 0%, transparent 60%);
+}
+:root.theme-light .voice-orb-ring {
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
 /* Idle: very subtle breathe so the orb isn't motionless. */
 .voice-orb-idle {
   animation: orb-breathe 6s ease-in-out infinite;
@@ -2934,7 +3150,7 @@ code.voice-tool-card-value {
      brick pattern bleed through and read as bluish — the user
      asked for a flat greyish fill consistent with the rest of the
      chrome family. */
-  background: #1c1c1e;
+  background: var(--surface-tile);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   cursor: pointer;
@@ -2947,7 +3163,7 @@ code.voice-tool-card-value {
     box-shadow 140ms ease;
 }
 .agent-card:hover:not(:disabled) {
-  background: #232325;
+  background: var(--surface-tile-hover);
   border-color: rgba(255, 255, 255, 0.10);
 }
 .agent-card:disabled {
@@ -2990,7 +3206,12 @@ code.voice-tool-card-value {
   z-index: 2;
 }
 /* Title + description go pure white when active so they stay
-   readable on top of the bloom. */
+   readable on top of the bloom (dark theme). Light theme keeps
+   the cream-paper card on the underside of the gradient so the
+   text needs to stay readable as a DARK foreground — the
+   `:root.theme-light` overrides below remap to ink-300 / ink-100
+   / ink-50 so the cards keep their accent bloom but with
+   readable text on paper. */
 .agent-card.active .agent-card-name {
   color: #ffffff;
 }
@@ -2999,6 +3220,15 @@ code.voice-tool-card-value {
 }
 .agent-card.active .agent-card-meta {
   color: rgba(255, 255, 255, 0.55);
+}
+:root.theme-light .agent-card.active .agent-card-name {
+  color: var(--text);
+}
+:root.theme-light .agent-card.active .agent-card-desc {
+  color: var(--text-dim);
+}
+:root.theme-light .agent-card.active .agent-card-meta {
+  color: var(--muted);
 }
 /* Pillar legacy class — still rendered by the JSX, but the bottom
    accent is now the gradient bloom + 1.5px line below, so the pillar
@@ -3220,7 +3450,7 @@ code.voice-tool-card-value {
      flush against the sidebar so there's no double gap). overflow:
      hidden above already clips internal panes to the rounded shape. */
   margin: 0 20px 20px 20px;
-  border: 1px solid #1f1f1f;
+  border: 1px solid var(--frame-border);
   border-radius: 12px;
 }
 
@@ -3284,7 +3514,10 @@ code.voice-tool-card-value {
   right: 0;
   bottom: 100%;
   height: 200vh;
-  background: rgba(0, 0, 0, 0.55);
+  /* Theme-aware: dark scrim on dark theme, cream-paper scrim on
+     light. Same alpha + blur in both so the dim-the-background
+     effect feels equal — only the tint flips. */
+  background: var(--terminal-scrim-bg);
   backdrop-filter: blur(4px);
   cursor: pointer;
   z-index: 1;
@@ -3309,7 +3542,7 @@ code.voice-tool-card-value {
   height: clamp(220px, 40vh, 60vh);
   display: flex;
   flex-direction: column;
-  background: #0c0e12;
+  background: var(--bg);
   border-top: 1px solid var(--border-strong);
   box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.4);
   /* Slide past 100% of the overlay's own height + the bar's height so
@@ -3383,7 +3616,12 @@ code.voice-tool-card-value {
   flex-wrap: wrap;
   gap: 6px;
   padding: 8px 10px;
-  background: #0a0d11;
+  /* Theme-aware: base bg in both themes — same surface family as
+     the rest of the terminal overlay above it. Was hardcoded
+     #0a0d11 (only worked in dark mode); now uses var(--bg) so it
+     flips to paper-100 cream in light mode and reads as a thin
+     band over the terminal canvas. */
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   max-height: 100px;
@@ -3420,7 +3658,12 @@ code.voice-tool-card-value {
   flex: 1;
   min-height: 0;
   padding: 6px 8px 4px;
-  background: #0c0e12;
+  /* Theme-aware: matches the xterm canvas exactly (set in
+     TerminalPanel.tsx) so the host wrapper's padding blends with
+     the terminal output area instead of reading as a contrasting
+     frame around it. Was hardcoded #0c0e12 — caused the visible
+     dark border around the cream xterm canvas in light mode. */
+  background: var(--terminal-canvas-bg);
 }
 /* Stretch xterm to fill the host. */
 .terminal-host .xterm {
@@ -4398,7 +4641,15 @@ code.voice-tool-card-value {
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
-  background: #0a0d13;
+  /* Theme-aware: dark code block on dark theme, warm paper on
+     light. Light value picks `--bg-elev-2` which resolves to
+     paper-200 (`#F1E9D2`) — a touch deeper than the surrounding
+     paper-50 cards so the code block reads as a slight inset,
+     same visual idiom as input fields per spec §9 (Card / Input). */
+  background: var(--code-block-bg, #0a0d13);
+}
+:root.theme-light .md-code-block {
+  background: var(--bg-elev-2);
 }
 .md-code-lang {
   padding: 4px 12px;
@@ -5719,7 +5970,7 @@ code.voice-tool-card-value {
      against the new canvas; the message field now matches the
      rest of the chrome family. Selection still surfaces via the
      accent border-color when the pane is active (rule below). */
-  background: #1c1c1e;
+  background: var(--surface-tile);
   /* Soft rounded corners that match the agent / worker cards in
      the sidebar (12px radius) so the composer reads as part of
      the same family. Was a fully-rounded pill (22px) before. */
@@ -10449,7 +10700,7 @@ select:focus {
      instead of the bluish var(--bg-elev). Profile cards now feel
      consistent with the workspace-bar buttons, agent cards in
      the sidebar, and the composer-row — all grey, no blue tint. */
-  background: #1c1c1e;
+  background: var(--surface-tile);
   overflow: hidden;
   transition: border-color 160ms ease;
 }
@@ -11755,7 +12006,7 @@ select:focus {
      just dialled WAY down — gives the Other / CLI section a quiet
      visual identifier so it reads as a different category from the
      LLM agents above without needing a heading divider. */
-  background: #1b152a;
+  background: var(--terminal-card-bg);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   cursor: pointer;
@@ -11772,7 +12023,7 @@ select:focus {
      keeping the tone family while signalling interactivity.
      Border picks up the same `--accent-2` (purple) tint it
      always did. */
-  background: #251d38;
+  background: var(--terminal-card-hover);
   border-color: rgba(183, 138, 255, 0.35);
 }
 .preset-card:disabled,
@@ -11816,6 +12067,19 @@ select:focus {
 }
 .preset-card.active .preset-card-meta {
   color: rgba(255, 255, 255, 0.55);
+}
+/* Light theme: cream-paper card with terracotta bloom means
+   pure white text becomes unreadable. Remap to ink-300 / ink-100
+   / muted browns so the cards stay legible. Mirrors the
+   `.agent-card.active` light overrides further up. */
+:root.theme-light .preset-card.active .preset-card-name {
+  color: var(--text);
+}
+:root.theme-light .preset-card.active .preset-card-desc {
+  color: var(--text-dim);
+}
+:root.theme-light .preset-card.active .preset-card-meta {
+  color: var(--muted);
 }
 /* Pillar legacy — JSX still emits the span; collapse it to nothing
    like .agent-card-pillar, since the bloom + border have replaced
@@ -14605,4 +14869,329 @@ select:focus {
 }
 .about-release-bullet-body {
   color: var(--text-dim);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Light theme — highlight.js token overrides
+   ───────────────────────────────────────────────────────────────
+   Markdown.tsx imports `highlight.js/styles/github-dark.css`,
+   which paints `.hljs-*` token classes with dark-theme colours
+   (pale strings, bright red keywords) that read as washed-out
+   stain on the warm-paper code-block background. Override the
+   most common tokens with paper-friendly hues:
+     - keywords  → terracotta (var(--accent))
+     - strings   → moss
+     - numbers   → muted brown
+     - comments  → ink-50 italic
+     - types     → deep ink-300
+     - functions → ink-200
+   This produces a github-light-style palette but rotated to the
+   paper-ink-terracotta family. Dark theme keeps the original
+   github-dark colours from the upstream import. */
+:root.theme-light .md-code-block .hljs {
+  color: var(--ink-200, #3e372d);
+  background: transparent;
+}
+:root.theme-light .md-code-block code {
+  color: var(--ink-300, #2a2620);
+}
+:root.theme-light .md-code-lang {
+  background: var(--bg-elev-1);
+  color: var(--text-dim);
+}
+:root.theme-light .hljs-keyword,
+:root.theme-light .hljs-selector-tag,
+:root.theme-light .hljs-built_in,
+:root.theme-light .hljs-section {
+  color: #b6552b;
+  font-weight: 600;
+}
+:root.theme-light .hljs-string,
+:root.theme-light .hljs-attr,
+:root.theme-light .hljs-literal,
+:root.theme-light .hljs-symbol {
+  color: #6b7a3f;
+}
+:root.theme-light .hljs-number,
+:root.theme-light .hljs-quote,
+:root.theme-light .hljs-meta {
+  color: #8a5e3e;
+}
+:root.theme-light .hljs-comment {
+  color: #8a8270;
+  font-style: italic;
+}
+:root.theme-light .hljs-type,
+:root.theme-light .hljs-class .hljs-title,
+:root.theme-light .hljs-title.class_,
+:root.theme-light .hljs-variable.language_ {
+  color: #2a2620;
+  font-weight: 600;
+}
+:root.theme-light .hljs-function .hljs-title,
+:root.theme-light .hljs-title.function_,
+:root.theme-light .hljs-attribute,
+:root.theme-light .hljs-name {
+  color: #3e372d;
+  font-weight: 500;
+}
+:root.theme-light .hljs-tag {
+  color: #5a5145;
+}
+:root.theme-light .hljs-deletion {
+  color: #b04340;
+  background: rgba(176, 67, 64, 0.08);
+}
+:root.theme-light .hljs-addition {
+  color: #6b7a3f;
+  background: rgba(107, 122, 63, 0.08);
+}
+
+/* Plain `.msg-code` blocks (tool input/output, error stubs) —
+   not run through highlight.js, but share the dark-on-dark look
+   that breaks under light theme. Re-tint to paper-200 inset. */
+:root.theme-light .msg-code,
+:root.theme-light pre.msg-code {
+  background: var(--bg-elev-2);
+  color: var(--ink-300, #2a2620);
+  border-color: var(--border);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Light theme — paper grain texture
+   ───────────────────────────────────────────────────────────────
+   Subtle two-dot pattern applied to the page canvas when light
+   theme is active. Dark theme reads cleaner without it.
+   Spec: §5 of the design system. */
+:root.theme-light html,
+:root.theme-light body,
+:root.theme-light #root {
+  background-image:
+    radial-gradient(var(--paper-grain-dot-1) 1px, transparent 1px),
+    radial-gradient(var(--paper-grain-dot-2) 1px, transparent 1px);
+  background-size: 24px 24px, 37px 37px;
+  background-position: 0 0, 12px 18px;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Theme switch (Uiverse.io / Galahhad, recolored)
+   ───────────────────────────────────────────────────────────────
+   Day/Night animated toggle used in the workspace bar between the
+   Settings button and the INZONE wordmark.
+
+   - Day side: warm dusk-orange container with a yellow sun + soft
+     drifting clouds in paper-50 / paper-300.
+   - Night side: dark espresso paper with a cream moon + tiny
+     stars drifting in from above.
+
+   Sized to ~32px tall (var(--toggle-size) * em scaling) so it
+   sits neatly inside the 60px workspace-bar frame with the
+   surrounding 40×40 buttons. */
+.theme-switch {
+  /* Sized for the workspace bar (40px-tall row of square buttons).
+     v1.16: bumped 6px → 9px (~1.5× larger) so the toggle reads as
+     a deliberate brand element rather than a tiny utility chip.
+     `margin-left` gives it visible breathing room from the
+     utilities cluster (sound / mission control / settings) on the
+     left so the right-hand grouping reads as: utilities · toggle ·
+     brand, three distinct families with clear spacing. */
+  --toggle-size: 9px;
+  --container-width: 5.625em;
+  --container-height: 2.5em;
+  margin-left: 16px;
+  --container-radius: 6.25em;
+  --container-light-bg: #c97a3e;
+  --container-night-bg: #1c1812;
+  --circle-container-diameter: 3.375em;
+  --sun-moon-diameter: 2.125em;
+  --sun-bg: #f0c850;
+  --moon-bg: #d6cebb;
+  --spot-color: #8a8270;
+  --circle-container-offset: calc(
+    (var(--circle-container-diameter) - var(--container-height)) / 2 * -1
+  );
+  --stars-color: #fdfaf0;
+  --clouds-color: #fdfaf0;
+  --back-clouds-color: #e6dbb8;
+  --transition: 0.5s cubic-bezier(0, -0.02, 0.4, 1.25);
+  --circle-transition: 0.3s cubic-bezier(0, -0.02, 0.35, 1.17);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.theme-switch,
+.theme-switch *,
+.theme-switch *::before,
+.theme-switch *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-size: var(--toggle-size);
+}
+.theme-switch__container {
+  width: var(--container-width);
+  height: var(--container-height);
+  background-color: var(--container-light-bg);
+  border-radius: var(--container-radius);
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow:
+    0em -0.062em 0.062em rgba(0, 0, 0, 0.25),
+    0em 0.062em 0.125em rgba(255, 255, 255, 0.6);
+  transition: var(--transition);
+  position: relative;
+}
+.theme-switch__container::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  box-shadow:
+    0em 0.05em 0.187em rgba(0, 0, 0, 0.25) inset,
+    0em 0.05em 0.187em rgba(0, 0, 0, 0.25) inset;
+  border-radius: var(--container-radius);
+}
+.theme-switch__checkbox {
+  display: none;
+}
+.theme-switch__circle-container {
+  width: var(--circle-container-diameter);
+  height: var(--circle-container-diameter);
+  background-color: rgba(255, 255, 255, 0.1);
+  position: absolute;
+  left: var(--circle-container-offset);
+  top: var(--circle-container-offset);
+  border-radius: var(--container-radius);
+  box-shadow:
+    inset 0 0 0 3.375em rgba(255, 255, 255, 0.1),
+    inset 0 0 0 3.375em rgba(255, 255, 255, 0.1),
+    0 0 0 0.625em rgba(255, 255, 255, 0.1),
+    0 0 0 1.25em rgba(255, 255, 255, 0.1);
+  display: flex;
+  transition: var(--circle-transition);
+  pointer-events: none;
+}
+.theme-switch__sun-moon-container {
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+  width: var(--sun-moon-diameter);
+  height: var(--sun-moon-diameter);
+  margin: auto;
+  border-radius: var(--container-radius);
+  background-color: var(--sun-bg);
+  box-shadow:
+    0.062em 0.062em 0.062em 0em rgba(254, 255, 239, 0.61) inset,
+    0em -0.062em 0.062em 0em #a1872a inset;
+  filter:
+    drop-shadow(0.062em 0.125em 0.125em rgba(0, 0, 0, 0.25))
+    drop-shadow(0em 0.062em 0.125em rgba(0, 0, 0, 0.25));
+  overflow: hidden;
+  transition: var(--transition);
+}
+.theme-switch__moon {
+  transform: translateX(100%);
+  width: 100%;
+  height: 100%;
+  background-color: var(--moon-bg);
+  border-radius: inherit;
+  box-shadow:
+    0.062em 0.062em 0.062em 0em rgba(254, 255, 239, 0.61) inset,
+    0em -0.062em 0.062em 0em #969696 inset;
+  transition: var(--transition);
+  position: relative;
+}
+.theme-switch__spot {
+  position: absolute;
+  top: 0.75em;
+  left: 0.312em;
+  width: 0.75em;
+  height: 0.75em;
+  border-radius: var(--container-radius);
+  background-color: var(--spot-color);
+  box-shadow: 0em 0.0312em 0.062em rgba(0, 0, 0, 0.25) inset;
+}
+.theme-switch__spot:nth-of-type(2) {
+  width: 0.375em;
+  height: 0.375em;
+  top: 0.937em;
+  left: 1.375em;
+}
+.theme-switch__spot:nth-last-of-type(3) {
+  width: 0.25em;
+  height: 0.25em;
+  top: 0.312em;
+  left: 0.812em;
+}
+.theme-switch__clouds {
+  width: 1.25em;
+  height: 1.25em;
+  background-color: var(--clouds-color);
+  border-radius: var(--container-radius);
+  position: absolute;
+  bottom: -0.625em;
+  left: 0.312em;
+  box-shadow:
+    0.937em 0.312em var(--clouds-color),
+    -0.312em -0.312em var(--back-clouds-color),
+    1.437em 0.375em var(--clouds-color),
+    0.5em -0.125em var(--back-clouds-color),
+    2.187em 0 var(--clouds-color),
+    1.25em -0.062em var(--back-clouds-color),
+    2.937em 0.312em var(--clouds-color),
+    2em -0.312em var(--back-clouds-color),
+    3.625em -0.062em var(--clouds-color),
+    2.625em 0em var(--back-clouds-color),
+    4.5em -0.312em var(--clouds-color),
+    3.375em -0.437em var(--back-clouds-color),
+    4.625em -1.75em 0 0.437em var(--clouds-color),
+    4em -0.625em var(--back-clouds-color),
+    4.125em -2.125em 0 0.437em var(--back-clouds-color);
+  transition: 0.5s cubic-bezier(0, -0.02, 0.4, 1.25);
+}
+.theme-switch__stars-container {
+  position: absolute;
+  color: var(--stars-color);
+  top: -100%;
+  left: 0.312em;
+  width: 2.75em;
+  height: auto;
+  transition: var(--transition);
+}
+.theme-switch__checkbox:checked + .theme-switch__container {
+  background-color: var(--container-night-bg);
+}
+.theme-switch__checkbox:checked
+  + .theme-switch__container
+  .theme-switch__circle-container {
+  left: calc(
+    100% - var(--circle-container-offset) - var(--circle-container-diameter)
+  );
+}
+.theme-switch__checkbox:checked
+  + .theme-switch__container
+  .theme-switch__circle-container:hover {
+  left: calc(
+    100% - var(--circle-container-offset) - var(--circle-container-diameter) -
+      0.187em
+  );
+}
+.theme-switch__circle-container:hover {
+  left: calc(var(--circle-container-offset) + 0.187em);
+}
+.theme-switch__checkbox:checked
+  + .theme-switch__container
+  .theme-switch__moon {
+  transform: translate(0);
+}
+.theme-switch__checkbox:checked
+  + .theme-switch__container
+  .theme-switch__clouds {
+  bottom: -4.062em;
+}
+.theme-switch__checkbox:checked
+  + .theme-switch__container
+  .theme-switch__stars-container {
+  top: 50%;
+  transform: translateY(-50%);
 }

@@ -20,6 +20,50 @@ import type { TerminalShortcut } from '@shared/types';
 import { useStore } from '../store';
 import { CloseIcon } from './icons';
 
+/**
+ * Read the current app theme from the html class. Used by the
+ * xterm theme picker below — keeps the terminal's canvas
+ * background / foreground / cursor in sync with the rest of the
+ * app on theme switch.
+ */
+type ThemeMode = 'light' | 'dark';
+function currentThemeMode(): ThemeMode {
+  if (typeof document === 'undefined') return 'dark';
+  return document.documentElement.classList.contains('theme-light')
+    ? 'light'
+    : 'dark';
+}
+
+/**
+ * Theme object xterm uses to colour its canvas. Two presets:
+ *
+ *   dark  — original Inzone palette: deep #0c0e12 base with
+ *           accent-yellow cursor + selection. Matches the rest of
+ *           the chrome family in dark mode.
+ *   light — warm paper-200 base with ink-300 brown foreground and
+ *           a terracotta cursor that matches the rest of the
+ *           --accent in light theme. Selection picks up a softer
+ *           paper-300 tint so it doesn't fight the cursor.
+ */
+function terminalThemeFor(mode: ThemeMode) {
+  if (mode === 'light') {
+    return {
+      background: '#f1e9d2',     // paper-200
+      foreground: '#2a2620',     // ink-300
+      cursor: '#b6552b',         // accent (terracotta)
+      cursorAccent: '#f1e9d2',
+      selectionBackground: 'rgba(182, 85, 43, 0.20)',
+    };
+  }
+  return {
+    background: '#0c0e12',
+    foreground: '#e6e8ee',
+    cursor: '#e4d947',
+    cursorAccent: '#0c0e12',
+    selectionBackground: 'rgba(228, 217, 71, 0.28)',
+  };
+}
+
 export function TerminalPanel() {
   const cwd = useStore((s) => s.cwd);
   const [open, setOpen] = useState(false);
@@ -82,13 +126,7 @@ export function TerminalPanel() {
       lineHeight: 1.2,
       cursorBlink: true,
       allowProposedApi: true,
-      theme: {
-        background: '#0c0e12',
-        foreground: '#e6e8ee',
-        cursor: '#e4d947',
-        cursorAccent: '#0c0e12',
-        selectionBackground: 'rgba(228, 217, 71, 0.28)',
-      },
+      theme: terminalThemeFor(currentThemeMode()),
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -167,6 +205,29 @@ export function TerminalPanel() {
     if (!open) return;
     void ensureSpawned();
   }, [open, ensureSpawned]);
+
+  // Watch for app theme changes and re-tint xterm in-place. xterm's
+  // theme is set at construction time but `term.options.theme = ...`
+  // also re-paints the canvas live — no remount needed. Observer
+  // watches the html element's class attribute since that's where
+  // ThemeToggle flips `theme-light` on/off.
+  useEffect(() => {
+    const apply = () => {
+      const term = xtermRef.current;
+      if (!term) return;
+      term.options.theme = terminalThemeFor(currentThemeMode());
+    };
+    const observer = new MutationObserver(apply);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    // Catch any class change that happened between mount and now —
+    // e.g. theme set from localStorage on App boot before the panel
+    // first renders.
+    apply();
+    return () => observer.disconnect();
+  }, []);
 
   /**
    * Respawn the PTY when the session's working directory changes. This

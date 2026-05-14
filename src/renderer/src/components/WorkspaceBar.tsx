@@ -9,6 +9,7 @@ import type { SettingsSection } from './settings/types';
 import { AppLogo } from './AppLogo';
 import { PreviewButton } from './PreviewButton';
 import { PrButton } from './PrButton';
+import { ThemeToggle } from './ThemeToggle';
 import {
   BellIcon,
   BellOffIcon,
@@ -508,6 +509,14 @@ export function WorkspaceBar() {
           <SettingsIcon />
         </IconButton>
       </div>
+
+      {/* Theme toggle — sits between the right-side utilities
+          cluster and the INZONE brand. Animated sun/moon switch
+          (Uiverse.io port) that flips a `.theme-light` class on
+          <html>; light theme reads as warm-paper, dark theme is
+          the existing surface family. */}
+      <ThemeToggle />
+
       {/* Brand sits at the right end of the framed band so its
           right edge lines up with the pane-host's frame (both
           anchored 20px from the viewport). Was outside the frame
