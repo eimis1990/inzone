@@ -192,6 +192,19 @@ export function PaperclipIcon(props: IconProps) {
   );
 }
 
+/**
+ * Slash glyph used on the composer's "/" command-picker button.
+ * A bold forward-slash inside a rounded square so it reads as a
+ * "press to open a list of commands" affordance, not as a divider.
+ */
+export function SlashIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <line x1="17" y1="4" x2="7" y2="20" />
+    </Svg>
+  );
+}
+
 export function SendIcon(props: IconProps) {
   return (
     <Svg {...props}>

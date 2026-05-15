@@ -18,6 +18,7 @@ import {
   saveAgent,
   saveSkill,
 } from './agents';
+import { listCommands } from './commands';
 import { buildLeadPrompt, createLeadToolServer } from './lead-tools';
 import {
   createAskUserQuestionServer,
@@ -847,6 +848,18 @@ export function registerIpcHandlers(): void {
         }
       }
       return { ok: true as const };
+    },
+  );
+
+  // -- Slash commands (composer "/" picker) ---------------------------------
+  // Reads .claude/commands/*.md from the given project cwd + the user's
+  // ~/.claude/commands/ and returns both lists. The renderer merges them
+  // with builtins (project > user > builtin, deduped by name) in
+  // mergeCommands(). Cheap enough to call on every picker open.
+  ipcMain.handle(
+    IPC.COMMANDS_LIST,
+    async (_e, args: { cwd: string }) => {
+      return listCommands(args?.cwd ?? '');
     },
   );
 

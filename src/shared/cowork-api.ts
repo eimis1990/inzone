@@ -14,6 +14,7 @@ import type {
   GhAccount,
   GhStatus,
   PaneSpawnRequest,
+  ProjectCommand,
   PRDraft,
   PrDetail,
   PrSummary,
@@ -587,6 +588,19 @@ export interface CoworkApi {
     save(prefs: CavemanSettings): Promise<{ ok: true }>;
     /** Subscribe to changes. Returns an unsubscribe function. */
     onChanged(listener: (prefs: CavemanSettings) => void): () => void;
+  };
+  commands: {
+    /** Enumerate slash commands available for the given project cwd:
+     *  `<cwd>/.claude/commands/*.md` (project-scoped) +
+     *  `~/.claude/commands/*.md` (user-global). The renderer merges
+     *  these with `BUILTIN_COMMANDS` in priority order via
+     *  `mergeCommands()` from `shared/builtin-commands.ts`. Missing
+     *  folders are not an error — they just yield empty lists. Cheap
+     *  enough to call on every picker open. */
+    list(args: { cwd: string }): Promise<{
+      project: ProjectCommand[];
+      user: ProjectCommand[];
+    }>;
   };
   terminal: {
     spawn(args: {

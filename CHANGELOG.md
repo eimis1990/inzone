@@ -4,6 +4,63 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0] — 2026-05-15
+
+### Added
+
+- **Slash command picker in the composer.** New `/` button left
+  of the paperclip opens a searchable popover above the composer
+  listing every slash command available for the active pane's
+  project. Sources merged in priority order:
+  `<project>/.claude/commands/*.md` (project-local) →
+  `~/.claude/commands/*.md` (user-global) → five built-in
+  starters (`/plan`, `/think`, `/review`, `/explain`, `/test`).
+  Frontmatter `description` becomes the picker subtitle; body
+  with `$ARGUMENTS` becomes the prompt template. Pick a
+  command → a pane-accent badge mounts at the top of the
+  composer, placeholder switches to `Arguments for /<name>…`,
+  and on send the template is expanded with the user's typed
+  text as `$ARGUMENTS` and submitted as one prompt. Typing
+  `/` as the first character of an empty composer also opens
+  the picker with the rest of the slash-token as the initial
+  filter; Backspace on an empty textarea drops the badge.
+  Lists refresh on every picker open so commands you just
+  dropped into `~/.claude/commands/` show up without a
+  restart. Agent panes only — terminal panes (Claude Code /
+  Codex / Aider / Gemini) handle slash commands natively in
+  the PTY and don't get the button.
+
+### Changed
+
+- **Composer is responsive per-pane via CSS container queries.**
+  At pane widths ≤ 480px the composer switches from a single-
+  row inline layout to a two-row grid: slash + paperclip on
+  the left of the top row, send + expand on the right, textarea
+  spanning the full bottom row. Send button collapses to icon-
+  only (no "Send" label) so the four utility buttons read as
+  one cluster of square tiles. At ≤ 220px the icon buttons
+  drop to 26×26 and gaps tighten further. The 480px threshold
+  matches the width at which "Message the agent… (⌘⏎)" stops
+  fitting on one line in single-row mode — both the layout
+  flip and the placeholder shortening kick in together so the
+  transition feels like one coherent responsive moment.
+- **Pane header trims at narrow widths.** At pane widths ≤
+  500px the emoji avatar and the agent-name slug chip are
+  hidden from the header, leaving just the title and the
+  model chip. The agent name is already visible in the
+  sidebar agents list; the model chip is the more useful
+  at-a-glance signal in a tight pane.
+- **Composer placeholder swaps with pane width.** A
+  ResizeObserver on the pane root tracks the live width and
+  drives an `isNarrow` flag. At < 500px the placeholder
+  shortens from `Message the agent… (⌘⏎)` to `Message…`,
+  and the picked-command placeholder shortens from
+  `Arguments for /<name>… (⌘⏎ to send)` to `/<name> args…`.
+  CSS can't rewrite `placeholder` text, so the swap lives in
+  React; the observer seeds with the actual width on first
+  measurement so a fresh mount doesn't flicker through the
+  wide-pane string.
+
 ## [1.17.0] — 2026-05-14
 
 ### Added

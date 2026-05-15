@@ -34,6 +34,7 @@ import type {
   UsageSummary,
   CavemanSettings,
   EditorPreferences,
+  ProjectCommand,
   VoiceSettings,
   WindowState,
   Workspace,
@@ -540,6 +541,12 @@ const api: CoworkApi = {
       return () =>
         ipcRenderer.removeListener(IPC.CAVEMAN_CHANGED, handler);
     },
+  },
+  commands: {
+    list: (args: { cwd: string }): Promise<{
+      project: ProjectCommand[];
+      user: ProjectCommand[];
+    }> => ipcRenderer.invoke(IPC.COMMANDS_LIST, args),
   },
   terminal: {
     spawn: (args: {

@@ -25,8 +25,16 @@ import {
   MicIcon,
   PaperclipIcon,
   SendFilledIcon,
+  SlashIcon,
   StopIcon,
 } from './icons';
+import { SlashCommandPicker } from './SlashCommandPicker';
+import {
+  BUILTIN_COMMANDS,
+  expandCommand,
+  mergeCommands,
+} from '@shared/builtin-commands';
+import type { ProjectCommand } from '@shared/types';
 import placemarkUrl from '../assets/in-zone-placeholder.png';
 
 /**
@@ -351,6 +359,85 @@ export function Pane({ id }: PaneProps) {
     setRenaming(false);
   };
   const [input, setInput] = useState('');
+  // Slash command state. `pickedCommand` is the badge currently
+  // mounted at the top of the composer (set on picker selection,
+  // cleared on send or X). `pickerOpen` controls the popover. The
+  // commands list is loaded from disk lazily — on first focus of
+  // the slash button or on first "/" keystroke — and refreshed
+  // whenever the cwd changes.
+  const cwd = useStore((s) => s.cwd);
+  const [pickedCommand, setPickedCommand] = useState<ProjectCommand | null>(
+    null,
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerFilter, setPickerFilter] = useState('');
+  const [commandList, setCommandList] = useState<ProjectCommand[]>(
+    BUILTIN_COMMANDS,
+  );
+  // Reload commands whenever the project changes. Cheap (just reads
+  // .claude/commands/*.md from two folders); we re-merge with builtins
+  // so the picker always has something to show.
+  useEffect(() => {
+    let cancelled = false;
+    if (!cwd) {
+      setCommandList(BUILTIN_COMMANDS);
+      return;
+    }
+    void window.cowork.commands
+      .list({ cwd })
+      .then((res) => {
+        if (cancelled) return;
+        setCommandList(mergeCommands(res.project ?? [], res.user ?? []));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Disk read failed — fall back to builtins. Nothing surfaces
+        // to the user; the picker just shows the starter set.
+        setCommandList(BUILTIN_COMMANDS);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cwd]);
+  // Refresh on picker open so a command file the user just dropped
+  // into ~/.claude/commands/ shows up without remounting the pane.
+  // Same call as the cwd-change effect; cheap.
+  useEffect(() => {
+    if (!pickerOpen || !cwd) return;
+    let cancelled = false;
+    void window.cowork.commands
+      .list({ cwd })
+      .then((res) => {
+        if (cancelled) return;
+        setCommandList(mergeCommands(res.project ?? [], res.user ?? []));
+      })
+      .catch(() => {
+        /* keep current list */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pickerOpen, cwd]);
+  const openPicker = (initialFilter = '') => {
+    setPickerFilter(initialFilter);
+    setPickerOpen(true);
+  };
+  const handlePickCommand = (cmd: ProjectCommand) => {
+    setPickedCommand(cmd);
+    setPickerOpen(false);
+    setPickerFilter('');
+    // If the user opened the picker by typing `/foo` in the composer,
+    // strip the leading slash-token now that the command is picked —
+    // the textarea is for `$ARGUMENTS` only.
+    setInput((prev) => {
+      if (!prev.startsWith('/')) return prev;
+      const rest = prev.replace(/^\/\S*\s?/, '');
+      return rest;
+    });
+    requestAnimationFrame(() => {
+      composerTextareaRef.current?.focus();
+    });
+  };
   // Pull "seed text" — typically a prepared prompt sent to this pane
   // by the PR Send-to-agent flow — into our local input state, then
   // tell the store we've consumed it so a re-render (or sibling pane
@@ -389,6 +476,34 @@ export function Pane({ id }: PaneProps) {
   const [voiceError, setVoiceError] = useState<string | undefined>();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // Track the pane's own width via ResizeObserver so we can swap the
+  // textarea placeholder when the pane is narrow (e.g. a 10-pane
+  // grid). The CSS-only @container queries handle the layout shifts
+  // (button cluster, hidden emoji, etc.) — this hook handles the
+  // ONE thing CSS can't change: the literal placeholder string
+  // ("Message the agent…" → "Message…" in tight quarters).
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [paneWidth, setPaneWidth] = useState<number>(800);
+  useEffect(() => {
+    const el = paneRef.current;
+    if (!el) return;
+    // Seed with the actual width on first measurement so a freshly-
+    // mounted pane starts with the right placeholder, not the 800px
+    // default.
+    setPaneWidth(el.clientWidth);
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width;
+      if (typeof w === 'number') setPaneWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Matches the composer's `@container composer (max-width: 480px)`
+  // breakpoint (the composer is ~24px narrower than the pane, so
+  // pane < 500 ≈ composer < 476). Swaps the placeholder string at
+  // the same width the layout flips to 2-row, so the two changes
+  // feel like one coherent responsive shift.
+  const isNarrow = paneWidth < 500;
 
   // Auto-grow the composer up to ~2× its single-line height. We measure
   // `scrollHeight` after every input change and clamp to a max so a
@@ -544,13 +659,24 @@ export function Pane({ id }: PaneProps) {
   const submit = async () => {
     const text = input;
     const toSend = attachments;
-    if (!text.trim() && toSend.length === 0) return;
+    const cmd = pickedCommand;
+    // Allow sending a slash command on its own — even with no
+    // arguments, the command's body is meaningful (e.g. `/review`
+    // tells the agent to review the work it just did, no extra
+    // text needed). For everything else, require either typed text
+    // or an attachment.
+    if (!cmd && !text.trim() && toSend.length === 0) return;
+    // Expand the command template with the user's typed text as
+    // `$ARGUMENTS`. If there's no command picked, just send the
+    // user's text. Either way the agent sees ONE coherent prompt.
+    const promptText = cmd ? expandCommand(cmd, text) : text;
     setInput('');
     setAttachments([]);
     setAttachError(undefined);
+    setPickedCommand(null);
     await sendMessage(
       id,
-      text,
+      promptText,
       toSend.length > 0 ? toSend.map(attachmentToMessageImage) : undefined,
     );
   };
@@ -582,7 +708,10 @@ export function Pane({ id }: PaneProps) {
   const busy = pane.status === 'streaming' || pane.status === 'starting';
   const canSend =
     pane.agentName &&
-    (input.trim() || attachments.length > 0) &&
+    // A picked command counts as sendable on its own — see submit()
+    // for the rationale (commands like /review are meaningful with
+    // no extra text).
+    (input.trim() || attachments.length > 0 || pickedCommand) &&
     !flowBlocked;
 
   // Propagate the agent's colour via CSS custom properties so the active
@@ -596,6 +725,7 @@ export function Pane({ id }: PaneProps) {
 
   return (
     <div
+      ref={paneRef}
       className={'pane' + (isActive ? ' active' : '') + (dragging ? ' dragging' : '')}
       style={paneStyle}
       data-pane-id={id}
@@ -866,6 +996,28 @@ export function Pane({ id }: PaneProps) {
           void submit();
         }}
       >
+        {pickedCommand && (
+          // Removable badge in front of the composer textarea — read-
+          // only display of which slash command will expand on send.
+          // The X drops the command (the typed text stays put).
+          <div
+            className="composer-command-badge"
+            title={
+              pickedCommand.filePath ?? `Built-in /${pickedCommand.name}`
+            }
+          >
+            <span>/{pickedCommand.name}</span>
+            <button
+              type="button"
+              className="composer-command-badge-remove"
+              onClick={() => setPickedCommand(null)}
+              aria-label="Remove command"
+              title="Remove command"
+            >
+              <CloseIcon size={10} stroke={2.5} />
+            </button>
+          </div>
+        )}
         {attachments.length > 0 && (
           <div className="composer-attachments">
             {attachments.map((a) => (
@@ -885,7 +1037,37 @@ export function Pane({ id }: PaneProps) {
           </div>
         )}
         {attachError && <div className="attach-error">{attachError}</div>}
+        {pickerOpen && (
+          <SlashCommandPicker
+            commands={commandList}
+            initialFilter={pickerFilter}
+            onPick={handlePickCommand}
+            onClose={() => {
+              setPickerOpen(false);
+              setPickerFilter('');
+            }}
+          />
+        )}
         <div className="composer-row">
+          <button
+            type="button"
+            className={
+              'composer-slash' +
+              (pickerOpen || pickedCommand ? ' active' : '')
+            }
+            onClick={() => {
+              if (pickerOpen) {
+                setPickerOpen(false);
+                return;
+              }
+              openPicker();
+            }}
+            disabled={!pane.agentName || flowBlocked}
+            title="Insert a slash command (/)"
+            aria-label="Insert a slash command"
+          >
+            <SlashIcon size={16} stroke={2} />
+          </button>
           <button
             type="button"
             className="composer-attach"
@@ -910,20 +1092,55 @@ export function Pane({ id }: PaneProps) {
           <textarea
             ref={composerTextareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setInput(next);
+              // Open the picker when the user types "/" as the FIRST
+              // character of an empty composer (and no command is
+              // already picked). Use the rest of the slash-token as
+              // the initial filter so `/pl<space>` lands on /plan
+              // straight away. Only fires the moment the very first
+              // "/" appears — once the user is typing real text we
+              // don't keep popping the picker on every keystroke.
+              if (
+                !pickedCommand &&
+                !pickerOpen &&
+                next.startsWith('/') &&
+                !input.startsWith('/')
+              ) {
+                const filter = next.slice(1).split(/\s/)[0] ?? '';
+                openPicker(filter);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
                 void submit();
+              }
+              // Backspace at the very start of an empty textarea
+              // drops the command badge (Slack-style).
+              if (
+                e.key === 'Backspace' &&
+                pickedCommand &&
+                input.length === 0
+              ) {
+                e.preventDefault();
+                setPickedCommand(null);
               }
             }}
             onPaste={onPaste}
             placeholder={
               flowBlocked
                 ? 'Flow is ON — use the Flow board'
-                : pane.agentName
-                  ? 'Message the agent… (⌘⏎)'
-                  : 'Pick an agent first'
+                : !pane.agentName
+                  ? 'Pick an agent first'
+                  : pickedCommand
+                    ? isNarrow
+                      ? `/${pickedCommand.name} args…`
+                      : `Arguments for /${pickedCommand.name}… (⌘⏎ to send)`
+                    : isNarrow
+                      ? 'Message…'
+                      : 'Message the agent… (⌘⏎)'
             }
             disabled={!pane.agentName || flowBlocked}
             rows={1}

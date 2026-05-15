@@ -1109,3 +1109,37 @@ export interface UpdateCheckResult {
   error?: string;
   devMode?: boolean;
 }
+
+/**
+ * A "slash command" picked from the composer's "/" picker — either a
+ * built-in starter prompt (`/plan`, `/review`, etc.) or a user-defined
+ * markdown file under `.claude/commands/<name>.md` in the project
+ * root or `~/.claude/commands/<name>.md` for user-global commands.
+ *
+ * The picker shows `name` + `description`; on send we expand `body`
+ * with `$ARGUMENTS` replaced by whatever the user typed after the
+ * badge, and submit that as the actual prompt to the agent.
+ */
+export interface ProjectCommand {
+  /** Command identifier (no leading slash). Filename stem for file
+   *  commands, hardcoded for builtins. */
+  name: string;
+  /** One-line description shown next to the name in the picker. From
+   *  frontmatter for file commands, hardcoded for builtins. */
+  description: string;
+  /** The prompt template. `$ARGUMENTS` placeholder is replaced with
+   *  whatever the user typed in the composer after picking the
+   *  command. If a command body has no `$ARGUMENTS`, the user's text
+   *  is appended on a new line. */
+  body: string;
+  /** Where this command came from:
+   *   - 'builtin' — hardcoded in shared/builtin-commands.ts
+   *   - 'project' — `.claude/commands/` in the active project
+   *   - 'user'    — `~/.claude/commands/`
+   *  Renderer uses this for sort order (project > user > builtin) and
+   *  for a small source-chip in the picker UI. */
+  source: 'builtin' | 'project' | 'user';
+  /** Absolute path on disk for file commands, undefined for builtins.
+   *  Surfaced as a tooltip so the user can find the source file. */
+  filePath?: string;
+}

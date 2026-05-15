@@ -67,6 +67,13 @@ export const IPC = {
   CAVEMAN_SAVE: 'caveman:save',
   CAVEMAN_CHANGED: 'caveman:changed', // main -> renderer push
 
+  // Slash commands — enumerate markdown files under
+  // `<project>/.claude/commands/` + `~/.claude/commands/` for the
+  // composer's "/" picker. Returns project + user lists separately
+  // so the renderer can merge them with builtins in priority order.
+  // Called on focus / picker open, no main → renderer push needed.
+  COMMANDS_LIST: 'commands:list',
+
   // Terminal (PTY) — bottom-bar shell
   TERM_SPAWN: 'term:spawn',
   TERM_INPUT: 'term:input',
