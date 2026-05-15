@@ -52,6 +52,11 @@ export interface AgentDef {
    *  by recency without each row hitting the disk. Optional because
    *  legacy persisted entries may not carry it. */
   modifiedAt?: number;
+  /** When this agent was contributed by an installed plugin, the
+   *  plugin's name (matches `InstalledPlugin.manifest.name`). The
+   *  Agents table renders a small "from <plugin>" attribution chip
+   *  when set. Undefined for vanilla user/project agents. */
+  pluginName?: string;
 }
 
 /**
@@ -65,6 +70,10 @@ export interface SkillDef {
   body: string;
   filePath: string;
   scope: 'user' | 'project';
+  /** When this skill was contributed by an installed plugin, the
+   *  plugin's name (matches `InstalledPlugin.manifest.name`).
+   *  Surfaced as an attribution chip in Settings → Skills. */
+  pluginName?: string;
 }
 
 /** State of a Claude Agent SDK session bound to a pane. */
@@ -635,7 +644,7 @@ export type McpServerConfig =
  *                so users can see everything Claude Code knows about,
  *                even when it isn't active in this workspace.
  */
-export type McpScope = 'user' | 'project' | 'project-other';
+export type McpScope = 'user' | 'project' | 'project-other' | 'plugin';
 
 /** A configured MCP server, augmented with provenance for the UI. */
 export interface McpServerEntry {
@@ -650,6 +659,11 @@ export interface McpServerEntry {
    */
   projectPath?: string;
   config: McpServerConfig;
+  /** When `scope === 'plugin'`, the contributing plugin's name. The
+   *  MCP servers list renders a "from <plugin>" attribution chip
+   *  and disables Delete (plugin contents are managed by the plugin
+   *  install/uninstall flow, not by the per-entry Delete button). */
+  pluginName?: string;
 }
 
 /** Editable MCP entry payload sent from renderer -> main on save. */
@@ -1111,6 +1125,155 @@ export interface UpdateCheckResult {
 }
 
 /**
+ * One Claude Code plugin manifest as written in the plugin folder's
+ * `.claude-plugin/plugin.json`. Plugins are bundles that can
+ * contribute any combination of: agents, skills, slash commands,
+ * MCP servers, and hooks. Inzone parses these manifests both for
+ * the Settings → Plugins surface (showing what's installed) and
+ * for the marketplace browser (showing what's installable).
+ *
+ * The `contributes` field is a derived count — main process fills
+ * it in by inspecting the plugin folder, NOT something the
+ * plugin author writes. Real plugin.json files just declare the
+ * metadata (name/version/description/etc.).
+ */
+export interface PluginManifest {
+  /** Stable identifier — usually matches the plugin's folder name
+   *  under `~/.claude/plugins/`. */
+  name: string;
+  /** Display label for the UI. Falls back to `name` when missing. */
+  displayName?: string;
+  /** Semver-ish version string. */
+  version?: string;
+  /** Free-form description shown in the plugin card / detail. */
+  description?: string;
+  /** Maintainer/org name. */
+  author?: string;
+  /** SPDX licence identifier (e.g. "MIT", "Apache-2.0"). */
+  license?: string;
+  /** "View source" link for the plugin's home page or repo. */
+  homepage?: string;
+  /** Tags surfaced in the UI for filtering / browsing. */
+  keywords?: string[];
+}
+
+/**
+ * An installed plugin discovered under `~/.claude/plugins/<name>/`.
+ * The manifest comes straight from `.claude-plugin/plugin.json`;
+ * the `contributes` block counts what the plugin folder actually
+ * provides (parsed by walking subfolders), the `installPath` is
+ * the absolute folder path the manifest lives in, and `source`
+ * records where the plugin came from when install was performed
+ * via Inzone (for the "View source" link + uninstall confirmation).
+ */
+export interface InstalledPlugin {
+  manifest: PluginManifest;
+  installPath: string;
+  /** Counts of what this plugin contributes to each surface. */
+  contributes: {
+    agents: number;
+    skills: number;
+    commands: number;
+    mcpServers: number;
+    hooks: number;
+  };
+  /** Whether this plugin is currently active. Disabled plugins
+   *  stay on disk but their agents / skills / commands / MCP
+   *  servers are NOT aggregated into the rest of Inzone — the
+   *  toggle in Settings → Plugins is the user's "park this
+   *  without uninstalling" lever. Defaults to true when the
+   *  install sidecar is missing (plugin discovered on disk
+   *  outside Inzone — we assume the user wants it on). */
+  enabled: boolean;
+  /** Where this plugin came from on install. Undefined when the
+   *  plugin was dropped on disk outside Inzone (e.g. via the
+   *  Claude Code CLI) — we just discovered it on filesystem. */
+  source?: string;
+  /** When Inzone installed this plugin (epoch ms). Undefined for
+   *  filesystem-discovered plugins. */
+  installedAt?: number;
+}
+
+/**
+ * One marketplace the user has added — points at a git repo (or
+ * any URL) hosting a `.claude-plugin/marketplace.json` file. The
+ * source URL is what we fetch when the user clicks "Browse" to
+ * see available plugins; the cached name is what shows in the
+ * marketplaces list in Settings.
+ */
+export interface Marketplace {
+  /** Marketplace display name (from its marketplace.json `name`
+   *  field, or a friendly fallback derived from the source URL). */
+  name: string;
+  /** Git URL / HTTPS URL of the marketplace repo or raw JSON file. */
+  source: string;
+  /** Epoch ms when the user added this marketplace. */
+  addedAt: number;
+  /** Optional description from the marketplace.json. */
+  description?: string;
+}
+
+/**
+ * One plugin listed in a marketplace's catalog. Comes from the
+ * marketplace.json `plugins` array. `source` is the location of
+ * the plugin within the marketplace repo (typically a sub-path
+ * like `./plugins/my-plugin`); we resolve it against the
+ * marketplace's repo URL at install time.
+ */
+export interface MarketplacePluginEntry {
+  /** Plugin identifier — also the install folder name. */
+  name: string;
+  /** Relative path inside the marketplace repo, or an absolute
+   *  URL/path for plugins hosted outside the marketplace repo. */
+  source: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  /** Optional license string. */
+  license?: string;
+  /** Tags for filtering. */
+  keywords?: string[];
+  /** Per-entry homepage override (e.g. each plugin's own GitHub). */
+  homepage?: string;
+}
+
+/**
+ * Result of fetching a marketplace's catalog. The renderer uses
+ * `marketplace.name` to render the heading and iterates `plugins`
+ * to build the install list.
+ */
+export interface MarketplaceCatalog {
+  /** Echo of the marketplace metadata so the renderer doesn't have
+   *  to re-derive it (especially the `name` parsed from
+   *  marketplace.json). */
+  marketplace: Marketplace;
+  plugins: MarketplacePluginEntry[];
+}
+
+/**
+ * One entry in the hardcoded curated Recommended Marketplaces
+ * list (Settings → Plugins → right rail). Shipped with the app so
+ * fresh users have at least one marketplace to browse without
+ * having to find URLs themselves.
+ */
+export interface RecommendedMarketplace {
+  /** Stable kebab-case id — also used as the display fallback. */
+  id: string;
+  /** Display name on the rail card. */
+  name: string;
+  /** Single emoji for the card head. */
+  emoji: string;
+  /** One-paragraph description. */
+  description: string;
+  /** Source URL — git repo or raw marketplace.json URL. */
+  source: string;
+  /** Author / org name. */
+  author: string;
+  /** Optional tags. */
+  tags?: string[];
+}
+
+/**
  * One entry in the curated Recommended MCPs list (Settings → MCP →
  * Recommended). Mirrors the shape of `RecommendedSkill` but for
  * MCP servers — three transports supported (local stdio, remote
@@ -1211,10 +1374,14 @@ export interface ProjectCommand {
    *   - 'builtin' — hardcoded in shared/builtin-commands.ts
    *   - 'project' — `.claude/commands/` in the active project
    *   - 'user'    — `~/.claude/commands/`
-   *  Renderer uses this for sort order (project > user > builtin) and
-   *  for a small source-chip in the picker UI. */
-  source: 'builtin' | 'project' | 'user';
+   *   - 'plugin'  — `~/.claude/plugins/<plugin>/commands/` (only when
+   *                 the contributing plugin is enabled)
+   *  Renderer uses this for sort order (project > user > plugin >
+   *  builtin) and for a small source-chip in the picker UI. */
+  source: 'builtin' | 'project' | 'user' | 'plugin';
   /** Absolute path on disk for file commands, undefined for builtins.
    *  Surfaced as a tooltip so the user can find the source file. */
   filePath?: string;
+  /** When `source === 'plugin'`, the contributing plugin's name. */
+  pluginName?: string;
 }

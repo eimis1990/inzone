@@ -18,6 +18,9 @@ import type {
   PRDraft,
   PrDetail,
   PrSummary,
+  InstalledPlugin,
+  Marketplace,
+  MarketplaceCatalog,
   ReleaseEntry,
   UpdateCheckResult,
   WikiPageMeta,
@@ -590,17 +593,83 @@ export interface CoworkApi {
     onChanged(listener: (prefs: CavemanSettings) => void): () => void;
   };
   commands: {
-    /** Enumerate slash commands available for the given project cwd:
-     *  `<cwd>/.claude/commands/*.md` (project-scoped) +
-     *  `~/.claude/commands/*.md` (user-global). The renderer merges
-     *  these with `BUILTIN_COMMANDS` in priority order via
-     *  `mergeCommands()` from `shared/builtin-commands.ts`. Missing
-     *  folders are not an error — they just yield empty lists. Cheap
-     *  enough to call on every picker open. */
+    /** Enumerate slash commands available for the given project cwd.
+     *  Three sources returned separately:
+     *    - `project` — `<cwd>/.claude/commands/*.md`
+     *    - `user`    — `~/.claude/commands/*.md`
+     *    - `plugin`  — `~/.claude/plugins/<plugin>/commands/*.md`
+     *                  for each enabled plugin (since v1.20)
+     *  The renderer merges them with `BUILTIN_COMMANDS` in priority
+     *  order (project > user > plugin > builtin) via
+     *  `mergeCommands()` in `shared/builtin-commands.ts`. Missing
+     *  folders are not an error — they just yield empty lists. */
     list(args: { cwd: string }): Promise<{
       project: ProjectCommand[];
       user: ProjectCommand[];
+      plugin: ProjectCommand[];
     }>;
+  };
+  plugins: {
+    /** List every plugin installed under `~/.claude/plugins/`. Each
+     *  result includes the parsed manifest, contribution counts, and
+     *  install metadata (source + installedAt) when Inzone performed
+     *  the install. */
+    list(): Promise<InstalledPlugin[]>;
+    /** Install a plugin from a marketplace. Clones the marketplace
+     *  repo, copies the plugin's `source` subdir to
+     *  `~/.claude/plugins/<pluginName>/`, writes the Inzone install
+     *  sidecar. Refuses to clobber an existing plugin of the same
+     *  name — the user has to uninstall first. */
+    install(args: {
+      marketplaceSource: string;
+      pluginSource: string;
+      pluginName: string;
+    }): Promise<
+      | { ok: true; installPath?: string; plugin?: InstalledPlugin }
+      | { ok: false; error: string }
+    >;
+    /** Uninstall a plugin by name. Removes its folder under
+     *  `~/.claude/plugins/`. Idempotent — uninstalling a plugin
+     *  that's not installed returns `removed: false` rather than
+     *  erroring. */
+    uninstall(args: { name: string }): Promise<
+      { ok: true; removed: boolean } | { ok: false; error: string }
+    >;
+    /** Toggle a plugin's enabled state. Disabled plugins stay on
+     *  disk but stop contributing their agents/skills/commands/MCPs
+     *  to the rest of Inzone (the loaders only walk enabled plugin
+     *  subfolders). Mirrors the flip into Claude Code's
+     *  `~/.claude/settings.json` `enabledPlugins` array so the two
+     *  apps stay in sync. */
+    setEnabled(args: { name: string; enabled: boolean }): Promise<
+      | { ok: true; installPath?: string; plugin?: InstalledPlugin }
+      | { ok: false; error: string }
+    >;
+    /** Marketplaces the user has added (read from
+     *  `~/.claude/plugins/marketplaces.json`). Inzone-owned file —
+     *  the Claude Code CLI doesn't write it. */
+    listMarketplaces(): Promise<Marketplace[]>;
+    /** Add a marketplace by URL. Validates by fetching the
+     *  `.claude-plugin/marketplace.json` first; refuses to save if
+     *  the URL doesn't resolve or the JSON doesn't parse. Duplicates
+     *  by source URL are deduped silently. */
+    addMarketplace(args: { source: string }): Promise<
+      | { ok: true; marketplace: Marketplace }
+      | { ok: false; error: string }
+    >;
+    /** Remove a marketplace from the user's list. Identifies by
+     *  source URL since names could collide. */
+    removeMarketplace(args: { source: string }): Promise<{
+      ok: true;
+      removed: boolean;
+    }>;
+    /** Fetch + parse a marketplace's catalog. GitHub URLs hit a
+     *  raw-content URL for speed; others fall back to a shallow
+     *  git clone into a temp dir. Either way returns the parsed
+     *  plugin list. */
+    fetchCatalog(args: { source: string }): Promise<
+      MarketplaceCatalog | { ok: false; error: string }
+    >;
   };
   terminal: {
     spawn(args: {

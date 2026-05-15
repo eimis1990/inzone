@@ -19,6 +19,16 @@ import {
   saveSkill,
 } from './agents';
 import { listCommands } from './commands';
+import {
+  addMarketplace,
+  fetchMarketplaceCatalog,
+  installPlugin,
+  listInstalledPlugins,
+  listMarketplaces,
+  removeMarketplace,
+  setPluginEnabled,
+  uninstallPlugin,
+} from './plugins';
 import { buildLeadPrompt, createLeadToolServer } from './lead-tools';
 import {
   createAskUserQuestionServer,
@@ -861,6 +871,43 @@ export function registerIpcHandlers(): void {
     async (_e, args: { cwd: string }) => {
       return listCommands(args?.cwd ?? '');
     },
+  );
+
+  // -- Plugins + marketplaces (Settings → Plugins) --------------------------
+  // Plugin bundles installed at `~/.claude/plugins/<name>/` plus the
+  // user's added marketplaces. All operations are short-lived and the
+  // renderer re-fetches `listInstalledPlugins` after every mutation —
+  // no push channel needed because the user is on the Plugins tab when
+  // they trigger these.
+  ipcMain.handle(IPC.PLUGINS_LIST, async () => listInstalledPlugins());
+  ipcMain.handle(
+    IPC.PLUGINS_INSTALL,
+    async (
+      _e,
+      args: { marketplaceSource: string; pluginSource: string; pluginName: string },
+    ) => installPlugin(args),
+  );
+  ipcMain.handle(
+    IPC.PLUGINS_UNINSTALL,
+    async (_e, args: { name: string }) => uninstallPlugin(args.name),
+  );
+  ipcMain.handle(
+    IPC.PLUGINS_SET_ENABLED,
+    async (_e, args: { name: string; enabled: boolean }) =>
+      setPluginEnabled(args.name, args.enabled),
+  );
+  ipcMain.handle(IPC.MARKETPLACES_LIST, async () => listMarketplaces());
+  ipcMain.handle(
+    IPC.MARKETPLACES_ADD,
+    async (_e, args: { source: string }) => addMarketplace(args.source),
+  );
+  ipcMain.handle(
+    IPC.MARKETPLACES_REMOVE,
+    async (_e, args: { source: string }) => removeMarketplace(args.source),
+  );
+  ipcMain.handle(
+    IPC.MARKETPLACES_FETCH_CATALOG,
+    async (_e, args: { source: string }) => fetchMarketplaceCatalog(args.source),
   );
 
   // -- Terminal (PTY) -------------------------------------------------------

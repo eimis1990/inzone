@@ -21,18 +21,27 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import matter from 'gray-matter';
 import type { ProjectCommand } from '../shared/types';
+import { listEnabledPlugins } from './plugins';
 
 interface ListResult {
   project: ProjectCommand[];
   user: ProjectCommand[];
+  plugin: ProjectCommand[];
 }
 
 /**
  * Enumerate slash commands for a given project cwd.
  *
- * Both lookups are independent — a missing folder on either side is
- * not an error, just an empty list. We sort by name within each
- * source so the picker shows a predictable order.
+ * Three sources of commands:
+ *   - `<cwd>/.claude/commands/` — project-scoped
+ *   - `~/.claude/commands/`     — user-scoped
+ *   - `~/.claude/plugins/<plugin>/commands/` for each enabled
+ *     plugin (since v1.20). Each command carries `source: 'plugin'`
+ *     and `pluginName` for the picker's attribution chip.
+ *
+ * All three lookups are independent — missing folders aren't an
+ * error, just an empty list. Sorted by name within each source so
+ * the picker order is stable.
  */
 export async function listCommands(projectCwd: string): Promise<ListResult> {
   const userDir = path.join(os.homedir(), '.claude', 'commands');
@@ -40,15 +49,33 @@ export async function listCommands(projectCwd: string): Promise<ListResult> {
     ? path.join(projectCwd, '.claude', 'commands')
     : null;
 
-  const [user, project] = await Promise.all([
+  const [user, project, plugin] = await Promise.all([
     readDir(userDir, 'user'),
     projectDir ? readDir(projectDir, 'project') : Promise.resolve([]),
+    readEnabledPluginCommands(),
   ]);
 
   return {
     user: user.sort(byName),
     project: project.sort(byName),
+    plugin: plugin.sort(byName),
   };
+}
+
+/**
+ * Walk each enabled plugin's `commands/` subdirectory and return
+ * the parsed commands tagged with `source: 'plugin'` + the
+ * contributing plugin name. Skipping disabled plugins is the
+ * activation lever the user controls from Settings → Plugins.
+ */
+async function readEnabledPluginCommands(): Promise<ProjectCommand[]> {
+  const plugins = await listEnabledPlugins();
+  const lists = await Promise.all(
+    plugins.map(async (p) =>
+      readDir(path.join(p.installPath, 'commands'), 'plugin', p.manifest.name),
+    ),
+  );
+  return lists.flat();
 }
 
 function byName(a: ProjectCommand, b: ProjectCommand): number {
@@ -57,7 +84,8 @@ function byName(a: ProjectCommand, b: ProjectCommand): number {
 
 async function readDir(
   dir: string,
-  source: 'user' | 'project',
+  source: 'user' | 'project' | 'plugin',
+  pluginName?: string,
 ): Promise<ProjectCommand[]> {
   let entries: string[];
   try {
@@ -94,6 +122,7 @@ async function readDir(
           body,
           source,
           filePath,
+          ...(pluginName ? { pluginName } : {}),
         };
         return cmd;
       } catch (err) {

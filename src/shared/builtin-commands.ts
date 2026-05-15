@@ -100,20 +100,26 @@ export const BUILTIN_COMMANDS: ProjectCommand[] = [
 /**
  * Merge command lists in priority order, deduping by name.
  *
- * Order: project files > user files > builtins. A project-local
- * `plan.md` shadows a user-global `plan.md`, which shadows the
- * built-in `/plan`. The renderer calls this AFTER the main process
- * enumerates files on disk; main returns project + user lists
- * separately so we can preserve the priority here even if disk
- * enumeration ordering ever changes.
+ * Order: project files > user files > plugin files > builtins. A
+ * project-local `plan.md` shadows a user-global `plan.md`, which
+ * shadows a plugin-contributed `/plan`, which shadows the built-in
+ * `/plan`. The renderer calls this AFTER the main process
+ * enumerates files on disk; main returns the four lists separately
+ * so we can preserve the priority here even if disk enumeration
+ * ordering ever changes.
+ *
+ * `plugin` is optional for backwards-compat with v1.18/v1.19 call
+ * sites — when omitted we behave as if there were no plugin
+ * commands.
  */
 export function mergeCommands(
   project: ProjectCommand[],
   user: ProjectCommand[],
+  plugin: ProjectCommand[] = [],
 ): ProjectCommand[] {
   const seen = new Set<string>();
   const out: ProjectCommand[] = [];
-  for (const list of [project, user, BUILTIN_COMMANDS]) {
+  for (const list of [project, user, plugin, BUILTIN_COMMANDS]) {
     for (const cmd of list) {
       if (seen.has(cmd.name)) continue;
       seen.add(cmd.name);

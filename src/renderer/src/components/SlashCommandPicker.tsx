@@ -27,7 +27,27 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import type { ProjectCommand } from '@shared/types';
+
+/**
+ * Tooltip state — `cmd` is what to show, `top`/`left` are viewport-
+ * relative pixel coordinates captured from the hovered row's
+ * bounding rect at the moment the 2s timer fires. Rendered through
+ * a portal so the tooltip escapes the picker's own overflow
+ * clipping.
+ */
+interface TooltipState {
+  cmd: ProjectCommand;
+  top: number;
+  left: number;
+}
+
+/** How long a row must be hovered before its description tooltip
+ *  appears. The native browser `title` attribute has platform-
+ *  specific delays (typically 1.5–3s) that we can't control,
+ *  which the user found unreliable — 2s exactly is the target. */
+const TOOLTIP_DELAY_MS = 2000;
 
 interface Props {
   commands: ProjectCommand[];
@@ -51,8 +71,65 @@ export function SlashCommandPicker({
 }: Props): JSX.Element {
   const [filter, setFilter] = useState(initialFilter ?? '');
   const [highlight, setHighlight] = useState(0);
+  // Custom hover-tooltip: shows the full command description after
+  // a deterministic 2s delay, regardless of native browser title
+  // timing. Lives in a portal to document.body so it escapes the
+  // picker list's `overflow-y: auto` clipping.
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const tooltipTimerRef = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Clear any pending tooltip timer on unmount so a long-delayed
+  // setState doesn't fire on a stale component.
+  useEffect(() => {
+    return () => {
+      if (tooltipTimerRef.current !== null) {
+        window.clearTimeout(tooltipTimerRef.current);
+        tooltipTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleRowEnter = (
+    i: number,
+    e: React.MouseEvent<HTMLLIElement>,
+  ) => {
+    setHighlight(i);
+    if (tooltipTimerRef.current !== null) {
+      window.clearTimeout(tooltipTimerRef.current);
+    }
+    setTooltip(null);
+    // Capture the target now — by the time the timer fires the
+    // synthetic event may have been recycled.
+    const rowEl = e.currentTarget;
+    tooltipTimerRef.current = window.setTimeout(() => {
+      // Closure captures `filtered` at mouseEnter time — if the
+      // user re-filters during the 2s delay the tooltip will be
+      // for the originally hovered command, which is the
+      // expected mental model.
+      const cmd = filtered[i];
+      if (!cmd) return;
+      const rect = rowEl.getBoundingClientRect();
+      // Anchor the tooltip to the row's right edge, vertically
+      // centred — keeps it out of the way of the row itself and
+      // close to the source-chip the user just hovered.
+      setTooltip({
+        cmd,
+        top: rect.top + rect.height / 2,
+        left: rect.right + 12,
+      });
+      tooltipTimerRef.current = null;
+    }, TOOLTIP_DELAY_MS);
+  };
+
+  const handleRowLeave = () => {
+    if (tooltipTimerRef.current !== null) {
+      window.clearTimeout(tooltipTimerRef.current);
+      tooltipTimerRef.current = null;
+    }
+    setTooltip(null);
+  };
 
   // Filter is case-insensitive over both the name and the
   // description so a user typing "test" finds /test and also any
@@ -177,11 +254,11 @@ export function SlashCommandPicker({
                   'slash-picker-row' +
                   (isHighlighted ? ' highlighted' : '')
                 }
-                onMouseEnter={() => setHighlight(i)}
+                onMouseEnter={(e) => handleRowEnter(i, e)}
+                onMouseLeave={handleRowLeave}
                 onClick={() => pick(cmd)}
                 role="button"
                 tabIndex={-1}
-                title={cmd.filePath ?? `Built-in /${cmd.name}`}
               >
                 <span className="slash-picker-name">/{cmd.name}</span>
                 <span className="slash-picker-desc">{cmd.description}</span>
@@ -192,7 +269,9 @@ export function SlashCommandPicker({
                     ? 'project'
                     : cmd.source === 'user'
                       ? 'user'
-                      : 'built-in'}
+                      : cmd.source === 'plugin'
+                        ? 'plugin'
+                        : 'built-in'}
                 </span>
               </li>
             );
@@ -211,6 +290,29 @@ export function SlashCommandPicker({
           <kbd>Esc</kbd> close
         </span>
       </div>
+      {tooltip &&
+        createPortal(
+          <div
+            className="slash-picker-tooltip"
+            style={{ top: tooltip.top, left: tooltip.left }}
+            role="tooltip"
+          >
+            <div className="slash-picker-tooltip-name">
+              /{tooltip.cmd.name}
+            </div>
+            <div className="slash-picker-tooltip-desc">
+              {tooltip.cmd.description}
+            </div>
+            {(tooltip.cmd.pluginName || tooltip.cmd.filePath) && (
+              <div className="slash-picker-tooltip-meta">
+                {tooltip.cmd.pluginName
+                  ? `From plugin · ${tooltip.cmd.pluginName}`
+                  : tooltip.cmd.filePath}
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

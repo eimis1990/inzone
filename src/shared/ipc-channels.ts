@@ -74,6 +74,21 @@ export const IPC = {
   // Called on focus / picker open, no main → renderer push needed.
   COMMANDS_LIST: 'commands:list',
 
+  // Plugins — Claude Code plugin bundles installed under
+  // `~/.claude/plugins/<name>/`. Settings → Plugins surfaces them
+  // as first-class objects with install/uninstall + marketplace
+  // browse. Renderer re-fetches after every mutating call (no
+  // push needed; the user is on the screen when they trigger
+  // these and the modal flow is short).
+  PLUGINS_LIST: 'plugins:list',
+  PLUGINS_INSTALL: 'plugins:install',
+  PLUGINS_UNINSTALL: 'plugins:uninstall',
+  PLUGINS_SET_ENABLED: 'plugins:setEnabled',
+  MARKETPLACES_LIST: 'plugins:marketplaces:list',
+  MARKETPLACES_ADD: 'plugins:marketplaces:add',
+  MARKETPLACES_REMOVE: 'plugins:marketplaces:remove',
+  MARKETPLACES_FETCH_CATALOG: 'plugins:marketplaces:catalog',
+
   // Terminal (PTY) — bottom-bar shell
   TERM_SPAWN: 'term:spawn',
   TERM_INPUT: 'term:input',

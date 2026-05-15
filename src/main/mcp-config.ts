@@ -26,6 +26,7 @@ import type {
   McpServerDraft,
   McpServerEntry,
 } from '@shared/types';
+import { listEnabledPlugins } from './plugins';
 
 const USER_SETTINGS = path.join(homedir(), '.claude.json');
 const USER_MCP_FALLBACK = path.join(homedir(), '.claude', '.mcp.json');
@@ -245,16 +246,22 @@ export async function readOtherProjectsLocalEntries(
  * Sorted alphabetically for stable display.
  */
 export async function listMcpServers(cwd?: string): Promise<McpServerEntry[]> {
-  const [user, project, projectLocal, otherProjects] = await Promise.all([
+  const [user, project, projectLocal, otherProjects, plugin] = await Promise.all([
     readUserEntries(),
     readProjectEntries(cwd),
     readClaudeProjectLocalEntries(cwd),
     readOtherProjectsLocalEntries(cwd),
+    readEnabledPluginMcpEntries(),
   ]);
-  // Active scopes (user + current project) merge by name with project
-  // winning on collision — Claude Code's own precedence rule.
+  // Active scopes (user + current project + enabled plugins) merge by
+  // name with project winning on collision — matches Claude Code's
+  // precedence rule. Plugin entries slot in between user and project:
+  // an explicit user/project entry overrides a plugin-contributed
+  // one of the same name, but plugin entries are otherwise shown
+  // alongside user-scope.
   const active = new Map<string, McpServerEntry>();
   for (const e of user) active.set(e.name, e);
+  for (const e of plugin) active.set(e.name, e);
   for (const e of projectLocal) active.set(e.name, e);
   for (const e of project) active.set(e.name, e);
   // Other-project entries don't merge with active — they're informational
@@ -272,6 +279,101 @@ export async function listMcpServers(cwd?: string): Promise<McpServerEntry[]> {
     if (sa !== sb) return sa - sb;
     return a.name.localeCompare(b.name);
   });
+}
+
+/**
+ * Walk each enabled plugin's `mcp.json` (or `.mcp.json`) and emit
+ * one `McpServerEntry` per server with `scope: 'plugin'` plus a
+ * `pluginName` attribution. Disabled plugins contribute nothing.
+ * The Settings → MCP view renders these alongside user-scope
+ * entries with a small "from <plugin>" chip and disables their
+ * Delete button (plugin contents are managed by the plugin
+ * install/uninstall flow).
+ */
+async function readEnabledPluginMcpEntries(): Promise<McpServerEntry[]> {
+  const plugins = await listEnabledPlugins();
+  const lists = await Promise.all(
+    plugins.map(async (p) => {
+      for (const filename of ['mcp.json', '.mcp.json']) {
+        const filePath = path.join(p.installPath, filename);
+        try {
+          const raw = await fs.readFile(filePath, 'utf8');
+          const parsed = JSON.parse(raw) as {
+            mcpServers?: Record<string, McpServerConfig | undefined>;
+          };
+          const servers = parsed.mcpServers ?? {};
+          const out: McpServerEntry[] = [];
+          for (const [name, config] of Object.entries(servers)) {
+            if (!config) continue;
+            const normalised = normaliseConfig(config);
+            if (!normalised) continue;
+            out.push({
+              name,
+              scope: 'plugin',
+              filePath,
+              config: normalised,
+              pluginName: p.manifest.name,
+            });
+          }
+          return out;
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code;
+          if (code === 'ENOENT') continue;
+          if (err instanceof SyntaxError) {
+            console.warn(`[mcp] invalid JSON in plugin ${filePath}:`, err);
+            return [];
+          }
+          // Any other I/O error — try the next candidate filename.
+        }
+      }
+      return [];
+    }),
+  );
+  return lists.flat();
+}
+
+/**
+ * Plugin-contributed MCP configs come straight from a `mcp.json`
+ * the plugin author wrote, so we can't trust the shape unilaterally
+ * (e.g. older plugins might omit `type` and assume stdio). Coerce
+ * into the canonical `McpServerConfig` union; return null if the
+ * shape can't be salvaged.
+ */
+function normaliseConfig(raw: unknown): McpServerConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const type =
+    typeof obj.type === 'string'
+      ? obj.type.toLowerCase()
+      : typeof obj.command === 'string'
+        ? 'stdio'
+        : typeof obj.url === 'string'
+          ? 'http'
+          : '';
+  if (type === 'stdio' && typeof obj.command === 'string') {
+    return {
+      type: 'stdio',
+      command: obj.command,
+      args: Array.isArray(obj.args)
+        ? obj.args.filter((a): a is string => typeof a === 'string')
+        : undefined,
+      env:
+        obj.env && typeof obj.env === 'object'
+          ? (obj.env as Record<string, string>)
+          : undefined,
+    };
+  }
+  if ((type === 'sse' || type === 'http') && typeof obj.url === 'string') {
+    return {
+      type: type === 'sse' ? 'sse' : 'http',
+      url: obj.url,
+      headers:
+        obj.headers && typeof obj.headers === 'object'
+          ? (obj.headers as Record<string, string>)
+          : undefined,
+    };
+  }
+  return null;
 }
 
 /**

@@ -387,7 +387,9 @@ export function Pane({ id }: PaneProps) {
       .list({ cwd })
       .then((res) => {
         if (cancelled) return;
-        setCommandList(mergeCommands(res.project ?? [], res.user ?? []));
+        setCommandList(
+          mergeCommands(res.project ?? [], res.user ?? [], res.plugin ?? []),
+        );
       })
       .catch(() => {
         if (cancelled) return;
@@ -409,7 +411,9 @@ export function Pane({ id }: PaneProps) {
       .list({ cwd })
       .then((res) => {
         if (cancelled) return;
-        setCommandList(mergeCommands(res.project ?? [], res.user ?? []));
+        setCommandList(
+          mergeCommands(res.project ?? [], res.user ?? [], res.plugin ?? []),
+        );
       })
       .catch(() => {
         /* keep current list */
@@ -1037,7 +1041,19 @@ export function Pane({ id }: PaneProps) {
           </div>
         )}
         {attachError && <div className="attach-error">{attachError}</div>}
-        {pickerOpen && (
+        {/* IMPORTANT: when the expand modal is open it renders its own
+            <SlashCommandPicker> instance off the same shared state.
+            If we ALSO render the inline picker here, both instances
+            mount and both register a global `mousedown` outside-click
+            handler. Clicking a row in the modal's picker fires
+            mousedown — the inline picker's handler sees the click
+            outside its own root and calls onClose(), flipping
+            pickerOpen to false BEFORE the click event reaches the
+            row's onClick. The picker unmounts mid-click and the
+            actual selection is lost ("nothing happens"). Suppressing
+            the inline picker while the expand modal is open
+            guarantees only one picker is mounted at a time. */}
+        {pickerOpen && !composerExpanded && (
           <SlashCommandPicker
             commands={commandList}
             initialFilter={pickerFilter}
@@ -1194,6 +1210,22 @@ export function Pane({ id }: PaneProps) {
             agentModel={agent?.model ?? null}
             agentEmoji={pane.agentName ? (agent?.emoji ?? '🤖') : null}
             accentColor={color?.vivid ?? null}
+            slashCommands={{
+              pickedCommand,
+              commandList,
+              pickerOpen,
+              pickerFilter,
+              onOpenPicker: (initialFilter = '') => {
+                setPickerFilter(initialFilter);
+                setPickerOpen(true);
+              },
+              onClosePicker: () => {
+                setPickerOpen(false);
+                setPickerFilter('');
+              },
+              onPickCommand: handlePickCommand,
+              onRemoveCommand: () => setPickedCommand(null),
+            }}
             onSubmit={async () => {
               await submit();
               // Auto-close after a successful submit so the user
@@ -1224,6 +1256,23 @@ export function Pane({ id }: PaneProps) {
  *   - Esc closes (without submitting)
  *   - ⌘/Ctrl + Enter submits (matches the inline composer)
  */
+/**
+ * Bundle of slash-command state piped from `Pane` into the expand
+ * modal so commands work identically in both composer surfaces.
+ * Lives in the parent so picking a command in the inline composer,
+ * expanding, and sending still uses the same `pickedCommand` snapshot
+ * — picker state stays in one place. */
+interface SlashCommandsBundle {
+  pickedCommand: ProjectCommand | null;
+  commandList: ProjectCommand[];
+  pickerOpen: boolean;
+  pickerFilter: string;
+  onOpenPicker: (initialFilter?: string) => void;
+  onClosePicker: () => void;
+  onPickCommand: (cmd: ProjectCommand) => void;
+  onRemoveCommand: () => void;
+}
+
 function ComposerExpandModal(props: {
   input: string;
   setInput: (v: string) => void;
@@ -1249,6 +1298,11 @@ function ComposerExpandModal(props: {
    *  and the meta-chip accent so the modal carries the same visual
    *  identity as the inline pane header. */
   accentColor: string | null;
+  /** Slash-command state shared with the inline composer (since
+   *  v1.20). Render the badge, slash button, and picker inside the
+   *  modal so commands work identically regardless of which surface
+   *  the user is in. */
+  slashCommands: SlashCommandsBundle;
   onSubmit: () => void | Promise<void>;
   onClose: () => void;
 }) {
@@ -1344,11 +1398,35 @@ function ComposerExpandModal(props: {
           ref={textareaRef}
           className="composer-expand-textarea"
           value={props.input}
-          onChange={(e) => props.setInput(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            props.setInput(next);
+            // Same "type / at the empty start to open the picker"
+            // shortcut as the inline composer.
+            if (
+              !props.slashCommands.pickedCommand &&
+              !props.slashCommands.pickerOpen &&
+              next.startsWith('/') &&
+              !props.input.startsWith('/')
+            ) {
+              const filter = next.slice(1).split(/\s/)[0] ?? '';
+              props.slashCommands.onOpenPicker(filter);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
               void props.onSubmit();
+            }
+            // Backspace on empty composer drops the badge — matches
+            // the inline composer's behaviour.
+            if (
+              e.key === 'Backspace' &&
+              props.slashCommands.pickedCommand &&
+              props.input.length === 0
+            ) {
+              e.preventDefault();
+              props.slashCommands.onRemoveCommand();
             }
           }}
           onPaste={props.onPaste}
@@ -1381,6 +1459,52 @@ function ComposerExpandModal(props: {
         <div className="composer-expand-actions">
           <button
             type="button"
+            className={
+              'composer-expand-attach composer-expand-slash' +
+              (props.slashCommands.pickerOpen ||
+              props.slashCommands.pickedCommand
+                ? ' active'
+                : '')
+            }
+            onClick={() => {
+              if (props.slashCommands.pickerOpen) {
+                props.slashCommands.onClosePicker();
+              } else {
+                props.slashCommands.onOpenPicker();
+              }
+            }}
+            disabled={props.disabled}
+            title="Insert a slash command (/)"
+            aria-label="Insert a slash command"
+          >
+            <SlashIcon size={14} stroke={2} />
+            <span>Command</span>
+          </button>
+          {/* Picked-command badge — sits right after the Command button
+              so the user can see + remove the active command without
+              taking it out of the action row. */}
+          {props.slashCommands.pickedCommand && (
+            <div
+              className="composer-command-badge composer-expand-command-badge"
+              title={
+                props.slashCommands.pickedCommand.filePath ??
+                `Built-in /${props.slashCommands.pickedCommand.name}`
+              }
+            >
+              <span>/{props.slashCommands.pickedCommand.name}</span>
+              <button
+                type="button"
+                className="composer-command-badge-remove"
+                onClick={props.slashCommands.onRemoveCommand}
+                aria-label="Remove command"
+                title="Remove command"
+              >
+                <CloseIcon size={10} stroke={2.5} />
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
             className="composer-expand-attach"
             onClick={props.onPickFile}
             disabled={props.disabled}
@@ -1389,6 +1513,14 @@ function ComposerExpandModal(props: {
             <PaperclipIcon size={14} />
             <span>Attach</span>
           </button>
+          {props.slashCommands.pickerOpen && (
+            <SlashCommandPicker
+              commands={props.slashCommands.commandList}
+              initialFilter={props.slashCommands.pickerFilter}
+              onPick={props.slashCommands.onPickCommand}
+              onClose={props.slashCommands.onClosePicker}
+            />
+          )}
           <span className="composer-expand-spacer" />
           <button
             type="button"

@@ -6,6 +6,7 @@ import { EditorSection } from './settings/EditorSection';
 import { ExperimentsSection } from './settings/ExperimentsSection';
 import { McpServersSection } from './settings/McpServersSection';
 import { MemorySection } from './settings/MemorySection';
+import { PluginsSection } from './settings/PluginsSection';
 import { ProfileSection } from './settings/ProfileSection';
 import { ShortcutsSection } from './settings/ShortcutsSection';
 import { SkillsSection } from './settings/SkillsSection';
@@ -53,6 +54,12 @@ const SECTIONS: SectionEntry[] = [
     label: 'MCP servers',
     hint: 'Connectors',
     icon: () => <PlugIcon />,
+  },
+  {
+    id: 'plugins',
+    label: 'Plugins',
+    hint: 'Marketplaces',
+    icon: () => <PuzzleIcon />,
   },
   {
     id: 'voice',
@@ -202,6 +209,7 @@ export function SettingsDrawer({
           {section === 'agents' && <AgentsSection />}
           {section === 'skills' && <SkillsSection />}
           {section === 'mcp' && <McpServersSection />}
+          {section === 'plugins' && <PluginsSection />}
           {section === 'voice' && <VoiceSettingsSection />}
           {section === 'terminal' && <TerminalShortcutsSection />}
           {section === 'editor' && <EditorSection />}
@@ -314,6 +322,29 @@ function PlugIcon() {
       <path d="M15 2v6" />
       <path d="M6 8h12v4a6 6 0 0 1-12 0z" />
       <path d="M12 18v4" />
+    </svg>
+  );
+}
+
+/**
+ * Puzzle-piece icon for the Plugins nav entry. Stroke-only so it
+ * picks up the surrounding nav-item color and stays consistent with
+ * the rest of the Settings icons.
+ */
+function PuzzleIcon() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.469.706 1.083.706 1.696s-.235 1.227-.706 1.696l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.5 2.5 0 1 0-3.214 3.214c.446.166.855.497.925.968a.98.98 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-3.393 0L8.766 19.71a.95.95 0 0 0-.892-.288 2.5 2.5 0 1 1-2.943-2.942.95.95 0 0 0-.288-.893l-1.561-1.561a2.404 2.404 0 0 1 0-3.393l1.61-1.61a.98.98 0 0 1 .837-.276c.47.07.802.48.968.925a2.5 2.5 0 1 0 3.214-3.214c-.446-.166-.855-.497-.925-.968a.98.98 0 0 1 .276-.837l1.61-1.61a2.404 2.404 0 0 1 3.393 0l1.546 1.546c.23.23.556.338.878.29a2.5 2.5 0 0 1 2.808 2.808Z" />
     </svg>
   );
 }

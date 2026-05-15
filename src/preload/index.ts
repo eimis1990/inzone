@@ -34,6 +34,9 @@ import type {
   UsageSummary,
   CavemanSettings,
   EditorPreferences,
+  InstalledPlugin,
+  Marketplace,
+  MarketplaceCatalog,
   ProjectCommand,
   VoiceSettings,
   WindowState,
@@ -546,7 +549,31 @@ const api: CoworkApi = {
     list: (args: { cwd: string }): Promise<{
       project: ProjectCommand[];
       user: ProjectCommand[];
+      plugin: ProjectCommand[];
     }> => ipcRenderer.invoke(IPC.COMMANDS_LIST, args),
+  },
+  plugins: {
+    list: (): Promise<InstalledPlugin[]> =>
+      ipcRenderer.invoke(IPC.PLUGINS_LIST),
+    install: (args: {
+      marketplaceSource: string;
+      pluginSource: string;
+      pluginName: string;
+    }) => ipcRenderer.invoke(IPC.PLUGINS_INSTALL, args),
+    uninstall: (args: { name: string }) =>
+      ipcRenderer.invoke(IPC.PLUGINS_UNINSTALL, args),
+    setEnabled: (args: { name: string; enabled: boolean }) =>
+      ipcRenderer.invoke(IPC.PLUGINS_SET_ENABLED, args),
+    listMarketplaces: (): Promise<Marketplace[]> =>
+      ipcRenderer.invoke(IPC.MARKETPLACES_LIST),
+    addMarketplace: (args: { source: string }) =>
+      ipcRenderer.invoke(IPC.MARKETPLACES_ADD, args),
+    removeMarketplace: (args: { source: string }) =>
+      ipcRenderer.invoke(IPC.MARKETPLACES_REMOVE, args),
+    fetchCatalog: (
+      args: { source: string },
+    ): Promise<MarketplaceCatalog | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC.MARKETPLACES_FETCH_CATALOG, args),
   },
   terminal: {
     spawn: (args: {

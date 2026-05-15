@@ -4,6 +4,104 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0] — 2026-05-15
+
+### Added
+
+- **Plugins + Marketplaces — full lifecycle in Settings → Plugins.**
+  New top-level Settings tab for the Claude Code plugin format:
+  bundles that can contribute any combination of agents, skills,
+  slash commands, MCP servers, and hooks. Browse marketplaces,
+  install plugins, toggle activation, uninstall — all from inside
+  Inzone, no Claude Code CLI required. Layout matches Skills + MCP
+  (two-column with installed plugins + marketplaces on the left,
+  Recommended Marketplaces rail on the right).
+- **Plugin activation.** Each installed plugin carries an
+  enabled/disabled flag persisted in `~/.claude/plugins/<name>/.claude-plugin/.inzone-install.json`.
+  When enabled, the plugin's `agents/`, `skills/`, `commands/`,
+  and `mcp.json` contents fold into Inzone's existing tabs and
+  the composer's `/` picker — disabled plugins stay on disk but
+  contribute nothing. Toggle in the plugin detail modal flips
+  the state and mirrors into Claude Code's
+  `~/.claude/settings.json` `enabledPlugins` array so the two
+  apps stay in sync. Default ON immediately after install.
+- **Marketplace browser as a right-side drawer.** Clicking
+  Browse on a marketplace card slides a 720px drawer in from
+  the right (same animation recipe as the skill editor). Lists
+  every plugin in the marketplace with per-row Install /
+  Uninstall actions, name + description + author + version +
+  license + View source link. Esc / backdrop / X all close the
+  drawer with a slide-out.
+- **Recommended Marketplaces** — two hardcoded starter entries
+  (Anthropic's official `claude-code` marketplace and the
+  `claude-code-plugins` examples repo) so a fresh user has at
+  least one marketplace to browse without having to find a URL
+  themselves.
+- **Slash commands work inside the expand-message modal.** The
+  picker, slash button, and picked-command badge are now
+  available in the larger composer too. Picker state is shared
+  with the inline composer so picking a command, expanding, and
+  sending keeps your draft + selection intact.
+- **2-second custom tooltip on slash picker rows.** Replaced the
+  native browser `title` attribute (unpredictable platform
+  timing) with a React portal-rendered tooltip that appears on
+  a deterministic 2s hover delay. Shows the full command name,
+  full description (wraps freely up to ~360px), and a meta line
+  with the source path or plugin attribution. Escapes the
+  picker list's `overflow-y: auto` clipping via
+  `position: fixed`.
+- **"From plugin" attribution chips** on agents, skills, slash
+  commands, and MCP servers contributed by an installed plugin.
+  New `pluginName` field on `AgentDef`, `SkillDef`,
+  `ProjectCommand`, and `McpServerEntry`; loaders tag results
+  during the plugin walk. Slash picker gets a green
+  `plugin`-source chip distinct from the accent-coloured
+  `project` chip.
+
+### Changed
+
+- **Modal heads got real chrome.** The `.modal-head` class
+  wasn't styled — it was inheriting `.modal`'s flex-column,
+  which stacked the title and the close button as two rows and
+  let the close `.ghost small` recipe stretch across the row
+  with a dashed outline. Now `.modal-head` is
+  `display: flex; justify-content: space-between` with the
+  close button overridden to a 28×28 square. Same recipe across
+  the plugin browse drawer, plugin detail modal, and
+  Recommended MCP detail modal.
+- **Marketplace card Browse + Remove share half-width.**
+  Browse is the filled accent CTA, Remove is `danger` (red
+  text) with a neutral outline that hovers to the danger
+  colour. The two buttons now sit as equal halves of the
+  card footer.
+- **Plugin catalog Uninstall moved to the bottom-right corner.**
+  In the marketplace browse drawer, the actions column for an
+  installed plugin is now a vertical stack — `✓ Installed` pill
+  pins top-right, `Uninstall` (red) drops to bottom-right via
+  flex space-between. Installed badge no longer wraps to two
+  lines on narrow columns (added `white-space: nowrap`).
+
+### Fixed
+
+- **Slash picker click-eat when the expand modal was open.**
+  The picker state is shared between the inline composer and
+  the expand modal, but both surfaces were rendering their own
+  `<SlashCommandPicker>` instance from the same `pickerOpen`
+  flag. Clicking a row in the modal's picker fired `mousedown`
+  first — the inline picker's outside-click handler saw the
+  click was outside its own root, called `onClose()`, flipped
+  `pickerOpen` to false BEFORE the `click` event reached the
+  row's onClick handler. The picker unmounted mid-click and the
+  selection was lost. The inline picker is now suppressed while
+  the expand modal is open so only one picker is ever mounted.
+- **+ Add marketplace button stretched the full row width**
+  because the global `.ghost.small { width: 100% }` rule
+  applied. Added `width: auto !important; flex: 0 0 auto` to
+  `.plugins-section-action` so this specific button always
+  sizes to content. Also switched the button class to
+  `primary` for the filled accent look (Cancel state stays
+  ghost).
+
 ## [1.19.0] — 2026-05-15
 
 ### Added

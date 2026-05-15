@@ -6481,6 +6481,14 @@ code.voice-tool-card-value {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+/* Plugin-contributed commands picked up at v1.20 via the
+   plugin loader. Tinted with the success-green family so the
+   chip reads distinct from the accent-coloured project tint. */
+.slash-picker-source-plugin {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--border));
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
 .slash-picker-empty {
   padding: 18px 12px;
   text-align: center;
@@ -6511,6 +6519,60 @@ code.voice-tool-card-value {
   font-size: 10.5px;
   letter-spacing: 0.02em;
 }
+/* Custom hover tooltip for slash picker rows (since v1.20). Native
+   `title` had unreliable timing across platforms — this is a
+   deterministic 2s-delayed React tooltip rendered via a portal to
+   `document.body` so it escapes the picker list's `overflow-y: auto`
+   clipping. Positioned via `position: fixed` using viewport coords
+   captured at the moment the timer fires. */
+.slash-picker-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 360px;
+  padding: 10px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+  pointer-events: none;
+  /* `top` is the row's vertical centre — shift up by half the
+     tooltip height visually via transform so the tooltip is
+     centred on the row, not anchored at its top. */
+  transform: translateY(-50%);
+  animation: slash-picker-tooltip-in 120ms ease-out;
+}
+@keyframes slash-picker-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+.slash-picker-tooltip-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.slash-picker-tooltip-desc {
+  color: var(--text-dim);
+  word-break: break-word;
+}
+.slash-picker-tooltip-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
 .slash-picker-foot kbd {
   display: inline-flex;
   align-items: center;
@@ -6794,6 +6856,41 @@ code.voice-tool-card-value {
   padding: 12px 16px;
   border-top: 1px solid var(--border);
   background: var(--bg);
+  /* Anchor for the slash-command picker (`bottom: 100%`) when
+     opened from inside the expand modal. Without this the picker
+     climbs up to the next positioned ancestor and lands in the
+     wrong spot. */
+  position: relative;
+}
+/* Slash button — same chrome as Attach but with an active-state
+   tint so the user can see the picker is open / a command is
+   currently picked. */
+.composer-expand-slash.active {
+  color: var(--composer-accent, var(--accent));
+  border-color: color-mix(
+    in srgb,
+    var(--composer-accent, var(--accent)) 50%,
+    var(--border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--composer-accent, var(--accent)) 14%,
+    transparent
+  );
+}
+/* Command badge inside the expand modal sits in the actions row
+   right after the Command button — same recipe as the inline
+   composer's command badge, just zero the bottom margin so it
+   doesn't push the row taller than the other action buttons. */
+.composer-expand-command-badge {
+  margin-bottom: 0;
+  align-self: center;
+  /* The badge inherits the agent's accent via `--pane-accent`
+     elsewhere in the app; inside the expand modal we expose the
+     same colour through `--composer-accent`. Map the variable so
+     the badge picks up the right tint without a per-component
+     override. */
+  --pane-accent: var(--composer-accent, var(--accent));
 }
 .composer-expand-attach {
   display: inline-flex;
@@ -7337,6 +7434,77 @@ select:focus {
   font-size: 15px;
   flex: 1;
   text-transform: capitalize;
+}
+
+/* `.modal-head` — used by the Plugins + MCP recommended detail
+   modals/drawers. Title block sits on the left, square X close
+   button pinned to the top-right corner. Same recipe across the
+   plugin browse drawer, the installed-plugin detail modal, and
+   the recommended-MCP detail modal so the chrome reads as a
+   family. The close button overrides the "ghost small" default
+   look — those are pill-shaped with a dashed-ish outline that
+   reads poorly as a single-character close action. */
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.modal-head > button[aria-label='Close'] {
+  /* Pull the X button out of the .ghost recipe — square 28×28,
+     fixed background, no dashed border, picks up var(--text-dim)
+     and brightens on hover. Anchors visually to the top-right
+     corner of the head. */
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.modal-head > button[aria-label='Close']:hover {
+  background: var(--surface-tile-hover, var(--bg-elev-2));
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+/* Modal foot row — Close + primary/danger action. Mirrors the
+   existing `.modal-footer` recipe but tightens spacing for the
+   smaller `.modal-head`-style modals (Plugins + Recommended MCPs
+   detail). Push primary actions to the right via `margin-left:
+   auto` on the second button so Close stays anchored on the
+   left. */
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev-2);
+}
+.modal-foot > .primary,
+.modal-foot > .danger {
+  margin-left: auto;
 }
 .modal-body {
   padding: 18px 24px 24px;
@@ -10723,6 +10891,651 @@ select:focus {
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 11px;
+}
+
+/* ── Plugins two-column layout (Settings → Plugins) ────────────── */
+/* Same recipe as `.mcp-two-col` / `.skills-two-col`. Left column
+   owns installed plugins + the user's marketplaces with its own
+   scroll track; right column is the Recommended Marketplaces rail. */
+.settings-pane-body.plugins-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+.plugins-two-col-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.plugins-two-col-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 4px 12px 0;
+}
+.plugins-two-col-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.plugins-two-col-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.plugins-two-col-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+.plugins-two-col-rail {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Section header inside the main column ("Installed" / "Marketplaces").
+   Matches `.mcp-scope-group-header` styling. */
+.plugins-section {
+  margin-top: 12px;
+}
+.plugins-section:first-of-type {
+  margin-top: 0;
+}
+.plugins-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+.plugins-section-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+.plugins-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+.plugins-section-action {
+  margin-left: auto;
+  /* Override `.ghost.small { width: 100% }` (defined globally) — in
+     this header context the action button should size to content and
+     sit at the right edge, not stretch across whatever flex room is
+     left over. */
+  width: auto !important;
+  flex: 0 0 auto;
+}
+
+/* Inline "Add marketplace" form. */
+.plugins-add-marketplace {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.plugins-add-marketplace .settings-search {
+  flex: 1;
+}
+
+/* Card list under each section — wraps to fill width with compact
+   cards (matches the v1.19 MCP rework). */
+.plugins-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+.plugins-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+  flex: 1 1 300px;
+  min-width: 280px;
+  max-width: 480px;
+}
+.plugins-card:hover {
+  border-color: var(--border-strong);
+}
+.plugins-installed-card {
+  cursor: pointer;
+}
+.plugins-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.plugins-card-title {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plugins-card-version {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+}
+.plugins-card-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.plugins-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.plugins-card-author {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.plugins-card-contributes {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  flex-shrink: 0;
+}
+.plugins-card-source {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+  line-height: 1.45;
+}
+.plugins-card-source code {
+  background: var(--bg-elev-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.plugins-card-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+/* Marketplace card foot — Browse + Remove split the footer 50/50
+   so the two actions sit as equal-weight halves. Remove inherits
+   `.danger`'s red text + transparent fill; we just give it a
+   visible border so it doesn't look like a floating link. */
+.plugins-marketplace-foot > button {
+  flex: 1;
+  justify-content: center;
+}
+.plugins-marketplace-remove {
+  /* `.danger` ships with a transparent border that only colours
+     on hover. For the marketplace card it sits next to the
+     filled Browse button, so a quiet outline at rest reads
+     better — keeps the 50/50 visual balance even when neither
+     is hovered. */
+  border-color: var(--border) !important;
+}
+.plugins-marketplace-remove:hover {
+  border-color: var(--danger) !important;
+}
+
+/* ── Recommended marketplaces rail ─────────────────────────────── */
+.recommended-marketplaces-block {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.recommended-marketplaces-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.recommended-marketplaces-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+.recommended-marketplaces-sub {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.recommended-marketplaces-rail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  padding: 4px 6px 12px 2px;
+  margin: -4px -6px -12px -2px;
+  min-height: 0;
+}
+.recommended-marketplaces-rail::-webkit-scrollbar {
+  width: 8px;
+}
+.recommended-marketplace-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+  scroll-snap-align: start;
+}
+.recommended-marketplace-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-elev-2);
+}
+.recommended-marketplace-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.recommended-marketplace-emoji {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.recommended-marketplace-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.recommended-marketplace-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recommended-marketplace-author {
+  font-size: 11px;
+  color: var(--muted);
+}
+.recommended-marketplace-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.recommended-marketplace-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+.recommended-marketplace-added {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ok);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--border));
+}
+
+/* ── Marketplace browse drawer ─────────────────────────────────── */
+/* The drawer borrows the side-panel chrome from `.modal-drawer`
+   (slide-in transition, no rounded corners, left-edge shadow) but
+   uses a narrower width — 720px is plenty for the catalog row
+   layout (name + description + meta on the left, action button on
+   the right), and leaves more of the underlying Plugins screen
+   visible so the user can see which marketplace they came from. */
+.modal.modal-drawer.plugins-browse-drawer {
+  width: min(720px, 96vw);
+  max-width: 720px;
+}
+.plugins-browse-source {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  word-break: break-all;
+  margin-top: 4px;
+}
+.plugins-browse-source code {
+  background: var(--bg-elev-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.plugins-browse-body {
+  /* The drawer fills the full viewport height, so we want the
+     body to expand to fill the available space inside it (head
+     pinned at top, body scrolls). Drop the modal default max-
+     height so the scrollable region grows naturally. */
+  flex: 1;
+  overflow-y: auto;
+  max-height: none;
+}
+.plugins-catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.plugins-catalog-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.plugins-catalog-titles {
+  flex: 1;
+  min-width: 0;
+}
+.plugins-catalog-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.plugins-catalog-version {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+}
+.plugins-catalog-desc {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.plugins-catalog-meta {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.plugins-catalog-meta a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.plugins-catalog-meta a:hover {
+  text-decoration: underline;
+}
+.plugins-catalog-actions {
+  /* Vertical stack pinned to the right of the row — `Installed`
+     pill anchors top-right, `Uninstall` button drops to bottom-
+     right via space-between. The actions column stretches to
+     match the height of the title column so the bottom edges of
+     pill + button align with the row's top/bottom respectively.
+     For the not-installed case the single Install button sizes
+     naturally and sits at the top of the column. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+.plugins-catalog-installed {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ok);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--border));
+  /* Without nowrap the `✓ Installed` text breaks across two lines
+     when the actions column shrinks below the natural pill width
+     — looked broken in narrow drawers. */
+  white-space: nowrap;
+}
+/* Uninstall button in the catalog row — picks up the base
+   `.danger` recipe (red text via var(--danger)) but tightens to
+   the small-button footprint so it sits comfortably alongside
+   the Installed pill. */
+.plugins-catalog-uninstall {
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+/* ── Installed plugin detail modal ─────────────────────────────── */
+.plugin-detail-modal {
+  max-width: 560px;
+}
+
+/* Enable/disable toggle inside the plugin detail modal. Two-column
+   flex layout — label + hint on the left, slider switch on the right.
+   The switch itself is a flat horizontal pill with a sliding knob,
+   tinted with the accent colour when enabled. */
+.plugin-detail-toggle {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+.plugin-detail-toggle-text {
+  flex: 1;
+  min-width: 0;
+}
+.plugin-detail-toggle-text strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.plugin-detail-toggle-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.plugin-detail-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.plugin-detail-toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.plugin-detail-toggle-knob {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.plugin-detail-toggle-knob::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  background: var(--text-dim);
+  border-radius: 50%;
+  transition:
+    left 200ms cubic-bezier(0.32, 0.72, 0, 1),
+    background 160ms ease;
+}
+.plugin-detail-toggle-switch input:checked + .plugin-detail-toggle-knob {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.plugin-detail-toggle-switch input:checked + .plugin-detail-toggle-knob::before {
+  left: 18px;
+  background: var(--accent);
+}
+.plugin-detail-toggle-switch input:focus-visible
+  + .plugin-detail-toggle-knob {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Compact "Disabled" pill on installed-plugin cards so a paused
+   plugin reads at a glance in the cards grid. */
+.plugins-card-disabled-pill {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+}
+.plugins-installed-card.plugins-installed-card-disabled {
+  /* Quiet the whole card so the active vs paused state reads at
+     a glance without needing to look at the pill. */
+  opacity: 0.7;
+}
+.plugins-installed-card.plugins-installed-card-disabled:hover {
+  opacity: 1;
+}
+.plugin-detail-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+  display: inline-flex;
+  gap: 6px;
+}
+.plugin-detail-desc {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.plugin-detail-contributes {
+  margin-bottom: 14px;
+}
+.plugin-detail-contributes h4,
+.plugin-detail-path h4 {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+.plugin-detail-contributes ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.plugin-detail-path code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 6px;
+  word-break: break-all;
+}
+.plugin-detail-source-line {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.plugin-detail-source-line code {
+  display: inline;
+  padding: 1px 5px;
+  font-size: 11.5px;
+}
+.plugin-detail-source-discovered {
+  color: var(--muted);
+  font-style: italic;
+}
+.plugin-detail-homepage {
+  margin-top: 14px;
+}
+.plugin-detail-homepage a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.plugin-detail-homepage a:hover {
+  text-decoration: underline;
+}
+
+/* Narrow viewport fallback for Plugins two-col. */
+@media (max-width: 1040px) {
+  .settings-pane-body.plugins-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .plugins-two-col-rail {
+    width: 100%;
+  }
 }
 
 /* ── MCP two-column layout ─────────────────────────────────────── */

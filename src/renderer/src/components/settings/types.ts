@@ -4,6 +4,7 @@ export type SettingsSection =
   | 'agents'
   | 'skills'
   | 'mcp'
+  | 'plugins'
   | 'voice'
   | 'terminal'
   | 'editor'

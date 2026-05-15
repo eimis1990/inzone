@@ -9,14 +9,21 @@ import type {
   SkillDef,
   SkillDraft,
 } from '@shared/types';
+import { listEnabledPlugins } from './plugins';
 
 const USER_AGENTS_DIR = path.join(homedir(), '.claude', 'agents');
 const USER_SKILLS_DIR = path.join(homedir(), '.claude', 'skills');
 
-/** Parse a single agent markdown file. Returns null on error. */
+/** Parse a single agent markdown file. Returns null on error.
+ *
+ *  `pluginName`, when present, tags the resulting agent as
+ *  contributed by that plugin (rendered as an attribution chip in
+ *  the Agents table and respected by save/delete which refuse to
+ *  edit plugin-owned files). */
 async function parseAgentFile(
   filePath: string,
   scope: 'user' | 'project',
+  pluginName?: string,
 ): Promise<AgentDef | null> {
   try {
     // Read + stat in parallel — stat gives us mtime for the Agents
@@ -94,6 +101,7 @@ async function parseAgentFile(
       filePath,
       scope,
       modifiedAt: stat ? stat.mtimeMs : undefined,
+      pluginName,
     };
   } catch (err) {
     console.warn(`[agents] failed to parse ${filePath}:`, err);
@@ -101,10 +109,14 @@ async function parseAgentFile(
   }
 }
 
-/** Scan a directory (recursively-ish) for *.md files. */
+/** Scan a directory (recursively-ish) for *.md files.
+ *
+ *  `pluginName` flows through to each parsed `AgentDef` so plugin-
+ *  contributed agents carry attribution. */
 async function scanAgentDir(
   dir: string,
   scope: 'user' | 'project',
+  pluginName?: string,
 ): Promise<AgentDef[]> {
   let entries: string[];
   try {
@@ -122,7 +134,7 @@ async function scanAgentDir(
       continue;
     }
     if (stat.isFile() && entry.toLowerCase().endsWith('.md')) {
-      const agent = await parseAgentFile(full, scope);
+      const agent = await parseAgentFile(full, scope, pluginName);
       if (agent) out.push(agent);
     }
   }
@@ -132,17 +144,39 @@ async function scanAgentDir(
 export async function listAgents(
   projectDir?: string,
 ): Promise<AgentDef[]> {
-  const userAgents = await scanAgentDir(USER_AGENTS_DIR, 'user');
-  let projectAgents: AgentDef[] = [];
-  if (projectDir) {
-    projectAgents = await scanAgentDir(
-      path.join(projectDir, '.claude', 'agents'),
-      'project',
-    );
-  }
-  // Project scope wins on name collision.
+  // Three sources of agents:
+  //   1. Built-in user library `~/.claude/agents/`
+  //   2. Project-local `<cwd>/.claude/agents/` (overrides on collision)
+  //   3. Enabled plugins' `<plugin>/agents/` folders — each plugin
+  //      contributes under user scope but carries a `pluginName`
+  //      attribution. Disabled plugins do NOT contribute (the
+  //      Settings → Plugins toggle is the user's lever to pause a
+  //      plugin without uninstalling it).
+  const [userAgents, projectAgents, pluginAgentsLists] = await Promise.all([
+    scanAgentDir(USER_AGENTS_DIR, 'user'),
+    projectDir
+      ? scanAgentDir(path.join(projectDir, '.claude', 'agents'), 'project')
+      : Promise.resolve([] as AgentDef[]),
+    listEnabledPlugins().then(async (plugins) => {
+      const lists = await Promise.all(
+        plugins.map((p) =>
+          scanAgentDir(
+            path.join(p.installPath, 'agents'),
+            'user',
+            p.manifest.name,
+          ),
+        ),
+      );
+      return lists.flat();
+    }),
+  ]);
+  // Precedence on name collision: project > plugin > user. Plugin
+  // wins over a vanilla user-scope agent of the same name (the user
+  // explicitly installed the plugin so its version is the wanted
+  // one) but loses to a project-local override.
   const byName = new Map<string, AgentDef>();
   for (const a of userAgents) byName.set(a.name, a);
+  for (const a of pluginAgentsLists) byName.set(a.name, a);
   for (const a of projectAgents) byName.set(a.name, a);
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -151,6 +185,7 @@ export async function listAgents(
 async function scanSkillDir(
   dir: string,
   scope: 'user' | 'project',
+  pluginName?: string,
 ): Promise<SkillDef[]> {
   let entries: string[];
   try {
@@ -184,6 +219,7 @@ async function scanSkillDir(
         body: parsed.content.trim(),
         filePath: skillFile,
         scope,
+        pluginName,
       });
     } catch (err) {
       console.warn(`[skills] failed to parse ${skillFile}:`, err);
@@ -193,16 +229,32 @@ async function scanSkillDir(
 }
 
 export async function listSkills(projectDir?: string): Promise<SkillDef[]> {
-  const userSkills = await scanSkillDir(USER_SKILLS_DIR, 'user');
-  let projectSkills: SkillDef[] = [];
-  if (projectDir) {
-    projectSkills = await scanSkillDir(
-      path.join(projectDir, '.claude', 'skills'),
-      'project',
-    );
-  }
+  // Same three-source merge as `listAgents`. Enabled plugins'
+  // `<plugin>/skills/<name>/SKILL.md` folders are walked into
+  // user scope with attribution; disabled plugins contribute
+  // nothing.
+  const [userSkills, projectSkills, pluginSkillsLists] = await Promise.all([
+    scanSkillDir(USER_SKILLS_DIR, 'user'),
+    projectDir
+      ? scanSkillDir(path.join(projectDir, '.claude', 'skills'), 'project')
+      : Promise.resolve([] as SkillDef[]),
+    listEnabledPlugins().then(async (plugins) => {
+      const lists = await Promise.all(
+        plugins.map((p) =>
+          scanSkillDir(
+            path.join(p.installPath, 'skills'),
+            'user',
+            p.manifest.name,
+          ),
+        ),
+      );
+      return lists.flat();
+    }),
+  ]);
+  // Same precedence as agents: project > plugin > user.
   const byName = new Map<string, SkillDef>();
   for (const s of userSkills) byName.set(s.name, s);
+  for (const s of pluginSkillsLists) byName.set(s.name, s);
   for (const s of projectSkills) byName.set(s.name, s);
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
