@@ -1354,6 +1354,20 @@ textarea {
   object-fit: contain;
   -webkit-user-drag: none;
 }
+/* Dark / light logo swap — both `<img>` elements always render
+   (see AppLogo.tsx); CSS hides whichever variant doesn't match the
+   active theme. Default = dark theme, so `.app-logo-light` is
+   hidden by default and `.app-logo-dark` shows. Under
+   `:root.theme-light` the roles flip. */
+.app-logo-light {
+  display: none;
+}
+:root.theme-light .app-logo-dark {
+  display: none;
+}
+:root.theme-light .app-logo-light {
+  display: block;
+}
 
 .pill {
   display: inline-flex;
@@ -5702,7 +5716,10 @@ code.voice-tool-card-value {
    * use case — cards size to their content there. */
   flex: 0 0 400px;
   width: 400px;
-  background: var(--bg);
+  /* Bumped from `var(--bg)` to `var(--bg-elev)` so the Skills rail
+     cards match the Recommended MCPs rail's chrome — both rails
+     now read as the same elevated-surface family. */
+  background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
@@ -10708,6 +10725,356 @@ select:focus {
   font-size: 11px;
 }
 
+/* ── MCP two-column layout ─────────────────────────────────────── */
+/* Settings → MCP renders as a two-column grid (matching Skills):
+   left column owns the user's own configured servers, right column
+   is the Recommended MCPs rail. Mirrors `.skills-two-col` so the
+   two Settings tabs feel symmetrical. */
+.settings-pane-body.mcp-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+.mcp-two-col-main {
+  /* Outer flex column with NO scroll — info banner + toolbar stay
+     pinned, only the inner `.mcp-two-col-scroll` wrapping the scope
+     groups owns the scroll track. Same pattern as the skills left
+     column. */
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mcp-two-col-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 4px 12px 0;
+}
+.mcp-two-col-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.mcp-two-col-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.mcp-two-col-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+.mcp-two-col-rail {
+  /* Rail = card width (340px) + breathing room + scrollbar gutter.
+     flex-shrink prevents the rail from getting squeezed when the
+     left column grows. */
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.mcp-two-col-rail .recommended-mcps-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+}
+/* Vertical-stack override for the cards when the rail lives on the
+   right. Base `.recommended-mcps-rail` is a horizontal flex strip;
+   here we flip to column + vertical scroll. */
+.mcp-two-col-rail .recommended-mcps-rail {
+  flex: 1;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  padding: 4px 6px 12px 2px;
+  margin: -4px -6px -12px -2px;
+  min-height: 0;
+}
+.mcp-two-col-rail .recommended-mcps-rail::-webkit-scrollbar {
+  width: 8px;
+  height: 0;
+}
+.mcp-two-col-rail .recommended-mcp-card {
+  /* Card width fits the rail's inner width; flex-basis switches to
+     auto so the card sizes to its content (the base rule has a
+     fixed 340px main-axis size which in a column-direction parent
+     would clamp the card's HEIGHT). */
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 0;
+  scroll-snap-align: start;
+}
+
+/* Narrow viewport fallback — drop to a single column with the rail
+   below the user's servers (don't lose access entirely). */
+@media (max-width: 1040px) {
+  .settings-pane-body.mcp-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mcp-two-col-rail {
+    width: 100%;
+  }
+  .mcp-two-col-rail .recommended-mcps-rail {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+  }
+  .mcp-two-col-rail .recommended-mcp-card {
+    flex: 0 0 340px;
+    width: 340px;
+  }
+}
+
+/* ── Recommended MCPs rail (Settings → MCP) ────────────────────── */
+/* Horizontal rail of one-click MCP installs rendered above the
+   user's own configured-servers list. Cards are fixed-width
+   (~340px) so the row reads as a scannable strip — overflow scrolls
+   horizontally with snap-points. Same recipe as the Recommended
+   Skills rail in the Skills tab. */
+.recommended-mcps-block {
+  margin: 14px 0 10px;
+}
+.recommended-mcps-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.recommended-mcps-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+.recommended-mcps-sub {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.recommended-mcps-rail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 8px;
+  /* Hide the scrollbar in WebKit unless the user actively hovers
+     the rail — keeps the row visually clean while still being
+     scrollable. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.recommended-mcp-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 340px;
+  width: 340px;
+  padding: 14px 14px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  scroll-snap-align: start;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.recommended-mcp-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-elev-2);
+}
+.recommended-mcp-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.recommended-mcp-emoji {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.recommended-mcp-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.recommended-mcp-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recommended-mcp-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.recommended-mcp-transport {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+}
+.recommended-mcp-transport-stdio {
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.recommended-mcp-transport-sse,
+.recommended-mcp-transport-http {
+  color: color-mix(in srgb, var(--ok) 80%, var(--text));
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.recommended-mcp-setup-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--warn, #d6a042) 14%, transparent);
+  color: color-mix(in srgb, var(--warn, #d6a042) 80%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--warn, #d6a042) 35%, var(--border));
+}
+.recommended-mcp-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  /* 3-line clamp keeps card heights even across the rail. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.recommended-mcp-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recommended-mcp-author {
+  flex: 1;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recommended-mcp-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.recommended-mcp-installed {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ok);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, var(--border));
+}
+
+/* Detail modal for entries with a setupGuide. */
+.recommended-mcp-modal {
+  max-width: 620px;
+}
+.recommended-mcp-modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+}
+.recommended-mcp-modal-head h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.recommended-mcp-license {
+  font-size: 10.5px;
+  color: var(--muted);
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+}
+.recommended-mcp-modal-desc {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.recommended-mcp-setup-block h4 {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+.recommended-mcp-setup-instructions {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.recommended-mcp-setup-instructions pre,
+.recommended-mcp-setup-instructions code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.recommended-mcp-envvars {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.recommended-mcp-envvars code {
+  margin: 0 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.recommended-mcp-signup-link,
+.recommended-mcp-source-line a {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.recommended-mcp-signup-link:hover,
+.recommended-mcp-source-line a:hover {
+  text-decoration: underline;
+}
+
 .mcp-scope-group {
   margin-top: 18px;
 }
@@ -10847,10 +11214,21 @@ select:focus {
 }
 
 .mcp-list {
+  /* Flex-wrap row so multiple cards tile across the available width
+     rather than each card hogging a full-width row. min-width gives
+     each card a sensible floor; flex-grow lets them stretch to fill
+     leftover space on rows with fewer cards so the grid stays even.
+     The skills two-col layout pins the main column to ~660px on a
+     1100px Settings pane, so two ~310px cards + 12px gap fit. */
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-top: 10px;
+}
+.mcp-list > .mcp-card {
+  flex: 1 1 300px;
+  min-width: 280px;
+  max-width: 480px;
 }
 .mcp-card {
   position: relative;

@@ -5,6 +5,84 @@ parseable header: `## [YYYY-MM-DD] <type> | <short title>`.
 
 See [[wiki-schema]] for the full format.
 
+## [2026-05-15] edit | v1.18.0 — slash commands + responsive composer
+
+Shipped two related composer improvements.
+
+**Slash commands.** New `/` button in the composer toolbar opens a
+searchable popover ([SlashCommandPicker.tsx](../../src/renderer/src/components/SlashCommandPicker.tsx))
+listing every slash command available for the active pane's
+project. Sources merged in priority order via `mergeCommands()`
+in [shared/builtin-commands.ts](../../src/shared/builtin-commands.ts):
+project-local `<cwd>/.claude/commands/*.md` → user-global
+`~/.claude/commands/*.md` → five built-in starters (`/plan`,
+`/think`, `/review`, `/explain`, `/test`). Main-process
+enumerator [commands.ts](../../src/main/commands.ts) parses with
+`gray-matter`; description comes from frontmatter or the first
+body line. `$ARGUMENTS` in the body is replaced with whatever the
+user types after picking; commands without the placeholder get
+the user text appended on a new line. New IPC channel
+`COMMANDS_LIST` + `window.cowork.commands.list({ cwd })` bridge.
+Picking a command mounts a pane-accent badge at the top of the
+composer; backspace on an empty textarea drops it. Typing `/` as
+the first char of an empty composer also opens the picker with
+the rest of the slash-token as the filter. Agent panes only —
+terminal panes (Claude Code / Codex / Aider / Gemini) handle
+slash commands natively in the PTY.
+
+**Responsive composer.** CSS container queries on the
+`.pane-composer` (`container-type: inline-size; container-name:
+composer;`) drive a two-row grid at narrow widths. At pane ≤
+480px the buttons sit on top (slash + paperclip on the left,
+send + expand on the right) and the textarea spans the full
+bottom row. Send button collapses to icon-only. At ≤ 220px the
+icon buttons drop to 26×26 and gaps tighten. Pane header also
+trims at ≤ 500px (hides emoji avatar + agent-name slug chip,
+leaves just title + model chip). Placeholder swaps via
+ResizeObserver-driven `isNarrow` flag — CSS can't rewrite
+`placeholder` text so the string lives in React. New glossary
+entries [[glossary]]: "Slash command", "SegmentedToggle". Two
+gotchas filed in [[gotchas]] — `@container rule placement vs
+cascade order` and `Per-component IPC subscription explodes the
+listener count`.
+
+## [2026-05-14] edit | v1.17.0 — sliding-pill mode switch, terminal shadow theme, preview tombstones
+
+Replaced the old Lead/Multi segmented control with a reusable
+sliding-pill toggle component
+([SegmentedToggle.tsx](../../src/renderer/src/components/SegmentedToggle.tsx)).
+Generic over the value type, icons only, springy
+`cubic-bezier(0.47, 1.64, 0.41, 0.8)` thumb glide, same accent
+fill in both positions so position alone signals the active mode.
+Theme-aware track via `--wb-btn-bg`; thumb is `var(--accent)` in
+both light and dark.
+
+Flow button is now always mounted in the right-hand utilities
+cluster (disabled outside Multi mode or with fewer than two agent
+panes). The reserved width keeps the mode switch's screen
+position fixed across Lead ↔ Multi swaps — the toggle no longer
+drifts left when Flow appears.
+
+Terminal-overlay box-shadow became theme-aware via new
+`--terminal-overlay-shadow` token: black depth in dark, layered
+terracotta-tinted gradient in light.
+
+Preview pill stale-URL fix. New `hiddenLocalhostUrls` tombstone
+set on the store; both `forgetLocalhostUrl` and
+`forgetLocalhostPort` write to it, and the Preview button's
+combined-URL memo filters every source through the set. The
+on-demand liveness sweep (run when the dropdown opens) now also
+probes transcript-only URLs and auto-tombstones any with no
+listener. Fixes the "count badge shows 3 for servers that aren't
+there" report.
+
+`useCavemanSettings` rebuilt as a singleton-subscription pattern
+on `useSyncExternalStore`. Was registering one IPC listener per
+`AssistantMessage` mount, which tripped Node's default
+10-listener ceiling on `IpcRenderer` once a pane had >10
+assistant bubbles. One module-level listener + many React
+subscribers now.
+
 ## [2026-05-09] init | wiki initialised
 
 Bootstrapped the wiki for INZONE itself. Until now we'd shipped the

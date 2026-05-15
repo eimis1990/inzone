@@ -112,6 +112,66 @@ renderer). Sub-agents are scoped — they don't see CLAUDE.md, only
 the specific task the lead delegates. See [MemorySection.tsx](../../src/renderer/src/components/settings/MemorySection.tsx)
 for the user-facing toggle.
 
+## Slash commands
+
+Composer-level prompt expansion (since v1.18.0). The `/` button
+in the composer toolbar opens a picker
+([SlashCommandPicker.tsx](../../src/renderer/src/components/SlashCommandPicker.tsx))
+listing every available command for the active pane's project.
+Three sources merged in priority order (project > user >
+builtin, deduped by name) via `mergeCommands()` in
+[shared/builtin-commands.ts](../../src/shared/builtin-commands.ts):
+
+1. `<cwd>/.claude/commands/*.md` (project-scoped)
+2. `~/.claude/commands/*.md` (user-global)
+3. Five hardcoded starters (`/plan`, `/think`, `/review`,
+   `/explain`, `/test`)
+
+Main-process enumeration in [src/main/commands.ts](../../src/main/commands.ts)
+parses each markdown file with `gray-matter` — frontmatter
+`description` becomes the picker subtitle, body becomes the
+prompt template with `$ARGUMENTS` as the user-text substitution
+point. New IPC channel `COMMANDS_LIST` + bridge
+`window.cowork.commands.list({ cwd })`. The renderer caches
+nothing — re-fetches on every picker open so commands you just
+dropped into the folder appear without a restart.
+
+Picking a command mounts a removable badge above the textarea
+(handled in [Pane.tsx](../../src/renderer/src/components/Pane.tsx)).
+On send, `expandCommand(cmd, userText)` substitutes
+`$ARGUMENTS` (or appends the user text on a new line if the
+template has no placeholder) and submits one coherent prompt to
+the agent. Agent panes only — terminal panes (Claude Code /
+Codex / Aider / Gemini) handle slash commands natively in the
+PTY, so the `/` button doesn't appear there.
+
+## Composer responsive layout
+
+Pane width drives composer geometry via CSS container queries
+declared on `.pane-composer` (`container-type: inline-size;
+container-name: composer;`). Two breakpoints:
+
+- **≤ 480px** — switches from inline flex to a two-row grid
+  (slash + paperclip top-left, send + expand top-right, textarea
+  full-width below). Send button collapses to icon-only.
+- **≤ 220px** — same grid, smaller buttons (26×26) and tighter
+  gaps.
+
+The `.pane` itself also has `container-name: pane;` so a
+companion query at ≤ 500px hides the emoji avatar and the
+agent-name slug chip from the header (the agent name is already
+in the sidebar list). Placeholder text (which CSS can't rewrite)
+is swapped in React via a `ResizeObserver` on the pane root —
+the `isNarrow` flag flips at < 500px to match the layout shift.
+
+Specificity note: every selector inside the `@container`
+queries is prefixed with `.pane-composer` to push from (0,1,0)
+to (0,2,0). The base `.composer-row { display: flex }` rule
+lives later in the file; without the bump, cascade order makes
+the flex rule win regardless of container width. Filed as a
+gotcha in [[gotchas]] (`@container rule placement vs cascade
+order`).
+
 ## Wiki feature
 
 The wiki this page lives in is itself a feature shipped by INZONE.
@@ -133,4 +193,8 @@ grounded in the wiki — see [src/renderer/src/voice/](../../src/renderer/src/vo
   [terminal-sessions.ts](../../src/renderer/src/components/terminal-sessions.ts)
 - [src/shared/ipc-channels.ts](../../src/shared/ipc-channels.ts) — every IPC channel
 - [src/shared/cowork-api.ts](../../src/shared/cowork-api.ts) — preload bridge type
+- [src/main/commands.ts](../../src/main/commands.ts) — slash-command enumerator
+- [src/shared/builtin-commands.ts](../../src/shared/builtin-commands.ts) — builtins + mergeCommands + expandCommand
+- [src/renderer/src/components/SlashCommandPicker.tsx](../../src/renderer/src/components/SlashCommandPicker.tsx)
+- [src/renderer/src/components/SegmentedToggle.tsx](../../src/renderer/src/components/SegmentedToggle.tsx)
 - Wiki: [[gotchas]], [[glossary]], [[decisions/electron-over-tauri]]

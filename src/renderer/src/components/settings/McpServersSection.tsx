@@ -24,13 +24,16 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { vim } from '@replit/codemirror-vim';
 import { useEditorPreferences } from '../../hooks/useEditorPreferences';
 import { useStore } from '../../store';
+import { Markdown } from '../Markdown';
 import type {
   McpProbeResult,
   McpScope,
   McpServerConfig,
   McpServerDraft,
   McpServerEntry,
+  RecommendedMcp,
 } from '@shared/types';
+import { RECOMMENDED_MCPS } from '@shared/recommended-mcps';
 
 /**
  * Per-entry probe state. Keyed by `${scope}:${name}` so collisions
@@ -247,6 +250,12 @@ export function McpServersSection() {
   const [editing, setEditing] = useState<McpServerDraft | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [query, setQuery] = useState('');
+  /** When non-null, the recommended-MCP setup-detail modal is open
+   *  for this entry. Modal's Install button calls back through the
+   *  same `installRecommended` handler the rail uses. */
+  const [recommendedDetail, setRecommendedDetail] = useState<
+    RecommendedMcp | null
+  >(null);
   const [probes, setProbes] = useState<Record<string, ProbeState>>(() =>
     readProbeCache(),
   );
@@ -388,6 +397,63 @@ export function McpServersSection() {
     setEditing(null);
     await refresh();
   };
+
+  /**
+   * Install a recommended MCP. Three paths:
+   *
+   *   1. Entry has `<placeholder>` args/env (e.g. Filesystem needs a
+   *      folder, Postgres needs a connection string, Brave Search
+   *      needs an API key) — open the editor pre-populated so the
+   *      user provides the missing value before save.
+   *   2. Stdio with no placeholders — write directly to
+   *      `~/.claude.json` via `save()`, done.
+   *   3. Remote (sse/http) — write directly, then immediately kick
+   *      off the standard MCP OAuth handshake via `mcp.authStart`.
+   *      The browser tab pops up; on success the auth list updates
+   *      and the entry's probe goes green.
+   *
+   * Refresh happens inside `save()`, which re-pulls the entries
+   * list, so the rail flips to "Installed" automatically.
+   */
+  const installRecommended = async (mcp: RecommendedMcp) => {
+    const draft = buildDraftFromRecommendedMcp(mcp);
+    if (recommendedMcpNeedsUserInput(mcp)) {
+      setEditing(draft);
+      return;
+    }
+    try {
+      await save(draft);
+      // For remote entries, kick off OAuth so the user is logged in
+      // before the first agent session needs the server.
+      if (mcp.transport !== 'stdio' && mcp.url) {
+        const res = await window.cowork.mcp.authStart({ url: mcp.url });
+        if (!res.ok) {
+          setError(
+            `Installed ${mcp.name}, but the OAuth handshake failed: ${res.error}. You can retry from the entry's Connect button.`,
+          );
+        } else {
+          await refreshAuthList();
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  /**
+   * Set of MCP names already configured at user scope — drives the
+   * "Installed" pill on each recommended-MCP card. We only consider
+   * user-scope here because that's the scope `installRecommended`
+   * writes to; a project-scoped entry with the same name shouldn't
+   * make the rail card claim the recommendation is satisfied.
+   */
+  const installedRecommendedNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of entries) {
+      if (e.scope === 'user') set.add(e.name);
+    }
+    return set;
+  }, [entries]);
 
   const remove = async (entry: McpServerEntry) => {
     const ok = confirm(
@@ -534,117 +600,144 @@ export function McpServersSection() {
         </p>
       </div>
 
-      <div className="settings-pane-body">
+      <div
+        className={
+          'settings-pane-body' + (!editing ? ' mcp-two-col' : '')
+        }
+      >
         {!editing && (
           <>
-            <div className="mcp-info-banner">
-              <div className="mcp-info-banner-icon">ⓘ</div>
-              <div className="mcp-info-banner-body">
-                <div className="mcp-info-banner-title">
-                  Already using MCPs in Claude Code? They show up here too —
-                  but OAuth tokens don&rsquo;t cross between apps.
+            {/* Left column — info banner, toolbar, scope groups. Owns
+                its own scroll track so the Recommended rail on the
+                right stays pinned while the user's own servers
+                scroll independently. */}
+            <div className="mcp-two-col-main">
+              <div className="mcp-info-banner">
+                <div className="mcp-info-banner-icon">ⓘ</div>
+                <div className="mcp-info-banner-body">
+                  <div className="mcp-info-banner-title">
+                    Already using MCPs in Claude Code? They show up here
+                    too — but OAuth tokens don&rsquo;t cross between apps.
+                  </div>
+                  INZONE reads the same files Claude Code uses —{' '}
+                  <code>~/.claude.json</code> (User and per-project
+                  under <code>projects[cwd]</code>) and{' '}
+                  <code>./.mcp.json</code>. The
+                  <strong> server list</strong> is shared, but each app
+                  keeps its <strong>own OAuth token cache</strong>. So
+                  if a server requires login (Atlassian, Figma, etc.),
+                  authenticate it
+                  <strong> once in INZONE</strong> via the{' '}
+                  <strong>Connect</strong> button below — INZONE will
+                  then sign every agent&rsquo;s MCP request with the
+                  cached token automatically.{' '}
+                  <strong>claude.ai integrations</strong> (synced from
+                  your claude.ai account) live outside the JSON files
+                  entirely and aren&rsquo;t shown here.
                 </div>
-                INZONE reads the same files Claude Code uses —{' '}
-                <code>~/.claude.json</code> (User and per-project under{' '}
-                <code>projects[cwd]</code>) and <code>./.mcp.json</code>. The
-                <strong> server list</strong> is shared, but each app keeps
-                its <strong>own OAuth token cache</strong>. So if a server
-                requires login (Atlassian, Figma, etc.), authenticate it
-                <strong> once in INZONE</strong> via the <strong>Connect</strong>{' '}
-                button below — INZONE will then sign every agent&rsquo;s MCP
-                request with the cached token automatically.{' '}
-                <strong>claude.ai integrations</strong> (synced from your
-                claude.ai account) live outside the JSON files entirely and
-                aren&rsquo;t shown here.
+              </div>
+
+              <div className="settings-toolbar">
+                <input
+                  className="settings-search"
+                  placeholder="Search servers…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <button
+                  className="ghost small"
+                  onClick={() => void probeAll()}
+                  disabled={anyProbing || entries.length === 0}
+                  title="Re-test connection for every configured server"
+                >
+                  {anyProbing ? 'Testing…' : 'Test all'}
+                </button>
+                <button
+                  className="primary small"
+                  onClick={startNew}
+                  title="Add a new MCP server"
+                >
+                  + Add server
+                </button>
+              </div>
+
+              {error && <div className="modal-error">{error}</div>}
+
+              <div className="mcp-two-col-scroll">
+                {loading && (
+                  <div className="settings-empty">Loading servers…</div>
+                )}
+                {!loading && filtered.length === 0 && !error && (
+                  <div className="settings-empty">
+                    {query
+                      ? 'No servers match that search.'
+                      : 'No MCP servers configured yet. Click "+ Add server" to wire one up.'}
+                  </div>
+                )}
+
+                {!loading && grouped.userScope.length > 0 && (
+                  <McpScopeGroup
+                    title="User scope"
+                    subtitle="Available in every workspace · ~/.claude.json"
+                    count={grouped.userScope.length}
+                    entries={grouped.userScope}
+                    probes={probes}
+                    onEdit={startEdit}
+                    onDelete={(e) => void remove(e)}
+                    onTest={(e) => void probeOne(e)}
+                    onAuth={(e) => void connectViaOauth(e)}
+                    onDisconnect={(e) => void disconnectAuth(e)}
+                    onCopyCommand={(e) => void copyShellCommand(e)}
+                    authedResources={authedResources}
+                  />
+                )}
+
+                {!loading && grouped.projectScope.length > 0 && (
+                  <McpScopeGroup
+                    title="Project scope"
+                    subtitle="This workspace only · ./.mcp.json + Claude Code local"
+                    count={grouped.projectScope.length}
+                    entries={grouped.projectScope}
+                    probes={probes}
+                    onEdit={startEdit}
+                    onDelete={(e) => void remove(e)}
+                    onTest={(e) => void probeOne(e)}
+                    onAuth={(e) => void connectViaOauth(e)}
+                    onDisconnect={(e) => void disconnectAuth(e)}
+                    onCopyCommand={(e) => void copyShellCommand(e)}
+                    authedResources={authedResources}
+                  />
+                )}
+
+                {!loading && grouped.otherProjects.length > 0 && (
+                  <McpScopeGroup
+                    title="Other Claude Code projects"
+                    subtitle="Configured in ~/.claude.json for folders other than this workspace · read-only"
+                    count={grouped.otherProjects.length}
+                    entries={grouped.otherProjects}
+                    probes={probes}
+                    onEdit={startEdit}
+                    onDelete={(e) => void remove(e)}
+                    onTest={(e) => void probeOne(e)}
+                    onAuth={(e) => void connectViaOauth(e)}
+                    onDisconnect={(e) => void disconnectAuth(e)}
+                    onCopyCommand={(e) => void copyShellCommand(e)}
+                    authedResources={authedResources}
+                    readOnly
+                  />
+                )}
               </div>
             </div>
 
-            <div className="settings-toolbar">
-              <input
-                className="settings-search"
-                placeholder="Search servers…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
+            {/* Right column — Recommended MCPs rail. Pinned width,
+                vertical scroll. Mirrors the Skills tab layout. */}
+            <div className="mcp-two-col-rail">
+              <RecommendedMcpsRail
+                installedNames={installedRecommendedNames}
+                onInstall={(mcp) => void installRecommended(mcp)}
+                onOpenDetail={(mcp) => setRecommendedDetail(mcp)}
               />
-              <button
-                className="ghost small"
-                onClick={() => void probeAll()}
-                disabled={anyProbing || entries.length === 0}
-                title="Re-test connection for every configured server"
-              >
-                {anyProbing ? 'Testing…' : 'Test all'}
-              </button>
-              <button
-                className="primary small"
-                onClick={startNew}
-                title="Add a new MCP server"
-              >
-                + Add server
-              </button>
             </div>
-
-            {error && <div className="modal-error">{error}</div>}
-
-            {loading && <div className="settings-empty">Loading servers…</div>}
-            {!loading && filtered.length === 0 && !error && (
-              <div className="settings-empty">
-                {query
-                  ? 'No servers match that search.'
-                  : 'No MCP servers configured yet. Click "+ Add server" to wire one up.'}
-              </div>
-            )}
-
-            {!loading && grouped.userScope.length > 0 && (
-              <McpScopeGroup
-                title="User scope"
-                subtitle="Available in every workspace · ~/.claude.json"
-                count={grouped.userScope.length}
-                entries={grouped.userScope}
-                probes={probes}
-                onEdit={startEdit}
-                onDelete={(e) => void remove(e)}
-                onTest={(e) => void probeOne(e)}
-                onAuth={(e) => void connectViaOauth(e)}
-                onDisconnect={(e) => void disconnectAuth(e)}
-                onCopyCommand={(e) => void copyShellCommand(e)}
-                authedResources={authedResources}
-              />
-            )}
-
-            {!loading && grouped.projectScope.length > 0 && (
-              <McpScopeGroup
-                title="Project scope"
-                subtitle="This workspace only · ./.mcp.json + Claude Code local"
-                count={grouped.projectScope.length}
-                entries={grouped.projectScope}
-                probes={probes}
-                onEdit={startEdit}
-                onDelete={(e) => void remove(e)}
-                onTest={(e) => void probeOne(e)}
-                onAuth={(e) => void connectViaOauth(e)}
-                onDisconnect={(e) => void disconnectAuth(e)}
-                onCopyCommand={(e) => void copyShellCommand(e)}
-                authedResources={authedResources}
-              />
-            )}
-
-            {!loading && grouped.otherProjects.length > 0 && (
-              <McpScopeGroup
-                title="Other Claude Code projects"
-                subtitle="Configured in ~/.claude.json for folders other than this workspace · read-only"
-                count={grouped.otherProjects.length}
-                entries={grouped.otherProjects}
-                probes={probes}
-                onEdit={startEdit}
-                onDelete={(e) => void remove(e)}
-                onTest={(e) => void probeOne(e)}
-                onAuth={(e) => void connectViaOauth(e)}
-                onDisconnect={(e) => void disconnectAuth(e)}
-                onCopyCommand={(e) => void copyShellCommand(e)}
-                authedResources={authedResources}
-                readOnly
-              />
-            )}
           </>
         )}
 
@@ -654,6 +747,14 @@ export function McpServersSection() {
             cwd={cwd}
             onCancel={cancel}
             onSave={save}
+          />
+        )}
+
+        {recommendedDetail && (
+          <RecommendedMcpDetailModal
+            mcp={recommendedDetail}
+            onClose={() => setRecommendedDetail(null)}
+            onInstall={(mcp) => void installRecommended(mcp)}
           />
         )}
       </div>
@@ -1566,4 +1667,284 @@ function shortenPath(p: string): string {
 
 function cloneConfig(cfg: McpServerConfig): McpServerConfig {
   return JSON.parse(JSON.stringify(cfg)) as McpServerConfig;
+}
+
+// ─── Recommended MCPs ────────────────────────────────────────────
+// A curated rail rendered at the top of the MCP Settings pane.
+// Mirrors the Settings → Skills "Recommended" pattern. The list is
+// hardcoded in `shared/recommended-mcps.ts`.
+
+/**
+ * True when any arg or env value looks like a `<placeholder>` the
+ * user must fill in (a folder path, connection string, API key,
+ * etc.). Drives whether Install opens the editor pre-filled or
+ * commits the entry directly.
+ */
+function recommendedMcpNeedsUserInput(mcp: RecommendedMcp): boolean {
+  const isPlaceholder = (s: string) => /^<.+>$/.test(s.trim());
+  if (mcp.args?.some(isPlaceholder)) return true;
+  if (mcp.env && Object.values(mcp.env).some(isPlaceholder)) return true;
+  return false;
+}
+
+/**
+ * Convert a recommended entry into the editor-ready draft shape.
+ * Defaults to `user` scope so the server is available across every
+ * workspace (matches what `claude mcp add` does without `--project`).
+ */
+function buildDraftFromRecommendedMcp(
+  mcp: RecommendedMcp,
+): McpServerDraft {
+  const name = mcp.installAs ?? mcp.id;
+  let config: McpServerConfig;
+  if (mcp.transport === 'stdio') {
+    config = {
+      type: 'stdio',
+      command: mcp.command ?? 'npx',
+      args: mcp.args ? [...mcp.args] : [],
+      ...(mcp.env ? { env: { ...mcp.env } } : {}),
+    };
+  } else if (mcp.transport === 'sse') {
+    config = {
+      type: 'sse',
+      url: mcp.url ?? '',
+      ...(mcp.headers ? { headers: { ...mcp.headers } } : {}),
+    };
+  } else {
+    config = {
+      type: 'http',
+      url: mcp.url ?? '',
+      ...(mcp.headers ? { headers: { ...mcp.headers } } : {}),
+    };
+  }
+  return { name, scope: 'user', config };
+}
+
+function transportLabel(t: RecommendedMcp['transport']): string {
+  if (t === 'stdio') return 'Local';
+  if (t === 'sse') return 'Remote · SSE';
+  return 'Remote · HTTP';
+}
+
+/**
+ * Horizontal rail of recommended-MCP cards. Renders above the user's
+ * own configured-servers list so it's the first thing they see when
+ * Settings → MCP is empty. Already-installed entries surface a
+ * disabled "Installed" pill instead of the Install button.
+ */
+function RecommendedMcpsRail({
+  installedNames,
+  onInstall,
+  onOpenDetail,
+}: {
+  /** Names of MCP servers already present in user-scope. Drives the
+   *  "Installed" state on each card. */
+  installedNames: Set<string>;
+  onInstall: (mcp: RecommendedMcp) => void;
+  onOpenDetail: (mcp: RecommendedMcp) => void;
+}): JSX.Element {
+  return (
+    <div className="recommended-mcps-block">
+      <div className="recommended-mcps-head">
+        <h3 className="recommended-mcps-title">Recommended MCPs</h3>
+        <span className="recommended-mcps-sub">
+          One-click installs — local stdio servers and remote (OAuth)
+          connectors. Hand-picked from the broader MCP ecosystem.
+        </span>
+      </div>
+      <div className="recommended-mcps-rail">
+        {RECOMMENDED_MCPS.map((mcp) => {
+          const installed = installedNames.has(mcp.installAs ?? mcp.id);
+          return (
+            <div className="recommended-mcp-card" key={mcp.id}>
+              <div className="recommended-mcp-head">
+                <span className="recommended-mcp-emoji" aria-hidden>
+                  {mcp.emoji}
+                </span>
+                <div className="recommended-mcp-titles">
+                  <div className="recommended-mcp-name">{mcp.name}</div>
+                  <div className="recommended-mcp-meta">
+                    <span
+                      className={
+                        'recommended-mcp-transport recommended-mcp-transport-' +
+                        mcp.transport
+                      }
+                    >
+                      {transportLabel(mcp.transport)}
+                    </span>
+                    {mcp.setupGuide && (
+                      <span className="recommended-mcp-setup-chip">
+                        Needs setup
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <p className="recommended-mcp-desc">{mcp.description}</p>
+              <div className="recommended-mcp-foot">
+                <span className="recommended-mcp-author">{mcp.author}</span>
+                <div className="recommended-mcp-actions">
+                  {mcp.setupGuide && (
+                    <button
+                      type="button"
+                      className="ghost small"
+                      onClick={() => onOpenDetail(mcp)}
+                      title="Setup instructions"
+                    >
+                      Setup
+                    </button>
+                  )}
+                  {installed ? (
+                    <span
+                      className="recommended-mcp-installed"
+                      title="Already in your ~/.claude.json"
+                    >
+                      ✓ Installed
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="primary small"
+                      onClick={() => onInstall(mcp)}
+                      title={
+                        mcp.transport === 'stdio'
+                          ? 'Write the entry to ~/.claude.json'
+                          : 'Write the entry and start the OAuth handshake'
+                      }
+                    >
+                      Install
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal that shows a recommended MCP's setup instructions before
+ * the user commits to installing. Opens from the card's "Setup"
+ * button. Pure presentation — Install kicks back through the same
+ * `onInstall` handler the rail uses.
+ */
+function RecommendedMcpDetailModal({
+  mcp,
+  onClose,
+  onInstall,
+}: {
+  mcp: RecommendedMcp;
+  onClose: () => void;
+  onInstall: (mcp: RecommendedMcp) => void;
+}): JSX.Element {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal recommended-mcp-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label={`${mcp.name} setup`}
+      >
+        <div className="modal-head">
+          <div className="recommended-mcp-modal-head">
+            <span className="recommended-mcp-emoji" aria-hidden>
+              {mcp.emoji}
+            </span>
+            <div>
+              <h3>{mcp.name}</h3>
+              <div className="recommended-mcp-meta">
+                <span
+                  className={
+                    'recommended-mcp-transport recommended-mcp-transport-' +
+                    mcp.transport
+                  }
+                >
+                  {transportLabel(mcp.transport)}
+                </span>
+                <span className="recommended-mcp-license">
+                  {mcp.license}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="ghost small"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="modal-body">
+          <p className="recommended-mcp-modal-desc">{mcp.description}</p>
+          {mcp.setupGuide && (
+            <div className="recommended-mcp-setup-block">
+              <h4>
+                Setup
+                {mcp.setupGuide.shortLabel
+                  ? ` — ${mcp.setupGuide.shortLabel}`
+                  : ''}
+              </h4>
+              <div className="recommended-mcp-setup-instructions">
+                <Markdown text={mcp.setupGuide.instructions} />
+              </div>
+              {mcp.setupGuide.envVar && (
+                <div className="recommended-mcp-envvars">
+                  <strong>Env var{
+                    Array.isArray(mcp.setupGuide.envVar) ? 's' : ''
+                  }:</strong>{' '}
+                  {(Array.isArray(mcp.setupGuide.envVar)
+                    ? mcp.setupGuide.envVar
+                    : [mcp.setupGuide.envVar]
+                  ).map((v) => (
+                    <code key={v}>{v}</code>
+                  ))}
+                </div>
+              )}
+              {mcp.setupGuide.signupUrl && (
+                <a
+                  className="recommended-mcp-signup-link"
+                  href={mcp.setupGuide.signupUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  Sign up / get a key →
+                </a>
+              )}
+            </div>
+          )}
+          {mcp.sourceUrl && (
+            <div className="recommended-mcp-source-line">
+              <a
+                href={mcp.sourceUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                View source / docs →
+              </a>
+            </div>
+          )}
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="ghost" onClick={onClose}>
+            Close
+          </button>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              onInstall(mcp);
+              onClose();
+            }}
+          >
+            Install
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -4,6 +4,66 @@ Landmines we've actually hit. Each gotcha records what bit us, why,
 and how to avoid. Future agents who notice "huh, that's weird" should
 check here first.
 
+## `@container` rule placement vs cascade order
+
+A `@container` query writes a regular CSS rule once the container
+condition matches — it does **not** automatically beat rules
+outside the query. They participate in normal cascade with their
+declared specificity. So a query like
+
+```css
+@container composer (max-width: 480px) {
+  .composer-row { display: grid; ... }
+}
+/* ...50 lines later... */
+.composer-row { display: flex; ... }  /* base rule */
+```
+
+…has the flex rule WIN at every width because it appears later
+at equal specificity. The query "fires" — but its declarations
+get overridden in the cascade.
+
+This bit us when the v1.18.0 responsive composer didn't switch
+to two-row mode on narrow panes. Two fixes work:
+
+1. **Bump specificity inside the query** (the path we took).
+   Prefix every selector with another class so it's (0,2,0)
+   instead of (0,1,0): `.pane-composer .composer-row { ... }`.
+2. **Move the @container block AFTER** all the rules it needs
+   to override.
+
+Option 1 is robust against anyone later adding more `.composer-row`
+rules; option 2 only works until the next edit. Default to option 1.
+
+See [src/renderer/src/index.css](../../src/renderer/src/index.css)
+search `pane-composer .composer-row` for the v1.18.0 fix.
+
+## Per-component IPC subscription explodes the listener count
+
+A hook that calls `ipcRenderer.on(channel, handler)` in
+`useEffect` registers a fresh listener PER MOUNT. If the hook
+runs from a component that mounts many times concurrently
+(e.g. one per chat bubble), you hit Node's default 10-listener
+ceiling on `IpcRenderer` and trip
+`MaxListenersExceededWarning: 11 <channel> listeners added to
+[IpcRenderer] …`. The bug compounds during operations that
+remount the consumer en masse — pane-mode swap re-renders every
+`AssistantMessage`.
+
+We hit this with `useCavemanSettings` (one IPC listener per
+assistant bubble in every pane). The fix is a singleton
+subscription pattern: ONE module-level IPC listener that
+maintains a snapshot, plus a Set of React subscribers that
+share that snapshot via `useSyncExternalStore`. Same shape as
+[lib/safeConfirm.ts](../../src/renderer/src/lib/safeConfirm.ts).
+
+If you find yourself writing `ipcRenderer.on(...)` inside a hook
+that any non-singleton component will call, stop. Move the
+listener to module scope, keep a `Set<() => void>` of React
+subscribers, and use `useSyncExternalStore`. See
+[src/renderer/src/hooks/useCavemanSettings.ts](../../src/renderer/src/hooks/useCavemanSettings.ts)
+for the canonical implementation.
+
 ## Iterating `Object.values(panes)` kills cross-project sessions
 
 The store keeps every project's panes warm in a single global

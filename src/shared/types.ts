@@ -1111,6 +1111,81 @@ export interface UpdateCheckResult {
 }
 
 /**
+ * One entry in the curated Recommended MCPs list (Settings → MCP →
+ * Recommended). Mirrors the shape of `RecommendedSkill` but for
+ * MCP servers — three transports supported (local stdio, remote
+ * SSE, remote streamable-HTTP), with optional `setupGuide` for
+ * entries that need an API key or pre-install configuration.
+ *
+ * On Install, the renderer builds an `McpServerDraft` from this
+ * entry and writes it to `~/.claude.json` via the existing
+ * `window.cowork.mcp.save` flow. For `sse` / `http` entries the
+ * post-save step runs `window.cowork.mcp.auth.start` to kick off
+ * the standard MCP OAuth handshake. Stdio entries that need
+ * arguments the user must fill in (filesystem path, DATABASE_URL,
+ * etc.) open the editor modal pre-populated with the recommended
+ * shape so the user only edits the missing piece.
+ */
+export type RecommendedMcpTransport = 'stdio' | 'sse' | 'http';
+
+export interface RecommendedMcp {
+  /** Stable kebab-case identifier — also used for state tracking. */
+  id: string;
+  /** Display name on the card. */
+  name: string;
+  /** Single emoji for the card head. */
+  emoji: string;
+  /** One-paragraph description (~20–40 words). */
+  description: string;
+  /** Wire protocol. `stdio` = local npm process, `sse`/`http` =
+   *  remote MCP server (OAuth handshake fires post-install). */
+  transport: RecommendedMcpTransport;
+  /** Name written into `~/.claude.json` `mcpServers.<installAs>`.
+   *  Defaults to `id` if omitted. */
+  installAs?: string;
+  /** SPDX licence identifier ("MIT", etc.) or "Proprietary". */
+  license: string;
+  /** Maintainer / hosting org. */
+  author: string;
+  /** Optional tags for future filtering — not surfaced in v1. */
+  tags?: string[];
+  /** Source URL for "View source" — usually a GitHub repo for
+   *  stdio entries, a docs page for remote ones. */
+  sourceUrl?: string;
+
+  // -- stdio fields (transport === 'stdio') ----------------------------
+  /** Executable that spawns the server, typically `npx` or `uvx`. */
+  command?: string;
+  /** Args passed to `command`. Placeholders like `<your folder>` are
+   *  user-fillable — when present the install flow opens the editor
+   *  pre-populated so the user provides the value before saving. */
+  args?: string[];
+  /** Environment variables the spawned process needs. Values can be
+   *  placeholders ("<your-key>") for user-fillable entries. */
+  env?: Record<string, string>;
+
+  // -- sse / http fields (transport === 'sse' | 'http') ----------------
+  /** Endpoint URL. */
+  url?: string;
+  /** Optional static headers (rare — most remote MCPs use OAuth). */
+  headers?: Record<string, string>;
+
+  // -- post-install setup guide (any transport) ------------------------
+  /** Optional walkthrough for entries needing pre-install setup
+   *  (API key, paid account, manual auth in another tab). When
+   *  present:
+   *    - the card shows a "Needs setup" chip
+   *    - the detail flow surfaces signup link + env var + body
+   *  Same shape as `RecommendedSkill.setupGuide`. */
+  setupGuide?: {
+    shortLabel: string;
+    signupUrl?: string;
+    envVar?: string | string[];
+    instructions: string;
+  };
+}
+
+/**
  * A "slash command" picked from the composer's "/" picker — either a
  * built-in starter prompt (`/plan`, `/review`, etc.) or a user-defined
  * markdown file under `.claude/commands/<name>.md` in the project

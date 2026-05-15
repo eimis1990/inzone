@@ -4,6 +4,51 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0] — 2026-05-15
+
+### Added
+
+- **Recommended MCPs in Settings → MCP.** New curated rail of
+  one-click MCP installs, sourced from a hardcoded list in
+  [shared/recommended-mcps.ts](src/shared/recommended-mcps.ts).
+  Thirteen entries shipped at launch — eight local stdio servers
+  (Filesystem, Memory, Sequential Thinking, Everything, Playwright,
+  Brave Search, PostgreSQL, SQLite) and five remote OAuth
+  connectors (Atlassian, Linear, Asana, Notion, Stripe). Each card
+  shows a transport chip (Local / Remote · SSE / Remote · HTTP)
+  and a "Needs setup" chip when API keys or paths are required.
+  Install flow handles three paths automatically: zero-config
+  stdio writes the entry to `~/.claude.json` directly, stdio with
+  `<placeholder>` args/env opens the editor pre-populated so the
+  user fills in the missing piece, and remote entries trigger the
+  standard MCP OAuth handshake via the existing
+  `mcp.authStart` bridge.
+- **Theme-aware app logo.** New light-theme logo variant ships
+  alongside the dark one in `src/renderer/src/assets/`. `AppLogo`
+  renders both `<img>` elements; CSS toggles visibility under
+  `:root.theme-light` so the swap is reactive to live theme
+  changes without any React state.
+
+### Changed
+
+- **Settings → MCP is now a two-column layout.** Left column owns
+  the user's own configured servers (info banner + toolbar + scope
+  groups, with its own scroll track); right column is the new
+  Recommended MCPs rail. Same `.skills-two-col` recipe used in
+  Settings → Skills so the two tabs feel symmetrical. Below
+  1040px viewport the layout collapses to a single column with
+  the rail wrapping to a horizontal strip below.
+- **User-scope + Other-projects MCP cards tile compactly.**
+  `.mcp-list` switched from `flex-direction: column` (one card
+  per row, full-width) to `flex-wrap: wrap` with
+  `flex: 1 1 300px; min-width: 280px; max-width: 480px;` per
+  card. Two-or-more servers tile across the available width
+  instead of each hogging a full row.
+- **Recommended Skills cards now match Recommended MCPs cards.**
+  `.recommended-skill-card` background lifted from `var(--bg)` to
+  `var(--bg-elev)` so both rails read as the same elevated-
+  surface family across Settings → Skills and Settings → MCP.
+
 ## [1.18.0] — 2026-05-15
 
 ### Added

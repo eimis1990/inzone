@@ -32,7 +32,11 @@ Includes default agents and skills users can opt into.
 
 The text input at the bottom of a chat pane. Cmd+Enter sends.
 Has an "expand" button that opens a larger modal version of the
-same input.
+same input. Toolbar: `/` (slash command picker, since v1.18.0),
+paperclip (image attachment), textarea, Send, expand. Layout is
+responsive via CSS container queries — at pane widths ≤ 480px
+the buttons drop to a top row and the textarea takes the full
+width below.
 
 ## CoworkApi
 
@@ -94,11 +98,47 @@ Pseudo-terminal. Each terminal pane gets its own PTY spawned in
 the main process via `node-pty`. The renderer's xterm.js attaches
 to the PTY's stream via IPC.
 
+## ProjectCommand
+
+A "slash command" available in the composer's `/` picker (since
+v1.18.0). Three sources: project-local
+`<cwd>/.claude/commands/<name>.md`, user-global
+`~/.claude/commands/<name>.md`, or one of five built-ins in
+[shared/builtin-commands.ts](../../src/shared/builtin-commands.ts).
+Filename stem is the command name; frontmatter `description`
+shows in the picker; body is the prompt template with
+`$ARGUMENTS` as the substitution point. Project shadows user
+shadows builtin by name (`mergeCommands()`). Enumerated by
+[main/commands.ts](../../src/main/commands.ts) via the
+`COMMANDS_LIST` IPC channel.
+
 ## Recommended skill
 
 A curated community skill (Awesome Design, etc.) listed in
 [recommended-skills.ts](../../src/shared/recommended-skills.ts). One-click install does a shallow
 git clone into `~/.claude/skills/`. Idempotent.
+
+## SegmentedToggle
+
+Reusable two-state pill toggle with a sliding `::before` thumb
+([SegmentedToggle.tsx](../../src/renderer/src/components/SegmentedToggle.tsx),
+shipped v1.17.0). Generic over the value type, icons only, the
+thumb glides between halves with a springy easing. Used by the
+Lead Agent / Multi Agents window-mode switch in the workspace
+bar — replaces the previous segmented track + sliding-accent-
+thumb recipe. Picks up `var(--accent)` in both positions; the
+contrast colour on the thumb-covered side is `var(--accent-on)`.
+
+## Slash command
+
+A user-typeable shortcut in the composer (since v1.18.0). Click
+the `/` button next to the paperclip, or type `/` as the first
+character of an empty composer, to open the
+[SlashCommandPicker](../../src/renderer/src/components/SlashCommandPicker.tsx).
+Pick a command and a pane-accent badge mounts at the top of the
+composer; typing fills in `$ARGUMENTS`; ⌘⏎ sends. The agent sees
+the expanded template, not the `/foo` syntax. See also
+[[glossary#ProjectCommand]].
 
 ## safeStorage
 
