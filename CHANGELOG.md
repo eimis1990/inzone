@@ -4,6 +4,69 @@ All notable changes to INZONE are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] — 2026-05-14
+
+### Added
+
+- **New sliding-pill mode switch.** The Lead Agent / Multi Agents
+  segmented control was replaced with a Uiverse-style sliding pill
+  toggle (`SegmentedToggle` — reusable, generic over the value type).
+  Icons only, no text. The thumb slides between halves with a
+  springy `cubic-bezier(0.47, 1.64, 0.41, 0.8)` and the same accent
+  fill in both positions so position alone signals the active mode.
+  Theme-aware: terracotta thumb in light, yellow-amber in dark; the
+  track matches the rest of the workspace-bar utility buttons in
+  both themes.
+- **Flow button is always mounted** in the right-hand utilities
+  cluster, dimmed and disabled outside Multi mode (or below two
+  agent panes). Tooltips spell out the gate ("Flow is available in
+  Multi Agents mode" / "Flow needs at least two agent panes"). The
+  reserved space also keeps the mode switch's screen position fixed
+  across Lead ↔ Multi transitions — no more horizontal drift when
+  Flow appears.
+
+### Changed
+
+- **Terminal-overlay shadow is theme-aware.** Dark mode keeps the
+  same black depth shadow above the open terminal panel; light mode
+  swaps it for a layered terracotta-tinted gradient
+  (`rgba(182, 85, 43, 0.22)` with a softer top edge) so the lift
+  reads as part of the warm-paper palette instead of slabbing a
+  black band over the cream UI. New `--terminal-overlay-shadow`
+  token drives both.
+- **Workspace bar centre-block stays put.** The mode switch sits in
+  the flex centre between two equal `wb-spacer` divs; with the
+  Flow button now constant on the right, both clusters have stable
+  widths so the toggle is equidistant from the left + right edges
+  in every mode.
+
+### Fixed
+
+- **Preview pill can finally clear stale URLs.** The X on the
+  preview dropdown could remove entries from the terminal-detected
+  list but couldn't remove URLs that had only ever appeared in
+  agent transcripts — the next render would re-mine them and
+  resurrect the dead `:3001`. The store now keeps a
+  `hiddenLocalhostUrls` tombstone set; both `forgetLocalhostUrl`
+  and `forgetLocalhostPort` write to it, and the Preview button's
+  combined-URL memo filters every source through the set. The
+  on-demand liveness sweep (run when the dropdown opens) now also
+  probes transcript-only URLs and auto-tombstones any that have no
+  listener, so the count badge no longer shows `3` for servers
+  that aren't there.
+- **`caveman:changed` IPC listener leak.** `useCavemanSettings()`
+  registered a fresh IPC listener per `AssistantMessage` mount, so
+  once a pane had more than ten assistant bubbles (and a mode swap
+  re-mounted many at once) Node's default 10-listener ceiling
+  tripped `MaxListenersExceededWarning: 11 caveman:changed
+  listeners …`. The hook is now a singleton-subscription pattern
+  built on `useSyncExternalStore` — one module-level IPC listener,
+  one snapshot, many subscribers. The warning is gone and the
+  badge still updates instantly when the Experiments toggle flips.
+- **Toggle no longer leaves an accent focus ring** after click.
+  Removed the `:focus-within` outline on `.segmented-toggle`; the
+  thumb's slide is itself the state indicator.
+
 ## [1.14.0] — 2026-05-12
 
 ### Added

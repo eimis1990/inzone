@@ -10,6 +10,7 @@ import { AppLogo } from './AppLogo';
 import { PreviewButton } from './PreviewButton';
 import { PrButton } from './PrButton';
 import { ThemeToggle } from './ThemeToggle';
+import { SegmentedToggle } from './SegmentedToggle';
 import {
   BellIcon,
   BellOffIcon,
@@ -426,11 +427,10 @@ export function WorkspaceBar() {
 
       <div className="wb-spacer" />
 
-      {/* Centered: window mode switch (Multi Agents has an embedded
-          "Flow" chip when the project has ≥2 panes). The Review chip
-          used to live next to it but moved to the left cluster (in
-          place of the old session-name pill) — closer to the sidebar
-          where the user thinks about projects. */}
+      {/* Centered: window mode switch. The Flow button on the right
+          is ALWAYS mounted (disabled in Lead mode) so the right
+          cluster width stays constant — that keeps the flex-centred
+          toggle equidistant from both clusters in every mode. */}
       <ModeSwitch />
 
       <div className="wb-spacer" />
@@ -601,51 +601,38 @@ function ModeSwitch() {
   const setWindowMode = useStore((s) => s.setWindowMode);
 
   return (
-    <div className="mode-switch-shell" aria-label="Window mode">
-      <div
-        className={'mode-switch-track-v2 mode-' + mode}
-        role="tablist"
-        aria-label="Window mode"
-      >
-        {/* Sliding accent thumb — position driven purely by the
-            parent's `mode-multi` / `mode-lead` class, so the
-            transition runs entirely in CSS. */}
-        <span className="mode-switch-thumb" aria-hidden />
-        <button
-          role="tab"
-          aria-selected={mode === 'lead'}
-          className={'mode-segment' + (mode === 'lead' ? ' active' : '')}
-          onClick={() => setWindowMode('lead')}
-          title="Lead Agent mode — one orchestrator drives the sub-agents"
-        >
-          <BotIcon size={14} stroke={2} />
-          <span>Lead Agent</span>
-        </button>
-        <button
-          role="tab"
-          aria-selected={mode === 'multi'}
-          className={'mode-segment' + (mode === 'multi' ? ' active' : '')}
-          onClick={() => setWindowMode('multi')}
-          title="Multi Agents mode — each pane runs independently"
-        >
-          <MultiAgentsIcon size={14} stroke={2} />
-          <span>Multi Agents</span>
-        </button>
-      </div>
-    </div>
+    <SegmentedToggle
+      value={mode}
+      leftValue="lead"
+      rightValue="multi"
+      onChange={setWindowMode}
+      leftIcon={<BotIcon size={18} stroke={1.75} />}
+      rightIcon={<MultiAgentsIcon size={18} stroke={1.75} />}
+      leftAriaLabel="Lead Agent mode — one orchestrator drives the sub-agents"
+      rightAriaLabel="Multi Agents mode — each pane runs independently"
+      title={
+        mode === 'lead'
+          ? 'Lead Agent mode — one orchestrator drives the sub-agents'
+          : 'Multi Agents mode — each pane runs independently'
+      }
+    />
   );
 }
 
 /**
  * Square 40×40 Flow toggle that lives in the right-hand utilities
- * group (alongside sound / mission control / settings). Shows only
- * when the active session is in Multi mode with ≥2 agent panes —
- * Flow chains sends across panes, so it's not meaningful for a
- * single pane or for Lead mode. Active = pipeline board view;
- * inactive = panes view. A small accent dot appears in the corner
- * when Flow is ENABLED (chains are firing), regardless of which
- * view is showing — visible reminder that sends are being routed
- * through the chain.
+ * group (alongside sound / mission control / settings). The button
+ * is ALWAYS mounted so the utilities cluster has a constant width
+ * across modes — when the user flips from Lead → Multi the toggle
+ * to the left doesn't jump because Flow appearing changes the
+ * right cluster width. The button is DISABLED when Flow isn't
+ * applicable (Lead mode, or fewer than two agent panes) — same
+ * visual recipe as the rest of the bar, just dimmed and
+ * non-interactive. Active = pipeline board view; inactive = panes
+ * view. A small accent dot appears in the corner when Flow is
+ * ENABLED (chains are firing), regardless of which view is
+ * showing — visible reminder that sends are being routed through
+ * the chain.
  */
 function FlowSquareButton() {
   const mode = useStore((s) => s.windowMode);
@@ -672,25 +659,31 @@ function FlowSquareButton() {
   const setView = useStore((s) => s.setPipelineView);
   const flowEnabled = useStore((s) => s.pipeline?.enabled === true);
 
-  if (mode !== 'multi' || paneCount < 2) return null;
-
-  const showingBoard = view === 'board';
+  const disabled = mode !== 'multi' || paneCount < 2;
+  const showingBoard = !disabled && view === 'board';
+  const title = disabled
+    ? mode !== 'multi'
+      ? 'Flow is available in Multi Agents mode'
+      : 'Flow needs at least two agent panes'
+    : showingBoard
+      ? 'Back to panes view'
+      : flowEnabled
+        ? 'Flow is ON — sends to one pane chain to the next.'
+        : 'Open Flow to chain panes into a sync sequence.';
   return (
     <button
       type="button"
       className={
         'wb-icon-btn wb-flow-btn' +
         (showingBoard ? ' active' : '') +
-        (flowEnabled ? ' wb-flow-enabled' : '')
+        (flowEnabled && !disabled ? ' wb-flow-enabled' : '')
       }
-      onClick={() => setView(showingBoard ? 'panes' : 'board')}
-      title={
-        showingBoard
-          ? 'Back to panes view'
-          : flowEnabled
-            ? 'Flow is ON — sends to one pane chain to the next.'
-            : 'Open Flow to chain panes into a sync sequence.'
-      }
+      onClick={() => {
+        if (disabled) return;
+        setView(showingBoard ? 'panes' : 'board');
+      }}
+      disabled={disabled}
+      title={title}
       aria-label="Toggle Flow board view"
       aria-pressed={showingBoard}
     >

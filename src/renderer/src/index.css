@@ -126,6 +126,12 @@
      opens. Dark theme uses a near-black tint; light theme uses
      warm-paper white at the same alpha. */
   --terminal-scrim-bg: rgba(0, 0, 0, 0.55);
+  /* Drop shadow above the open terminal overlay. Acts as a vertical
+     gradient that fades the panes into the terminal panel. Dark theme:
+     near-black so it reads as natural depth. Light theme overrides it
+     with an accent-tinted shadow so the "gradient feel" picks up
+     terracotta instead of a flat dark band. */
+  --terminal-overlay-shadow: 0 -16px 40px rgba(0, 0, 0, 0.4);
 }
 
 /* ─── Light theme override ──────────────────────────────────────
@@ -208,6 +214,14 @@
      terminal in light mode doesn't dump a dark slab over the
      paper UI. Same alpha as dark so the blur effect feels equal. */
   --terminal-scrim-bg: rgba(249, 244, 230, 0.55);
+  /* Light theme — the terminal-overlay shadow lifts into a warm
+     terracotta-tinted gradient instead of a black slab. The lower
+     layer (deeper terracotta, soft alpha) does most of the
+     "depth" work; the upper layer (very subtle) keeps the lip
+     of the overlay visible against the cream pane. */
+  --terminal-overlay-shadow:
+    0 -2px 8px rgba(182, 85, 43, 0.10),
+    0 -16px 40px rgba(182, 85, 43, 0.22);
 }
 
 * {
@@ -626,6 +640,168 @@ textarea {
 }
 .mode-segment.active > svg {
   color: var(--accent-on);
+}
+
+/* --------------------------------------------------------------
+ * Segmented sliding-pill toggle (components/SegmentedToggle.tsx)
+ *
+ * Two equal grid columns + an absolutely-positioned `::before`
+ * thumb that slides between halves via `inset`. `::after` paints
+ * the track behind it. No SVG, no goo filter — just CSS layers.
+ *
+ * Tokens
+ *   --_switch-bg-clr      track colour (the bezel around the thumb)
+ *   --_slider-bg-clr      thumb when SITTING on the LEFT (unchecked)
+ *   --_slider-bg-clr-on   thumb when SITTING on the RIGHT (checked)
+ *   --_slider-txt-clr     icon colour for the side covered by the thumb
+ *
+ * All four are theme-aware: the track sits in the same surface
+ * family as the workspace-bar buttons (`var(--wb-btn-bg)`); the
+ * thumb uses the accent so its position is the colour signal.
+ * ------------------------------------------------------------*/
+.segmented-toggle {
+  --_switch-padding: 4px;
+  --_switch-bg-clr: var(--wb-btn-bg);
+  /* Single thumb colour for both states — the thumb's POSITION
+     (left vs right half) signals which mode is active, not its
+     hue. Keeps the bar feeling steady when the user flips modes. */
+  --_slider-bg-clr: var(--accent);
+  --_slider-bg-clr-on: var(--accent);
+  --_slider-txt-clr: var(--accent-on);
+  --_switch-easing: cubic-bezier(0.47, 1.64, 0.41, 0.8);
+
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  /* Match the 40px utility-button height used in the workspace bar. */
+  height: 40px;
+  width: fit-content;
+  border-radius: 9999px;
+  cursor: pointer;
+  user-select: none;
+  /* Sit on top of the rest of the workspace bar so the thumb's slide
+     animation isn't visually clipped by neighbouring frames. */
+  color: var(--text);
+}
+
+/* Visually-hidden checkbox — the label captures clicks. */
+.segmented-toggle input[type='checkbox'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+/* Drop the browser's default focus ring (and our own focus-within
+   outline) — the thumb's slide is itself the focus indicator and
+   the accent-coloured ring around the pill reads as a misclick
+   "stuck" state. Keyboard users still get the input's own implicit
+   focus behaviour via the checkbox state change. */
+.segmented-toggle:focus,
+.segmented-toggle:focus-within,
+.segmented-toggle input[type='checkbox']:focus {
+  outline: none;
+}
+
+/* Each half — the icon (or any other content) sits centred in a
+   grid cell. Opacity flips depending on which side the thumb covers
+   so the active side reads at 1, inactive at 0.55-ish. */
+.segmented-toggle > .segmented-toggle-side {
+  display: grid;
+  place-content: center;
+  /* The label-padding controls the toggle's WIDTH (icon size + this).
+     16px on each side around a 16-18px icon gives a comfortable
+     ~48px cell, which combined with the 4px outer padding lands the
+     overall pill at ~104×40 — matches the old segmented control's
+     footprint so it sits cleanly in the workspace bar. */
+  padding: 0 18px;
+  height: 100%;
+  transition: opacity 300ms ease-in-out 150ms, color 200ms ease;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+/* Active side (the one the thumb sits on) reads at full opacity in
+   the thumb's contrast colour. */
+.segmented-toggle > input:checked ~ .segmented-toggle-side.right,
+.segmented-toggle:has(input:not(:checked)) > .segmented-toggle-side.left {
+  opacity: 1;
+  color: var(--_slider-txt-clr);
+}
+/* Inactive side fades. */
+.segmented-toggle > input:checked ~ .segmented-toggle-side.left,
+.segmented-toggle:has(input:checked) > .segmented-toggle-side.left {
+  opacity: 0.7;
+}
+.segmented-toggle:has(input:not(:checked)) > .segmented-toggle-side.right {
+  opacity: 0.7;
+}
+
+/* Thumb (`::before`) and track (`::after`). */
+.segmented-toggle::before,
+.segmented-toggle::after {
+  content: '';
+  position: absolute;
+  border-radius: inherit;
+  transition: inset 150ms ease-in-out;
+}
+/* Thumb — sits on the LEFT half by default. */
+.segmented-toggle::before {
+  background-color: var(--_slider-bg-clr);
+  inset:
+    var(--_switch-padding) 50% var(--_switch-padding)
+    var(--_switch-padding);
+  transition:
+    inset 500ms var(--_switch-easing),
+    background-color 500ms ease-in-out;
+  z-index: -1;
+  box-shadow:
+    inset 0 1px 1px rgba(0, 0, 0, 0.3),
+    0 1px rgba(255, 255, 255, 0.18);
+}
+/* Track — fills the whole pill behind the thumb. */
+.segmented-toggle::after {
+  background-color: var(--_switch-bg-clr);
+  inset: 0;
+  z-index: -2;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+:root.theme-light .segmented-toggle::after {
+  border-color: var(--border);
+}
+
+/* Hover — thumb peeks toward the opposite side a touch (the
+   easing makes it feel "magnetic"). */
+.segmented-toggle:has(input:checked):hover::before {
+  inset:
+    var(--_switch-padding) var(--_switch-padding) var(--_switch-padding)
+    45%;
+}
+.segmented-toggle:has(input:not(:checked)):hover::before {
+  inset:
+    var(--_switch-padding) 45% var(--_switch-padding)
+    var(--_switch-padding);
+}
+/* Same magnetic-peek on hover for the OPPOSITE label's opacity so
+   the user gets a hint that clicking will swap. */
+.segmented-toggle:has(input:checked):hover > .segmented-toggle-side.left,
+.segmented-toggle:has(input:not(:checked)):hover > .segmented-toggle-side.right {
+  opacity: 0.95;
+  transition-delay: 0ms;
+  transition-duration: 100ms;
+}
+
+/* Checked — slide thumb to the right. */
+.segmented-toggle:has(input:checked)::before {
+  background-color: var(--_slider-bg-clr-on);
+  inset:
+    var(--_switch-padding) var(--_switch-padding) var(--_switch-padding)
+    50%;
 }
 
 /* Flow slot — animates in/out from the right. Uses max-width + a
@@ -3544,7 +3720,10 @@ code.voice-tool-card-value {
   flex-direction: column;
   background: var(--bg);
   border-top: 1px solid var(--border-strong);
-  box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.4);
+  /* Theme-aware shadow — dark mode keeps the black depth; light
+     mode replaces it with a terracotta-tinted gradient so the
+     opening fade picks up the accent rather than a black slab. */
+  box-shadow: var(--terminal-overlay-shadow);
   /* Slide past 100% of the overlay's own height + the bar's height so
      the closed-state overlay clears the bar (which sits inside the
      dock). Without the +bar-height the overlay's bottom edge ends up

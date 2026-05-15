@@ -24,6 +24,7 @@ export function PreviewButton() {
   const leadPaneId = useStore((s) => s.leadPaneId);
   const panes = useStore((s) => s.panes);
   const terminalLocalhostUrls = useStore((s) => s.terminalLocalhostUrls);
+  const hiddenLocalhostUrls = useStore((s) => s.hiddenLocalhostUrls);
   const forgetLocalhostUrl = useStore((s) => s.forgetLocalhostUrl);
   const forgetLocalhostPort = useStore((s) => s.forgetLocalhostPort);
   const [killing, setKilling] = useState<string | null>(null);
@@ -49,17 +50,23 @@ export function PreviewButton() {
   //      pnpm dev, etc.) — most relevant when the user is iterating.
   //   3. URLs mined from agent transcripts (older sessions, agents
   //      that printed a URL while doing setup).
-  // Deduped while preserving priority.
+  // Deduped while preserving priority, then filtered through the
+  // tombstone set — when the user kills `:3001` we drop it from
+  // `terminalLocalhostUrls`, but transcript-mined entries can still
+  // re-add it; the tombstone lets the X button finally win.
   const urls = useMemo(() => {
+    const hidden = new Set(hiddenLocalhostUrls.map((u) => u.replace(/\/$/, '')));
     const out: string[] = [];
     const push = (u: string) => {
+      const norm = u.replace(/\/$/, '');
+      if (hidden.has(norm)) return;
       if (!out.includes(u)) out.push(u);
     };
     if (previewUrl) push(previewUrl);
     for (const u of terminalLocalhostUrls) push(u);
     for (const u of detectedUrls) push(u);
     return out;
-  }, [previewUrl, terminalLocalhostUrls, detectedUrls]);
+  }, [previewUrl, terminalLocalhostUrls, detectedUrls, hiddenLocalhostUrls]);
 
   const handleActivate = () => {
     if (urls.length === 0) {
@@ -116,10 +123,12 @@ export function PreviewButton() {
         hasListener = true;
       }
       if (!hasListener) {
-        // Stale URL. Drop everything on this port and exit quietly.
+        // Stale URL. Tombstone the specific URL the user clicked on
+        // (so transcript-mined entries can't resurrect it) AND drop
+        // anything else on the same port in one go.
+        forgetLocalhostUrl(url);
         const port = portFromUrl(url);
         if (port != null) forgetLocalhostPort(port);
-        else forgetLocalhostUrl(url);
         if (urls.length <= 1) setShowMenu(false);
         return;
       }
@@ -147,11 +156,12 @@ export function PreviewButton() {
         // Don't prune on outright failure — let the user retry.
         return;
       }
-      // Drop ALL URLs sharing this port (e.g. `:3001/kainos` should
-      // disappear when the user kills `:3001`).
+      // Tombstone the URL the user clicked AND drop everything else
+      // sharing this port (e.g. `:3001/kainos` should disappear when
+      // the user kills `:3001`).
+      forgetLocalhostUrl(url);
       const port = portFromUrl(url);
       if (port != null) forgetLocalhostPort(port);
-      else forgetLocalhostUrl(url);
       if (urls.length <= 1) setShowMenu(false);
     } catch (err) {
       alert(
@@ -166,12 +176,28 @@ export function PreviewButton() {
    *  callable on demand (e.g. when the dropdown opens, so the user
    *  always sees fresh state instead of a list that's up to 12s
    *  stale). Drops dead URLs by port to keep the multi-URL-per-port
-   *  case clean. */
+   *  case clean. Also probes URLs that came from agent transcripts
+   *  (not just `terminalLocalhostUrls`) so a `:3001` that an agent
+   *  mentioned during setup but no longer responds gets tombstoned
+   *  the moment the user opens the dropdown — otherwise the X button
+   *  is the only way to clear them. */
   const sweepNow = async () => {
-    const list = useStore.getState().terminalLocalhostUrls;
-    if (list.length === 0) return;
+    const terminalList = useStore.getState().terminalLocalhostUrls;
+    // Probe both lists in one pass; dedupe by URL so we don't double-
+    // check entries that appear in both.
+    const seen = new Set<string>();
+    const probe: string[] = [];
+    for (const u of terminalList) {
+      const k = u.replace(/\/$/, '');
+      if (!seen.has(k)) { seen.add(k); probe.push(u); }
+    }
+    for (const u of detectedUrls) {
+      const k = u.replace(/\/$/, '');
+      if (!seen.has(k)) { seen.add(k); probe.push(u); }
+    }
+    if (probe.length === 0) return;
     const checks = await Promise.all(
-      list.map(async (u) => {
+      probe.map(async (u) => {
         try {
           const listeners = await window.cowork.system.portListeners({
             url: u,
@@ -183,13 +209,21 @@ export function PreviewButton() {
       }),
     );
     const deadPorts = new Set<number>();
+    const deadUrls: string[] = [];
     for (const { url: u, alive } of checks) {
       if (!alive) {
+        deadUrls.push(u);
         const p = portFromUrl(u);
         if (p != null) deadPorts.add(p);
       }
     }
+    // Tombstone every dead URL we probed (covers transcript-only
+    // entries that have no listener — these don't map to
+    // terminalLocalhostUrls, so the port-level forget alone would
+    // leave them visible).
+    const forgetUrl = useStore.getState().forgetLocalhostUrl;
     const forgetPort = useStore.getState().forgetLocalhostPort;
+    for (const u of deadUrls) forgetUrl(u);
     for (const p of deadPorts) forgetPort(p);
   };
 

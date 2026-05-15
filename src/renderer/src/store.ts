@@ -425,6 +425,17 @@ interface StoreState {
    * even when there's no agent running. Newest first, deduped, capped.
    */
   terminalLocalhostUrls: string[];
+  /**
+   * URLs the user has explicitly dismissed (via the Preview menu's X
+   * button) or that the liveness sweep flagged as dead. We keep them
+   * here so the *transcript-mined* `detectLocalhostUrls` results don't
+   * resurrect a stale `:3001` two seconds after the user killed it.
+   * Without this filter, agent chat messages that mentioned the URL
+   * during setup would keep showing in the Preview dropdown forever,
+   * with no way to remove them (the kill flow only operates on
+   * terminalLocalhostUrls). Cleared per-session.
+   */
+  hiddenLocalhostUrls: string[];
   /** Guards against double-invocation under React.StrictMode. */
   _initialized: boolean;
 }
@@ -1422,6 +1433,7 @@ export const useStore = create<Store>((set, get) => ({
   mergeResult: null,
   mergeError: null,
   terminalLocalhostUrls: [],
+  hiddenLocalhostUrls: [],
   _initialized: false,
 
   init: async () => {
@@ -1835,7 +1847,17 @@ export const useStore = create<Store>((set, get) => ({
   forgetLocalhostUrl: (url) => {
     const norm = url.replace(/\/$/, '');
     const filtered = get().terminalLocalhostUrls.filter((u) => u !== norm);
-    const updates: Partial<Store> = { terminalLocalhostUrls: filtered };
+    // Tombstone the URL in `hiddenLocalhostUrls` so transcript-mined
+    // URLs (which the Preview button merges in below) can't resurrect
+    // it after the X click. Without this, an agent message that said
+    // "open http://localhost:3001" would keep re-adding the dead URL
+    // every render — the user clicks X and nothing changes.
+    const hiddenSet = new Set(get().hiddenLocalhostUrls);
+    hiddenSet.add(norm);
+    const updates: Partial<Store> = {
+      terminalLocalhostUrls: filtered,
+      hiddenLocalhostUrls: Array.from(hiddenSet),
+    };
     // If the manual previewUrl was pointing at this same URL (e.g. user
     // just killed the dev server it's loading), drop it too so the
     // modal goes back to the empty state instead of trying to reach a
@@ -1862,7 +1884,18 @@ export const useStore = create<Store>((set, get) => ({
     const filtered = get().terminalLocalhostUrls.filter(
       (u) => portFromUrl(u) !== port,
     );
-    const updates: Partial<Store> = { terminalLocalhostUrls: filtered };
+    // Same tombstoning logic as forgetLocalhostUrl but at the port
+    // level: when the user kills `:3001`, both `:3001` and
+    // `:3001/kainos` should stay gone even if a transcript still
+    // mentions one of them.
+    const hiddenSet = new Set(get().hiddenLocalhostUrls);
+    for (const u of get().terminalLocalhostUrls) {
+      if (portFromUrl(u) === port) hiddenSet.add(u.replace(/\/$/, ''));
+    }
+    const updates: Partial<Store> = {
+      terminalLocalhostUrls: filtered,
+      hiddenLocalhostUrls: Array.from(hiddenSet),
+    };
     const cur = get().previewUrl;
     if (cur && portFromUrl(cur) === port) {
       updates.previewUrl = null;
@@ -2577,6 +2610,7 @@ export const useStore = create<Store>((set, get) => ({
         leadPaneName: null,
         previewUrl: null,
         terminalLocalhostUrls: [],
+        hiddenLocalhostUrls: [],
         panes: {
           ...s.panes,
           [placeholderLeafId]: {
@@ -4304,6 +4338,7 @@ export const useStore = create<Store>((set, get) => ({
       mergeResult: null,
       mergeError: null,
       terminalLocalhostUrls: [],
+      hiddenLocalhostUrls: [],
     });
     await window.cowork.state.setActiveSession(id);
     void get().refreshAgents();
