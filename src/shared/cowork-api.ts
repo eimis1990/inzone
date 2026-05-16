@@ -671,6 +671,21 @@ export interface CoworkApi {
       MarketplaceCatalog | { ok: false; error: string }
     >;
   };
+  preview: {
+    /** Start the chokidar reload-on-save watcher rooted at `cwd`.
+     *  No-op if the same cwd is already being watched. */
+    watchStart(args: { cwd: string }): Promise<
+      { ok: true } | { ok: false; error: string }
+    >;
+    /** Stop the watcher (if any). Always resolves `{ ok: true }`. */
+    watchStop(): Promise<{ ok: true }>;
+    /** Subscribe to file-change events from the watcher. Returns an
+     *  unsubscribe function. The callback fires for every settled
+     *  change matching the watcher's source-file globs. */
+    onFileChanged(
+      listener: (event: { filePath: string }) => void,
+    ): () => void;
+  };
   terminal: {
     spawn(args: {
       cwd: string;

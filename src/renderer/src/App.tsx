@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Panel,
   PanelGroup,
   PanelResizeHandle,
 } from 'react-resizable-panels';
 import { ConversationProvider } from '@elevenlabs/react';
-import { useStore } from './store';
+import { detectLocalhostUrls, useStore } from './store';
 import { AgentSidebar } from './components/AgentSidebar';
 import { WorkspaceBar } from './components/WorkspaceBar';
 import { PaneTree } from './components/PaneTree';
@@ -14,7 +14,7 @@ import { Pane } from './components/Pane';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { EditorModal } from './components/EditorModal';
 import { AppLogo } from './components/AppLogo';
-import { PreviewModal } from './components/PreviewModal';
+import { PreviewPane } from './components/PreviewPane';
 import { TerminalPanel } from './components/TerminalPanel';
 import { PipelineBoardSafe } from './components/PipelineBoardSafe';
 import { ReviewViewSafe } from './components/ReviewViewSafe';
@@ -32,6 +32,55 @@ export function App() {
   const windowMode = useStore((s) => s.windowMode);
   const leadPaneId = useStore((s) => s.leadPaneId);
   const focusedPaneId = useStore((s) => s.focusedPaneId);
+  const paneViewMode = useStore((s) => s.paneViewMode);
+  const setPaneViewMode = useStore((s) => s.setPaneViewMode);
+  // The preview card mounts only when at least one localhost URL is
+  // available — either a user-set previewUrl, a terminal-detected
+  // URL, or an agent-transcript-mined URL that hasn't been hidden.
+  // Without this gate the right-side peek would always show with an
+  // empty webview, which reads as broken. The cheap derived check
+  // avoids triggering re-renders for every transcript update —
+  // `hasPreviewableUrl` is just a boolean.
+  const hasPreviewableUrl = useStore((s) => {
+    if (s.previewUrl) return true;
+    const hidden = new Set(s.hiddenLocalhostUrls.map((u) => u.replace(/\/$/, '')));
+    if (s.terminalLocalhostUrls.some((u) => !hidden.has(u.replace(/\/$/, '')))) {
+      return true;
+    }
+    // Skip the expensive transcript scan unless we genuinely need
+    // to — `detectLocalhostUrls` walks every pane's items. We only
+    // run it when nothing in the cheaper buckets matched.
+    return false;
+  });
+  // If the previously-forward card lost its URL while the user was
+  // looking at the preview, fall back to 'panes' so they don't get
+  // stuck on a useless empty webview. Effect, not a derived value,
+  // because we want the swap animation to play on the transition.
+  useEffect(() => {
+    if (!hasPreviewableUrl && paneViewMode === 'preview') {
+      setPaneViewMode('panes');
+    }
+  }, [hasPreviewableUrl, paneViewMode, setPaneViewMode]);
+  // PreviewPane is heavy — its <webview> tag spawns a full Chromium
+  // renderer process plus whatever the loaded page brings (JS, timers,
+  // websockets, HMR). We only mount it while the user is actually on
+  // the preview side; flipping back to panes unmounts it and kills
+  // the renderer process so a long-running dev server SPA doesn't
+  // sit in the background eating RAM. Unmount is delayed by the
+  // slide-out animation duration (320ms + a small buffer) so the
+  // card animates away with its contents visible instead of going
+  // empty mid-swipe. The preview-host wrapper stays mounted whenever
+  // a URL is available, so the next swap-in has a stationary
+  // translateX(100%) element to animate from.
+  const [previewMounted, setPreviewMounted] = useState(false);
+  useEffect(() => {
+    if (paneViewMode === 'preview' && hasPreviewableUrl && cwd) {
+      setPreviewMounted(true);
+      return;
+    }
+    const t = window.setTimeout(() => setPreviewMounted(false), 340);
+    return () => window.clearTimeout(t);
+  }, [paneViewMode, hasPreviewableUrl, cwd]);
   // The user can flip the project's main area between the regular
   // pane-tree view and the pipeline board (Multi mode only — pipelines
   // don't compose with Lead, where the orchestrator already routes work).
@@ -182,60 +231,89 @@ export function App() {
               <AgentSidebar />
             </div>
           </div>
-          <div className="pane-host">
-            {!cwd ? (
-              <EmptyState />
-            ) : showReview ? (
-              <ReviewViewSafe />
-            ) : showPipelineBoard ? (
-              <PipelineBoardSafe />
-            ) : (
-              // The pane area is wrapped in a single flex-column
-              // container so the PaneTabs strip on top and the
-              // actual pane content below stack cleanly inside the
-              // grid's 1fr row. Without this wrapper, fragments
-              // would create multiple grid items and the layout
-              // breaks (tabs would steal the 1fr instead of the
-              // content). The Lead pane / fullscreen / multi
-              // branches each render their own content piece.
-              <div className="pane-stack">
-                <PaneTabs />
-                {focusedPaneId ? (
-                  // Fullscreen view: a single pane fills the rest
-                  // of the column. Non-focused panes stay alive in
-                  // the store (their sessions keep running), they're
-                  // just not currently rendered.
-                  <div className="pane-fullscreen-host">
-                    <Pane id={focusedPaneId} />
-                  </div>
-                ) : windowMode === 'lead' && leadPaneId ? (
-                  <PanelGroup direction="vertical">
-                    <Panel
-                      defaultSize={38}
-                      minSize={20}
-                      id="lead-panel"
-                      order={0}
-                      className="lead-panel"
-                    >
-                      <div className="lead-slot">
-                        <Pane id={leadPaneId} />
-                      </div>
-                    </Panel>
-                    <PanelResizeHandle className="resize-handle" />
-                    <Panel defaultSize={62} id="subagents-panel" order={1}>
-                      <PaneTree />
-                    </Panel>
-                  </PanelGroup>
-                ) : (
-                  <PaneTree />
-                )}
+          {/* Two cards share this stack — pane-host and the inline
+              browser preview. One is forward at any time, the other
+              slides fully off-screen. The Preview button in the
+              workspace bar is the only swap trigger; clicking it
+              flips `paneViewMode` and CSS does the slide-cross
+              animation.
+              The preview card only mounts when there's a URL to
+              show — without that, the stack is just the pane-host
+              filling the whole width (no preview card, no swap).
+              The terminal dock sits below in the pane-host so its
+              position doesn't move when the cards swap. */}
+          <div
+            className={
+              'pane-preview-stack pane-preview-stack-mode-' +
+              paneViewMode +
+              (hasPreviewableUrl && cwd ? ' has-preview' : '')
+            }
+          >
+            <div className="pane-host">
+              {!cwd ? (
+                <EmptyState />
+              ) : showReview ? (
+                <ReviewViewSafe />
+              ) : showPipelineBoard ? (
+                <PipelineBoardSafe />
+              ) : (
+                // The pane area is wrapped in a single flex-column
+                // container so the PaneTabs strip on top and the
+                // actual pane content below stack cleanly inside
+                // the grid's 1fr row. Without this wrapper,
+                // fragments would create multiple grid items and
+                // the layout breaks (tabs would steal the 1fr
+                // instead of the content). The Lead pane /
+                // fullscreen / multi branches each render their
+                // own content piece.
+                <div className="pane-stack">
+                  <PaneTabs />
+                  {focusedPaneId ? (
+                    // Fullscreen view: a single pane fills the
+                    // rest of the column. Non-focused panes stay
+                    // alive in the store (their sessions keep
+                    // running), they're just not currently
+                    // rendered.
+                    <div className="pane-fullscreen-host">
+                      <Pane id={focusedPaneId} />
+                    </div>
+                  ) : windowMode === 'lead' && leadPaneId ? (
+                    <PanelGroup direction="vertical">
+                      <Panel
+                        defaultSize={38}
+                        minSize={20}
+                        id="lead-panel"
+                        order={0}
+                        className="lead-panel"
+                      >
+                        <div className="lead-slot">
+                          <Pane id={leadPaneId} />
+                        </div>
+                      </Panel>
+                      <PanelResizeHandle className="resize-handle" />
+                      <Panel
+                        defaultSize={62}
+                        id="subagents-panel"
+                        order={1}
+                      >
+                        <PaneTree />
+                      </Panel>
+                    </PanelGroup>
+                  ) : (
+                    <PaneTree />
+                  )}
+                </div>
+              )}
+              {cwd && <TerminalPanel />}
+            </div>
+            {hasPreviewableUrl && cwd && (
+              <div className="preview-host" aria-hidden={paneViewMode !== 'preview'}>
+                {previewMounted && <PreviewPane />}
               </div>
             )}
-            {cwd && <TerminalPanel />}
           </div>
         </div>
         <EditorModal />
-        <PreviewModal />
         <MissionControlSafe />
         <PrModal />
         <WelcomeModal />

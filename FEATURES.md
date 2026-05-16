@@ -220,13 +220,26 @@ Configure quick-action buttons (title + command) from Settings →
 Terminal. They appear above the xterm host and one-click run things
 like `npm run dev`, `npx serve`, `git status`.
 
-### Preview Window
+### Preview Pane
 In-app browser for localhost. INZONE auto-detects URLs printed by
 agents *and* by the terminal (e.g. `Local: http://localhost:5173/`)
-and surfaces a Preview pill in the workspace bar. The pill becomes a
+and surfaces a Preview button in the workspace bar. The button is a
 multi-URL picker when several services are running, with a "kill"
-action to free a port. `⌘⇧P` opens the centered 16:10 preview at 90%
-viewport. Liveness sweeps prune URLs that no longer respond.
+action to free a port. Liveness sweeps prune URLs that no longer
+respond.
+
+Pressing Preview swaps the pane area into a browser card — the
+pane-host slides off-screen left and the preview card slides in from
+the right (full swap, no overlay). Click Preview again (or press
+Esc) to swap back. The preview card has its own toolbar: back /
+forward / reload / address field, a seven-step zoom (with
+⌘+ / ⌘− / ⌘0 shortcuts), a 375px mobile-viewport simulator, an
+auto-reload-on-save toggle (chokidar watches the project's source
+files and reloads when one changes), an inline devtools button, and
+open-in-system-browser / close. The preview is lazy — the webview's
+Chromium renderer process spawns when you swap in and is torn down
+shortly after you swap back out, so an idle session costs no
+background memory.
 
 ### MCP Server Support
 Connect external MCP servers (Figma, JIRA, Atlassian, Context7,

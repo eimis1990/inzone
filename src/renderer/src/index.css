@@ -1805,6 +1805,16 @@ textarea {
      390px in this iteration; tightened to 370 once the visual
      looked too wide for typical content. */
   grid-template-columns: 370px 1fr;
+  /* Explicit 1fr row track. Before v1.21 the OLD `.pane-host` was
+     a `display: grid` container with its own `grid-template-rows`,
+     which propagated a non-zero content height back up through
+     CSS Grid's intrinsic sizing and made the implicit auto row in
+     the body fill the available space. The new `.pane-preview-stack`
+     uses `position: absolute` children that contribute 0 to the
+     parent's content height, so the implicit auto row collapsed to
+     zero. Pinning the row to `1fr` makes its size definite and
+     independent of what the children look like. */
+  grid-template-rows: 1fr;
   min-height: 0;
   transition: grid-template-columns 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
@@ -3623,10 +3633,43 @@ code.voice-tool-card-value {
   flex-shrink: 0;
 }
 
+/* ── Pane / Preview swap stack (v1.21+) ────────────────────────── */
+/* Wraps the pane-host and the inline browser preview side-by-side.
+   One card is "forward" (full width minus 24px peek lane), the other
+   peeks 24px from the opposite edge. Clicking the peeking lane (or
+   the Preview button in the workspace bar) flips `paneViewMode`,
+   which switches the mode class and triggers the slide-cross
+   transition.
+
+   The stack owns the outer margin (was on `.pane-host` before this
+   refactor) so both cards share the same outer bounds and the swap
+   reads as cards LITERALLY exchanging positions, not a content
+   reflow. `overflow: hidden` clips the shifted-off card to the
+   stack's bounding box. `container-type: inline-size` lets us use
+   `cqi` units inside the cards' transforms — clean math without
+   JS-driven width measurement. */
+.pane-preview-stack {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  margin: 0 20px 20px 20px;
+  container-type: inline-size;
+  /* No explicit height — `.body`'s `grid-template-rows: 1fr` gives
+     this grid item a definite row track, and the default
+     `align-self: stretch` makes the stack fill it. With margins
+     INSIDE that filled space, the 20px bottom margin produces a
+     visible gutter against the bottom of the page (matching the
+     sidebar's own bottom gutter). An earlier `height: 100%`
+     bypassed the margin model and pushed the stack 20px past the
+     bottom of the screen. */
+}
+
 .pane-host {
   min-width: 0;
   min-height: 0;
-  position: relative;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   /* Two rows: pane content (1fr) on top, terminal dock (auto) below.
      The dock's bar always reserves its small height — the open overlay
@@ -3635,13 +3678,55 @@ code.voice-tool-card-value {
   grid-template-rows: 1fr auto;
   /* v1.15 frame design — round the OUTER pane container to match
      the workspace-bar frame. Border matches `#1F1F1F` from the
-     workspace bar, 12px radius. Margin around three edges so the
-     rounded corners are visible against the page bg (left edge sits
-     flush against the sidebar so there's no double gap). overflow:
-     hidden above already clips internal panes to the rounded shape. */
-  margin: 0 20px 20px 20px;
+     workspace bar, 12px radius. Margin moved up to the stack in
+     v1.21 so both cards share the same outer bounds during the
+     swap; `inset: 0` fills the stack now. */
   border: 1px solid var(--frame-border);
   border-radius: 12px;
+  /* Slide animation when paneViewMode flips. The `transform` baseline
+     is set by the parent stack's mode class (rules below). */
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Preview card — same chrome as pane-host so the two read as a
+   matched pair when they swap. Different background (var(--bg-elev)
+   so the inset toolbar reads as a band against the page) and an
+   internal flex column for toolbar + body. */
+.preview-host {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--frame-border);
+  border-radius: 12px;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Full-swap mode (v1.21 final): the back card slides ENTIRELY off
+   the stack to its side. No peek lane — the Preview button in the
+   workspace bar is the only way to swap. Reasons we dropped the
+   peek:
+   • The back card's visible edge often looked like a broken/blank
+     sliver (the webview hasn't loaded its left edge content yet,
+     or the pane content has no chrome at its right edge).
+   • A button-only toggle is easier to discover and matches the
+     spatial mental model people have for tab-style swaps. */
+.pane-preview-stack.has-preview.pane-preview-stack-mode-panes .pane-host {
+  transform: translateX(0);
+}
+.pane-preview-stack.has-preview.pane-preview-stack-mode-panes .preview-host {
+  /* Off-screen right — fully hidden by the stack's overflow clip. */
+  transform: translateX(100%);
+}
+.pane-preview-stack.has-preview.pane-preview-stack-mode-preview .pane-host {
+  transform: translateX(-100%);
+}
+.pane-preview-stack.has-preview.pane-preview-stack-mode-preview .preview-host {
+  transform: translateX(0);
 }
 
 /* ─── Terminal dock (bottom of pane host) ────────────────────────────── */
@@ -4027,6 +4112,19 @@ code.voice-tool-card-value {
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* PreviewPane's outer wrapper — fills the host (`.preview-host`),
+   stacks toolbar + body vertically. Without `flex: 1` + `min-height:
+   0` here the inner body collapses to the webview's natural height
+   (often a fraction of the viewport) and a white band shows below
+   the rendered page. */
+.preview-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
 .preview-toolbar {
   display: flex;
   align-items: center;
@@ -4057,6 +4155,44 @@ code.voice-tool-card-value {
 .preview-tool-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+/* Active state for toggle buttons (mobile viewport, auto-reload,
+   devtools). Picks up the accent so the user can see at a glance
+   which features are on. */
+.preview-tool-btn.active {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-elev-2));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--accent);
+}
+
+/* Zoom group — minus button, percent readout (clickable to
+   reset), plus button. Tight gap so the three controls read as
+   one unit instead of three loose buttons. */
+.preview-zoom-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  margin-left: 4px;
+  margin-right: 4px;
+}
+.preview-zoom-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.preview-zoom-label:hover {
+  background: var(--bg-elev);
+  border-color: var(--border-strong);
 }
 
 .preview-url-wrap {
@@ -4115,13 +4251,60 @@ code.voice-tool-card-value {
 .preview-body {
   flex: 1;
   min-height: 0;
-  background: #ffffff;
+  /* `var(--bg)` (the deep app bg) instead of hard white. If the
+     webview ever paints slightly smaller than its container during
+     a layout reflow, the visible underfill blends with the rest of
+     Inzone's chrome instead of flashing a white slab. */
+  background: var(--bg);
   position: relative;
+  /* Flex container so a child `.preview-webview` with `flex: 1`
+     fills the remaining space. The previous attempt used
+     `position: absolute; inset: 0` on the webview itself — that
+     conflicts with the inline pixel `width`/`height` written by the
+     ResizeObserver, and Electron's webview ended up rendering at
+     its intrinsic short size (~350px) regardless. Flex layout is
+     the Electron-recommended pattern for webview sizing. */
+  display: flex;
+}
+/* Mobile viewport simulator — clamps the webview to 375px wide
+   centred in the body. The dark frame on either side reads as
+   "phone bezel" and signals to the user that the rendered page is
+   being shown at a constrained viewport, not the full pane. */
+.preview-body.preview-body-mobile {
+  align-items: stretch;
+  justify-content: center;
+  padding: 16px 0;
+}
+.preview-body.preview-body-mobile .preview-webview {
+  /* Override the default `flex: 1` — in mobile mode we want a
+     FIXED 375px width regardless of body width, with the height
+     still filling the available space (align-items: stretch
+     handles that on the cross axis). */
+  flex: 0 0 375px;
+  width: 375px;
+  /* Soft corners + faint outline mimic a phone frame without
+     going hard on the chrome-y device-mockup look. */
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+  background: #fff;
 }
 .preview-webview {
-  width: 100%;
-  height: 100%;
-  display: inline-flex;
+  /* Electron-recommended sizing pattern: `display: flex` on the
+     webview itself (so the renderer doesn't trip over the
+     inline-element gap that `<webview>` inherits from its iframe
+     ancestry) plus `flex: 1` so it stretches inside the flex-
+     parent body. `min-height: 0` lets it shrink below its
+     intrinsic-content size when the body is short.
+     The previous attempt at `position: absolute; inset: 0`
+     conflicted with the inline pixel width/height the
+     ResizeObserver writes, leaving the webview stuck at its
+     short intrinsic size. */
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
   border: 0;
 }
 .preview-empty {

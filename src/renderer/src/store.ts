@@ -262,6 +262,16 @@ interface StoreState {
   sidebarCollapsed: boolean;
   soundEnabled: boolean;
   windowMode: WindowMode;
+  /**
+   * Which surface is forward in the pane/preview swap (v1.21+).
+   *   - 'panes'   — pane-host fills the body, browser preview peeks
+   *                 24px from the right edge (when a URL is detected)
+   *   - 'preview' — browser preview fills the body, pane-host peeks
+   *                 24px from the left edge
+   * Per-session; defaults to 'panes' on fresh sessions and after
+   * project switches. The swap animation lives in CSS — flipping
+   * this value triggers a slide-cross transition on the stack. */
+  paneViewMode: 'panes' | 'preview';
   /** Pane id of the Lead agent when windowMode === 'lead'. */
   leadPaneId: PaneId | null;
   /**
@@ -538,6 +548,13 @@ interface StoreActions {
   deleteCustomTaskTemplate: (id: string) => Promise<void>;
   toggleSound: () => void;
   setWindowMode: (mode: WindowMode) => void;
+  /** Toggle between 'panes' and 'preview' for the pane/preview swap.
+   *  Used by the Preview button in the workspace bar AND by clicks
+   *  on the peeking edge of the back card. */
+  togglePaneViewMode: () => void;
+  /** Set the pane/preview swap to a specific mode (rare — used to
+   *  force back to 'panes' when the URL list goes empty). */
+  setPaneViewMode: (mode: 'panes' | 'preview') => void;
   setLeadAgent: (agentName: string) => Promise<void>;
   refreshUsage: () => Promise<void>;
   setMemoryScope: (scope: MemoryScope) => void;
@@ -1378,6 +1395,7 @@ export const useStore = create<Store>((set, get) => ({
   sidebarCollapsed: false,
   soundEnabled: true,
   windowMode: 'multi',
+  paneViewMode: 'panes',
   leadPaneId: null,
   leadPaneName: null,
   memoryScope: 'project' as MemoryScope,
@@ -1747,6 +1765,7 @@ export const useStore = create<Store>((set, get) => ({
       panes: { [id]: { id, status: 'idle', items: [] } },
       activePaneId: id,
       windowMode: 'multi',
+  paneViewMode: 'panes',
       leadPaneId: null,
       leadPaneName: null,
       memoryScope: 'project',
@@ -2606,6 +2625,7 @@ export const useStore = create<Store>((set, get) => ({
         tree: { kind: 'leaf', id: placeholderLeafId },
         activePaneId: placeholderLeafId,
         windowMode: 'multi',
+  paneViewMode: 'panes',
         leadPaneId: null,
         leadPaneName: null,
         previewUrl: null,
@@ -2952,6 +2972,16 @@ export const useStore = create<Store>((set, get) => ({
     } catch {
       // ignore — telemetry should never break the app
     }
+  },
+
+  togglePaneViewMode: () => {
+    set((s) => ({
+      paneViewMode: s.paneViewMode === 'panes' ? 'preview' : 'panes',
+    }));
+  },
+  setPaneViewMode: (mode) => {
+    if (mode === get().paneViewMode) return;
+    set({ paneViewMode: mode });
   },
 
   setWindowMode: (mode) => {
@@ -3427,6 +3457,7 @@ export const useStore = create<Store>((set, get) => ({
       },
       activePaneId: newPaneId,
       windowMode: 'multi',
+  paneViewMode: 'panes',
       leadPaneId: null,
       leadPaneName: null,
       memoryScope: 'project',
@@ -3503,6 +3534,7 @@ export const useStore = create<Store>((set, get) => ({
       },
       activePaneId: newPaneId,
       windowMode: 'multi',
+  paneViewMode: 'panes',
       leadPaneId: null,
       leadPaneName: null,
       memoryScope: 'project',
@@ -4485,6 +4517,7 @@ export const useStore = create<Store>((set, get) => ({
           windowId: nanoid(10),
           activePaneId: null,
           windowMode: 'multi',
+  paneViewMode: 'panes',
           leadPaneId: null,
   leadPaneName: null,
                   memoryScope: 'project',

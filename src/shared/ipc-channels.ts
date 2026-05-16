@@ -84,6 +84,13 @@ export const IPC = {
   PLUGINS_INSTALL: 'plugins:install',
   PLUGINS_UNINSTALL: 'plugins:uninstall',
   PLUGINS_SET_ENABLED: 'plugins:setEnabled',
+
+  // Preview reload-on-save — main-process chokidar watcher on the
+  // project cwd; pings the renderer on every source-file change so
+  // the inline browser preview reloads.
+  PREVIEW_WATCH_START: 'preview:watch:start',
+  PREVIEW_WATCH_STOP: 'preview:watch:stop',
+  PREVIEW_FILE_CHANGED: 'preview:fileChanged', // main -> renderer push
   MARKETPLACES_LIST: 'plugins:marketplaces:list',
   MARKETPLACES_ADD: 'plugins:marketplaces:add',
   MARKETPLACES_REMOVE: 'plugins:marketplaces:remove',

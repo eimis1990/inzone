@@ -29,6 +29,7 @@ import {
   setPluginEnabled,
   uninstallPlugin,
 } from './plugins';
+import { startPreviewWatch, stopPreviewWatch } from './preview-watcher';
 import { buildLeadPrompt, createLeadToolServer } from './lead-tools';
 import {
   createAskUserQuestionServer,
@@ -896,6 +897,13 @@ export function registerIpcHandlers(): void {
     async (_e, args: { name: string; enabled: boolean }) =>
       setPluginEnabled(args.name, args.enabled),
   );
+
+  // -- Preview reload-on-save (chokidar watcher) -----------------------------
+  ipcMain.handle(
+    IPC.PREVIEW_WATCH_START,
+    async (_e, args: { cwd: string }) => startPreviewWatch(args),
+  );
+  ipcMain.handle(IPC.PREVIEW_WATCH_STOP, async () => stopPreviewWatch());
   ipcMain.handle(IPC.MARKETPLACES_LIST, async () => listMarketplaces());
   ipcMain.handle(
     IPC.MARKETPLACES_ADD,

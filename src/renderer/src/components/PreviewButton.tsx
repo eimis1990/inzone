@@ -19,7 +19,13 @@ import { detectLocalhostUrls, useStore } from '../store';
 export function PreviewButton() {
   const previewUrl = useStore((s) => s.previewUrl);
   const setPreviewUrl = useStore((s) => s.setPreviewUrl);
-  const openPreview = useStore((s) => s.openPreview);
+  // v1.21 — the Preview button no longer opens a modal. Instead it
+  // toggles the pane/preview swap. Label switches between "Preview"
+  // and "Panes" depending on which card is currently forward so the
+  // button always reads as "the OTHER view".
+  const paneViewMode = useStore((s) => s.paneViewMode);
+  const togglePaneViewMode = useStore((s) => s.togglePaneViewMode);
+  const setPaneViewMode = useStore((s) => s.setPaneViewMode);
   const tree = useStore((s) => s.tree);
   const leadPaneId = useStore((s) => s.leadPaneId);
   const panes = useStore((s) => s.panes);
@@ -70,28 +76,38 @@ export function PreviewButton() {
 
   const handleActivate = () => {
     if (urls.length === 0) {
-      // Nothing detected — still open the modal so the user can paste
-      // a URL by hand. The modal's empty state explains what to do.
-      openPreview();
+      // No URL detected — nothing to swap to. Don't toggle (the
+      // preview card wouldn't mount anyway because of the
+      // `hasPreviewableUrl` gate in App.tsx). Leaving the menu
+      // closed too — there's no useful dropdown when the URL
+      // list is empty.
       return;
     }
-    if (urls.length === 1) {
-      // Commit the detected URL into store so PreviewModal's
-      // `effectiveUrl` resolves to it. Without this the modal opens but
-      // shows "No URL yet" because previewUrl is null and the modal's
-      // own pane-only fallback finds nothing.
+    if (urls.length > 1 && paneViewMode === 'panes') {
+      // Multiple URLs and we're about to swap INTO preview mode
+      // — show the picker so the user chooses which URL the
+      // preview card should load before the swap. Single-URL
+      // case skips the picker and swaps directly.
+      setShowMenu((v) => !v);
+      return;
+    }
+    // Single URL OR we're already in preview mode (toggling back).
+    // For the single-URL case, commit the URL so the preview card
+    // resolves to it on the first render.
+    if (urls.length === 1 && paneViewMode === 'panes') {
       const only = urls[0];
       if (previewUrl !== only) setPreviewUrl(only);
-      openPreview();
-    } else {
-      setShowMenu((v) => !v);
     }
+    togglePaneViewMode();
   };
 
   const pick = (url: string) => {
     setPreviewUrl(url);
     setShowMenu(false);
-    openPreview();
+    // Pick always lands the user in preview mode — the menu only
+    // opens when they're swapping IN, never when they're already
+    // viewing.
+    setPaneViewMode('preview');
   };
 
   /**
@@ -346,26 +362,39 @@ export function PreviewButton() {
 
   const hasUrls = urls.length > 0;
   const displayed = urls[0];
+  // Label + tooltip flip with paneViewMode. In 'panes' mode the
+  // button reads "Preview" — clicking swaps to the preview card.
+  // In 'preview' mode it reads "Panes" — clicking swaps back.
+  // The displayed port chip stays on both states so the user can
+  // see which URL is being previewed without opening anything.
+  const inPreviewMode = paneViewMode === 'preview';
+  const buttonLabel = inPreviewMode ? 'Panes' : 'Preview';
   const tooltip = !hasUrls
-    ? 'No localhost servers detected — click to open the preview window and paste a URL (⌘P)'
-    : urls.length > 1
-      ? `${urls.length} localhost URLs detected — click to choose (⌘P)`
-      : `${displayed} (⌘P)`;
+    ? 'No localhost servers detected — start a dev server or paste a URL into a transcript'
+    : inPreviewMode
+      ? 'Back to panes (Esc)'
+      : urls.length > 1
+        ? `${urls.length} localhost URLs detected — click to choose (⌘P)`
+        : `${displayed} (⌘P)`;
   return (
     <div className="preview-pill-wrap" ref={wrapRef}>
       <button
         type="button"
-        className={'wb-pill preview-pill' + (!hasUrls ? ' preview-pill-empty' : '')}
+        className={
+          'wb-pill preview-pill' +
+          (!hasUrls ? ' preview-pill-empty' : '') +
+          (inPreviewMode ? ' preview-pill-active' : '')
+        }
         onClick={handleActivate}
         title={tooltip}
+        disabled={!hasUrls}
       >
         <PreviewIcon />
-        <span className="wb-pill-label">Preview</span>
-        {hasUrls && (
-          <span className="preview-pill-meta">
-            {urls.length > 1 ? `${urls.length}` : shortPort(displayed)}
-          </span>
-        )}
+        <span className="wb-pill-label">{buttonLabel}</span>
+        {/* Port chip removed in v1.21 — the inline preview now
+            displays its own URL in its toolbar, so duplicating
+            the port on the button felt noisy. Multi-URL dropdown
+            still triggers from this button on click. */}
       </button>
       {showMenu && urls.length > 1 && (
         <div className="dropdown preview-pill-menu">

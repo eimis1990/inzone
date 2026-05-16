@@ -575,6 +575,18 @@ const api: CoworkApi = {
     ): Promise<MarketplaceCatalog | { ok: false; error: string }> =>
       ipcRenderer.invoke(IPC.MARKETPLACES_FETCH_CATALOG, args),
   },
+  preview: {
+    watchStart: (args: { cwd: string }) =>
+      ipcRenderer.invoke(IPC.PREVIEW_WATCH_START, args),
+    watchStop: () => ipcRenderer.invoke(IPC.PREVIEW_WATCH_STOP),
+    onFileChanged: (listener: (e: { filePath: string }) => void) => {
+      const handler = (_e: unknown, payload: { filePath: string }) =>
+        listener(payload);
+      ipcRenderer.on(IPC.PREVIEW_FILE_CHANGED, handler);
+      return () =>
+        ipcRenderer.removeListener(IPC.PREVIEW_FILE_CHANGED, handler);
+    },
+  },
   terminal: {
     spawn: (args: {
       cwd: string;
