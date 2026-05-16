@@ -8775,6 +8775,31 @@ select:focus {
   pointer-events: none;
 }
 
+/* Bezier edge + arrowhead + anchor dots. Classed so the colour can
+   swap with theme — the previous inline rgba(255,...) values were
+   invisible on the cream paper background. Dark-theme defaults
+   match the old hardcoded whites; the light-theme override uses an
+   ink-coloured ramp so the connectors read against the paper. */
+.flow-edge {
+  stroke: rgba(255, 255, 255, 0.55);
+}
+.flow-edge-anchor {
+  fill: rgba(255, 255, 255, 0.72);
+}
+.flow-arrow-head {
+  fill: rgba(255, 255, 255, 0.92);
+}
+
+:root.theme-light .flow-edge {
+  stroke: rgba(60, 50, 38, 0.55);
+}
+:root.theme-light .flow-edge-anchor {
+  fill: rgba(60, 50, 38, 0.7);
+}
+:root.theme-light .flow-arrow-head {
+  fill: rgba(60, 50, 38, 0.82);
+}
+
 .flow-empty {
   position: absolute;
   top: 80px;
@@ -13105,6 +13130,27 @@ select:focus {
 }
 .review-line-ctx {
   color: var(--text-dim);
+}
+
+/* Light theme — the dark-mode pastels (#b2eabc / #f4a8af) all but
+   disappear on the cream paper background, and the 10% rgba bands
+   read as no-tint-at-all. Replace with GitHub-style deep saturated
+   tints + ink-dark text for both bg contrast AND legibility. The
+   left rail (`box-shadow inset`) also gets a stronger accent so the
+   add/remove side-bar is visible from a glance even on a small
+   monitor. */
+:root.theme-light .review-line-add {
+  background: rgba(34, 134, 58, 0.16);
+  color: rgb(15, 70, 30);
+  box-shadow: inset 3px 0 0 rgba(34, 134, 58, 0.55);
+}
+:root.theme-light .review-line-del {
+  background: rgba(190, 50, 55, 0.14);
+  color: rgb(110, 22, 28);
+  box-shadow: inset 3px 0 0 rgba(190, 50, 55, 0.55);
+}
+:root.theme-light .review-line-ctx {
+  color: rgb(70, 60, 50);
 }
 
 .review-empty,

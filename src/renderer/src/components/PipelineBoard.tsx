@@ -555,9 +555,13 @@ export function PipelineBoard() {
                 markerHeight="10"
                 orient="auto-start-reverse"
               >
+                {/* Class-based fill so the light theme can override —
+                    inline `fill="rgba(255,...)"` would beat any CSS
+                    rule. Default (dark theme) values live in the
+                    `.flow-arrow-head` rule. */}
                 <path
                   d="M 0 0 L 10 5 L 0 10 z"
-                  fill="rgba(255, 255, 255, 0.92)"
+                  className="flow-arrow-head"
                 />
               </marker>
             </defs>
@@ -566,7 +570,7 @@ export function PipelineBoard() {
                 <path
                   d={p.d}
                   fill="none"
-                  stroke="rgba(255, 255, 255, 0.55)"
+                  className="flow-edge"
                   strokeWidth="1.75"
                   strokeLinecap="round"
                   markerEnd="url(#flow-arrow)"
@@ -578,13 +582,13 @@ export function PipelineBoard() {
                   cx={p.ax}
                   cy={p.ay}
                   r="3"
-                  fill="rgba(255, 255, 255, 0.72)"
+                  className="flow-edge-anchor"
                 />
                 <circle
                   cx={p.bx}
                   cy={p.by}
                   r="3"
-                  fill="rgba(255, 255, 255, 0.72)"
+                  className="flow-edge-anchor"
                 />
               </g>
             ))}

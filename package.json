@@ -1,6 +1,6 @@
 {
   "name": "inzone",
-  "version": "1.21.0",
+  "version": "1.22.0",
   "description": "INZONE — a desktop cockpit for running multiple Claude Agent SDK sessions side-by-side.",
   "main": "out/main/index.mjs",
   "author": {

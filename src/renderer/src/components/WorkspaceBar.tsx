@@ -87,6 +87,19 @@ export function WorkspaceBar() {
     return () => window.removeEventListener('inzone:open-settings', handler);
   }, []);
 
+  // ⌘S toggles the Settings drawer. App.tsx owns the keyboard
+  // handler and fires this event when ⌘S is pressed outside text
+  // inputs; we flip the drawer open/closed here. When opening,
+  // 'profile' is the default landing section — same as clicking
+  // the gear without coming from a deep-link.
+  useEffect(() => {
+    const handler = () => {
+      setDrawerSection((current) => (current === null ? 'profile' : null));
+    };
+    window.addEventListener('inzone:toggle-settings', handler);
+    return () => window.removeEventListener('inzone:toggle-settings', handler);
+  }, []);
+
   const handleCreateWorkspace = async () => {
     const name = newWorkspaceName.trim();
     setNewWorkspaceName('');

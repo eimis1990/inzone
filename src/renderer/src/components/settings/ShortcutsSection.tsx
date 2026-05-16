@@ -50,7 +50,9 @@ const GROUPS: ShortcutGroup[] = [
       {
         mods: ['cmd'],
         key: 'P',
-        action: 'Open the Preview window for the active session',
+        action: 'Swap between panes and preview',
+        context:
+          'Same shortcut both ways — opens preview from panes, returns to panes from preview',
       },
       {
         mods: ['cmd'],
@@ -62,6 +64,18 @@ const GROUPS: ShortcutGroup[] = [
         mods: ['cmd'],
         key: 'T',
         action: 'Toggle the terminal panel',
+      },
+      {
+        mods: ['cmd'],
+        key: 'S',
+        action: 'Open / close Settings',
+      },
+      {
+        mods: ['cmd'],
+        key: 'M',
+        action: 'Toggle Multi Agents ↔ Lead Agent mode',
+        context:
+          'Overrides the macOS minimize shortcut while INZONE is focused — use the traffic-light buttons to minimize',
       },
       {
         mods: ['cmd', 'shift'],

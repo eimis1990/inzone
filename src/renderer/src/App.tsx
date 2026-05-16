@@ -172,6 +172,68 @@ export function App() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // ⌘S / Ctrl+S toggles the Settings drawer. The drawer's open state
+  // lives inside WorkspaceBar (it owns the drawer), so we fire a
+  // window-level custom event the bar listens to instead of routing
+  // through the store. Skipped when focus is inside a text input so
+  // ⌘S still works inside the wiki editor (which uses it to save).
+  // Trade-off: the OS default ⌘S (browser-style save-as) doesn't
+  // exist in INZONE so there's nothing to clash with at the app
+  // level — but in CodeMirror surfaces we want the editor's own
+  // save handler to win, hence the text-input opt-out.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.shiftKey || e.altKey) return;
+      if (e.key.toLowerCase() !== 's') return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        target?.isContentEditable ||
+        target?.closest('.cm-editor')
+      ) {
+        return;
+      }
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent('inzone:toggle-settings'));
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // ⌘M / Ctrl+M toggles the project's window mode between Multi
+  // Agents and Lead Agent. On macOS, ⌘M is the OS-level minimize-
+  // window shortcut — we override it while INZONE is focused so the
+  // mode toggle gets the muscle memory. Users who want to minimize
+  // can still use the green-yellow-red traffic-light buttons or
+  // ⌘H to hide. Gated on having a cwd so the toggle doesn't fire
+  // on the empty "pick a folder" screen.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.shiftKey || e.altKey) return;
+      if (e.key.toLowerCase() !== 'm') return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        target?.isContentEditable ||
+        target?.closest('.cm-editor')
+      ) {
+        return;
+      }
+      const state = useStore.getState();
+      if (!state.cwd) return;
+      e.preventDefault();
+      state.setWindowMode(state.windowMode === 'multi' ? 'lead' : 'multi');
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   // PR inbox auto-poll for the active project. Fires once on app
   // boot (so the pill has data when the user clicks), then every
   // 5 minutes while the window is focused. Blur pauses; focus

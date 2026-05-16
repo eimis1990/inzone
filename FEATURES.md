@@ -163,15 +163,114 @@ server set, and model. Curated agents stay focused on their job and
 don't accidentally use the wrong tool.
 
 ### Agents & Skills Library
-The Settings → Agents and Settings → Skills sections present every
-agent and skill as a card with its color stripe, emoji, name, model,
-description, and footer chips for tools/skills. Search and create
-buttons sit in a sticky toolbar so they're always reachable.
+The Settings → Agents page is a sortable table of every agent
+(humanized name + emoji avatar, description, model, capability
+counts, scope). Click any row to open the editor. Settings → Skills
+is a two-column layout — your own skills on the left as a separated
+list with a pinned header + count badge + sort, and a Recommended
+Skills rail on the right (curated, one-click installs like
+VoltAgent's Awesome Design, Printing Press skills, Slack, Linear,
+Stripe, Notion, Hacker News, Shopify, Firecrawl, Figma, X/Twitter,
+and others). Recommended cards show a 🔑 "Needs setup" chip for
+skills that require API keys and surface a setup guide block in
+the detail modal with signup link, env-var name, and step-by-step
+instructions. Skill creation + editing opens in a 960px right-side
+drawer with a CodeMirror Markdown editor.
 
 ### Workspace Presets
 Save your current pane layout + agent assignments + folder + mode +
 pipeline configuration as a named preset. Loading a preset restores
 everything in one move.
+
+### Tasks — One-Click Workflow Recipes
+Pre-wired templates that configure the workspace for a specific
+kind of work. Pick a template and INZONE switches to the right mode,
+optionally binds the Lead agent, creates one pane per agent the
+recipe needs, and pre-assigns them — saves 5–10 clicks per task
+setup. Nine built-in recipes ship with the app:
+
+- 🎨 **Website Redesign** (Lead) — extract spec → redesign UI →
+  implement → review
+- 📱 **Mobile Feature** (Lead) — design + developer + code reviewer
+- 🚀 **Greenfield Project** (Lead) — frontend + backend + fullstack
+  + reviewer
+- 🐛 **Bug Fix** (Lead) — fullstack dev + reviewer
+- 🔍 **Code Review** (Multi) — reviewer paired with a developer
+- 🌐 **Browser Automation** (Multi) — browser agent + reviewer
+- 🎯 **Frontend Sprint** / 🛠️ **Backend Sprint** (Multi)
+- 🦄 **Solo Builder** (Multi) — single-pane talk-it-out flow
+
+Templates filter by what you have installed — adding new agents
+progressively unlocks more recipes. The Tasks modal also shows your
+live pane configuration as a "Current session" card with editable
+title, description, and emoji and a Save action; saved templates
+persist across restarts. Broken custom templates (referencing agents
+you've renamed or deleted) are flagged with a red ✗ missing
+treatment instead of silently breaking.
+
+### Plugins + Marketplaces
+Full lifecycle for the Claude Code plugin format — bundles that can
+contribute any combination of agents, skills, slash commands, MCP
+servers, and hooks — managed entirely from inside Settings →
+Plugins. Two-column layout: installed plugins + marketplaces on the
+left, a Recommended Marketplaces rail on the right with starter
+entries (Anthropic's official `claude-code` marketplace and the
+`claude-code-plugins` examples repo). Click Browse on a marketplace
+to slide a 720px drawer in from the right that lists every plugin
+with per-row Install / Uninstall actions, name, description, author,
+version, license, and a View source link.
+
+- **Activation toggle** — each installed plugin carries an
+  enabled/disabled flag. When enabled, the plugin's `agents/`,
+  `skills/`, `commands/`, and `mcp.json` contents fold into INZONE's
+  existing tabs and the composer's `/` picker; disabled plugins stay
+  on disk but contribute nothing. State mirrors into Claude Code's
+  `~/.claude/settings.json` `enabledPlugins` array so the two apps
+  stay in sync.
+- **"From plugin" attribution** — agents, skills, slash commands,
+  and MCP servers contributed by an installed plugin carry a green
+  source chip distinct from the project-scope chip, so you always
+  know where a thing came from.
+
+### Slash Commands in the Composer
+A `/` button left of the paperclip opens a searchable popover above
+the composer listing every slash command available for the active
+pane's project. Sources merge in priority order:
+`<project>/.claude/commands/*.md` (project-local) →
+`~/.claude/commands/*.md` (user-global) → plugins (when enabled)
+→ five built-in starters (`/plan`, `/think`, `/review`, `/explain`,
+`/test`). Pick a command and a pane-accent badge mounts at the top
+of the composer; on send the template is expanded with your typed
+text as `$ARGUMENTS`. Typing `/` as the first character of an empty
+composer also opens the picker with the rest of the token as the
+initial filter. Lists refresh on every picker open so commands
+freshly dropped into `~/.claude/commands/` show up without a
+restart. Works in the inline composer and the expand-message modal.
+
+### Pane Focus Tabs
+A horizontal strip below the workspace bar with one tab per pane
+plus an "All" tab. Click a pane tab to fullscreen that pane (the
+others stay alive — sessions keep running, transcripts intact, just
+not currently rendered). Click "All" to return to multi-pane view.
+Each tab carries the agent's emoji and a soft agent-coloured
+underline + bloom when selected. ⌘F toggles fullscreen on the
+active pane. Hidden in Flow mode and when there's only one pane.
+
+### Project Wiki + Wiki Protocol
+A markdown wiki at `.inzone/wiki/` that agents can read, edit, and
+cite. INZONE bundles a non-editable agent contract — the **Inzone
+Wiki Protocol** — that auto-injects into every agent's system prompt
+the moment a project initialises a wiki. The protocol is imperative
+("after EVERY task that read code → update at least one page") with
+a pre-response checklist, and it overrides softer wiki guidance in
+CLAUDE.md. A read-only viewer in Settings → CLAUDE.md shows the
+exact text being injected, with a live status line indicating
+whether the wiki is active for the current project. The voice
+agent's `list_wiki_pages`, `read_wiki_page`, and `search_wiki`
+tools let you ask project-specific questions and get answers
+grounded in real wiki content. Read/Write/Edit calls targeting
+`.inzone/wiki/` paths render a yellow "Wiki read" / "Wiki updated"
+badge in the transcript so wiki activity is easy to spot.
 
 ---
 
@@ -243,10 +342,21 @@ background memory.
 
 ### MCP Server Support
 Connect external MCP servers (Figma, JIRA, Atlassian, Context7,
-Supabase, GitHub, Filesystem, custom). Settings → MCP Servers has a
-curated wizard with one-click presets, plus a Custom flow for stdio
-or HTTP/SSE remote servers. MCP servers from Claude Code's
-project-local and project-other config files are read in too.
+Supabase, GitHub, Filesystem, custom). Settings → MCP Servers is a
+two-column layout: the left column owns your own configured
+servers (info banner + toolbar + scope groups, scrolls
+independently), the right column is a **Recommended MCPs** rail
+with thirteen one-click installs — eight local stdio servers
+(Filesystem, Memory, Sequential Thinking, Everything, Playwright,
+Brave Search, PostgreSQL, SQLite) and five remote OAuth connectors
+(Atlassian, Linear, Asana, Notion, Stripe). Each card shows a
+transport chip (Local / Remote · SSE / Remote · HTTP) and a
+"Needs setup" chip when API keys or paths are required. Zero-config
+stdio writes the entry to `~/.claude.json` directly; stdio with
+`<placeholder>` args/env opens the editor pre-populated; remote
+entries trigger the standard MCP OAuth handshake. MCP servers from
+Claude Code's project-local and project-other config files are read
+in too.
 
 - **Native OAuth (PKCE)**: connectors that need OAuth (Atlassian,
   Linear, etc.) authenticate via a built-in localhost callback flow,
@@ -288,6 +398,60 @@ form card — single or multi-select, options with descriptions, big
 clickable cards. The user's answer flows back to the agent as a tool
 result and the conversation continues naturally. Available to every
 agent automatically.
+
+### Vim Mode + Editor Preferences
+Settings → Editor has a Vim-mode toggle that applies across every
+CodeMirror surface in the app — agent / skill prompt editor, wiki
+page editor, CLAUDE.md editor, and the MCP raw-JSON view. Backed by
+`@replit/codemirror-vim`: modal editing with normal / insert /
+visual, registers, marks, search, and dot-repeat. Toggling takes
+effect immediately in every open editor (and across every open
+INZONE window) without a reload, via a dedicated
+`editorPrefs:changed` IPC broadcast.
+
+### GPU-Accelerated Terminal
+Both the bottom-dock terminal and per-pane terminal panes load
+`@xterm/addon-webgl`, drawing through the GPU instead of canvas2D.
+Noticeably smoother scrolling under heavy output (build logs,
+`npm install`, test runs). Falls back automatically to the default
+renderer if a WebGL context can't be acquired and recovers
+gracefully if the GPU process drops the context mid-session.
+
+### Auto-Scroll Pin + Jump to Latest
+The chat scroller auto-snaps to the bottom only when you're already
+at the bottom (within 64px). Scroll up to read older context and
+the lock releases — new content arriving from the agent doesn't
+yank you back. When you're scrolled up and new content lands, a
+small "↓ Jump to latest" pill appears that snaps you back and
+re-pins. A ResizeObserver on the scroller catches every height
+change (streaming text, expanding tool blocks, image loads), so
+the pin tracks the actual content even while text is still
+streaming.
+
+### Theme — Light + Dark
+The whole UI is theme-aware. Dark mode (default) is INZONE's deep
+slate + yellow-amber palette; light mode is a warm paper-and-ink
+palette with terracotta accents and a subtle paper-grain texture
+on the body. A toggle in the workspace bar flips between the two
+live. Every surface — terminal overlay shadow, mode-switch thumb,
+recommended-skill cards, modal chrome, app logo — picks up the
+active theme via CSS variables.
+
+### Settings → Shortcuts
+A single reference page listing every keyboard shortcut wired into
+INZONE, grouped by surface (Workspace, Composer, Editor & modals).
+Modifier glyphs swap automatically — ⌘ ⇧ ⌥ on macOS,
+Ctrl / Shift / Alt on Windows and Linux — so each user sees what
+their actual keyboard says.
+
+### About + Release Notes
+Settings → About shows the running app version, a manual "Check
+for updates" button that delegates to electron-updater, and the
+full CHANGELOG (most recent release auto-expanded, the rest
+click-to-expand, with a count chip). Releases render as collapsible
+cards with tinted Added / Changed / Fixed headings (green / accent
+/ orange) and bold-title + dimmed-body bullets. CHANGELOG.md ships
+in the packaged app so the notes work offline.
 
 ---
 
@@ -341,6 +505,27 @@ Every agent is told about the shared workspace folder, the names of
 other agents in the window, and lightweight handoff conventions
 (`./.handoff-to-frontend`, etc). Agents can produce files in the
 workspace that other agents pick up.
+
+### Composer — Per-Pane Identity + Expand Modal
+The composer takes on the bound agent's colour — field border tints
+with the agent's accent, Send button fills with the agent's colour
+with a high-contrast icon. Inactive panes keep a neutral grey
+Send. Click the ⤡ button to pop the composer into a 60×60% modal
+with the agent's avatar + name in the head, slug + model chips on
+the right, and the same agent-coloured textarea border — no more
+guessing which pane the long message will land in. Slash commands,
+attachments, and picker state are shared between the inline and
+expanded surfaces.
+
+### Responsive Pane Composer
+At pane widths ≤ 480px the composer switches from a single-row
+inline layout to a two-row grid (slash + paperclip on the left of
+the top row, send + expand on the right, textarea spanning the
+full bottom row). Send button collapses to icon-only so the four
+utility buttons read as one cluster of square tiles. At ≤ 220px
+the icon buttons drop to 26×26 and gaps tighten further. The
+composer placeholder also shortens with width — `Message the
+agent… (⌘⏎)` becomes `Message…` below 500px.
 
 ### Sound + Visual Cues
 A custom completion sound plays when an agent finishes a turn
