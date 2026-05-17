@@ -1,13 +1,11 @@
 <div align="center">
-  <img src="docs/inzone-app-logo.png" width="120" alt="INZONE logo" />
 
-  <h1>INZONE</h1>
+<img src="docs/inzone-logo-github.png" width="320" alt="INZONE24" />
 
-  <p>
-    <strong>A macOS cockpit for orchestrating multiple Claude agents in one window.</strong><br/>
-    Run several agents in parallel, chain them into pipelines, isolate work in git worktrees,
-    and ship code without ever leaving the app.
-  </p>
+<p>
+  <strong>A macOS cockpit for orchestrating multiple Claude agents in one window.</strong><br/>
+  Run a fleet of AI agents. Chain them into pipelines. Review their diffs. Ship — without leaving the app.
+</p>
 
   <p>
     <a href="https://github.com/eimis1990/inzone/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/eimis1990/inzone?label=download&style=for-the-badge&color=E4F250&labelColor=141821" /></a>
@@ -15,6 +13,7 @@
     <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-%E2%9C%93-141821?style=for-the-badge&labelColor=141821&color=8E8E93" />
     <img alt="Intel" src="https://img.shields.io/badge/Intel-%E2%9C%93-141821?style=for-the-badge&labelColor=141821&color=8E8E93" />
     <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-141821?style=for-the-badge&labelColor=141821&color=8E8E93" />
+    <img alt="No telemetry" src="https://img.shields.io/badge/telemetry-0-141821?style=for-the-badge&labelColor=141821&color=6B7A3F" />
   </p>
 
   <p>
@@ -24,6 +23,8 @@
     &nbsp;·&nbsp;
     <a href="#quick-start">Quick start</a>
     &nbsp;·&nbsp;
+    <a href="#everything-else">More features</a>
+    &nbsp;·&nbsp;
     <a href="#for-developers">Build from source</a>
   </p>
 </div>
@@ -31,184 +32,273 @@
 <br/>
 
 <p align="center">
-  <img src="docs/screenshots/multi-agents-feature.png" alt="INZONE multi-agent workspace" />
+  <img src="docs/screenshots/hero_image_dark.png" alt="INZONE24 workspace with multiple Claude agents working in parallel" />
 </p>
 
-## Why INZONE
+## Why INZONE24
 
-Most AI coding tools give you one chat window with one agent. INZONE gives you a workspace.
+Most AI coding tools give you one chat window with one agent. INZONE24 gives you a workspace.
 
-You bind agents to panes, point each at the same project folder, and they work in parallel — a frontend agent on the UI, a backend agent on the API, a code-reviewer watching both. When you need something more structured, switch to **Lead** mode and let an orchestrator delegate to sub-agents through a built-in messaging protocol. When you need something pipelined, enable **Flow** and chain panes into a sequence that passes output downstream.
+You bind agents to panes, point each at the same project folder, and they work in parallel — a frontend agent on the UI, a backend agent on the API, a code-reviewer watching both. When you need something more structured, switch to **Lead** mode and let an orchestrator delegate to sub-agents through a built-in messaging protocol. When you need something pipelined, enable **Flow** and chain panes into a sequence that passes output downstream. When you need to review what they produced, the **Review** tab gives you per-hunk approve/reject and a one-click PR. All in one window.
 
-INZONE is local-first. Your agent definitions, transcripts, and credentials live on your machine. The only data that leaves goes to Anthropic (for Claude turns) and any MCP servers you explicitly add.
+Built for developers who use Claude as a teammate, not a tab.
 
-It's compatible with Claude Code's `~/.claude/` directory, so any agents and skills you've already authored work here unchanged.
+<br/>
+
+<table align="center">
+  <tr>
+    <td align="center"><strong>5+</strong><br/><sub>STARTER AGENTS</sub></td>
+    <td align="center"><strong>8</strong><br/><sub>STARTER SKILLS</sub></td>
+    <td align="center"><strong>4</strong><br/><sub>CLI TOOLS AS WORKERS</sub></td>
+    <td align="center"><strong>0</strong><br/><sub>TELEMETRY · ACCOUNTS · LOCK-IN</sub></td>
+  </tr>
+</table>
 
 <a id="features"></a>
 
 ## Features
 
-### Multi-Agent Workspace
+### 01 · Multi-pane workspace — several agents, one window, zero context-switching
 
-Drop several Claude agents into independent panes inside one window. Each pane has its own conversation, transcript, and SDK session, so agents can work on different parts of the same project in parallel without stepping on each other. Splitters resize panes live; pre-built grids (1, 2, 4, 6, 8, 10-pane) are one click away in [Layouts](#layouts--save-your-pane-setups), and [Tasks](#tasks--one-click-mission-setups) bundle a layout with the right agents already assigned.
+Split your project view into independent panes, each with its own agent and conversation. Agents run in parallel, see the same project folder, and can hand off work to each other through lightweight file conventions.
 
-<p align="center">
-  <img src="docs/screenshots/multi-agents-feature.png" alt="Multiple Claude agents running side by side" />
-</p>
-
-### Lead Agent — Delegate, Don't Micromanage
-
-Promote one pane to a top-row orchestrator. The Lead agent sees a custom MCP toolset for assigning work, asking questions, and broadcasting context to its sub-agents. You write the goal once; the Lead figures out who does what and routes results back. Switch between Multi and Lead with a single segmented control in the workspace bar.
+No more juggling six Claude tabs.
 
 <p align="center">
-  <img src="docs/screenshots/lead-agent-feature.png" alt="Lead agent orchestrating sub-agents" />
+  <img src="docs/screenshots/feature_1_dark.png" alt="Multi-pane workspace showing multiple agents working in parallel" />
 </p>
 
-### Flow — Sequential Agent Pipelines
+### 02 · Lead mode — one orchestrator, many sub-agents
 
-Chain panes into a synchronous sequence. Each step fires the next as soon as it finishes, passing the previous agent's output downstream via a `{previous}` placeholder. Authored on a free-form canvas with draggable cards, bezier connection lines, per-card prompts, configurable per-step delay, and a live logs side panel with autoscroll. Toggle Flow off and the cards lock; pane composers reclaim message authoring.
+Switch a project into Lead mode and the top pane becomes the orchestrator agent. It can spawn sub-agents, message them by name, watch their progress, and hand off tasks.
+
+The same lightweight pattern Anthropic uses internally — without any of the plumbing.
 
 <p align="center">
-  <img src="docs/screenshots/multi-agents-flow-feature.png" alt="Flow pipeline canvas with chained agents" />
+  <img src="docs/screenshots/feature_2_dark.png" alt="Lead mode with orchestrator agent managing sub-agents" />
 </p>
 
-### Tasks — One-Click Mission Setups
+### 03 · Flow — chain your agents into pipelines
 
-Spin up the right multi-pane setup for the work you're about to do — no manual splitting, no manual agent assignment. Nine built-in task templates ship with the app ("Build a feature", "Fix a bug", "Code review", "Ship to production", and more), each pre-wiring the pane layout and dropping the appropriate agents into each slot. Pick one, click apply, start working.
+Build a sequential workflow on a free-form canvas. Each card is a pane with its own prompt; outputs flow forward via `{previous}`. Hit Run Flow and walk away.
 
-Save your own setups too: the "current session" card at the top of the modal captures your live pane tree + agent bindings as a reusable template. Templates that reference agents you've since deleted are flagged with a red ✗ chip and disabled rather than silently breaking — you'll know exactly what's wrong before you click.
+Live logs surface in a side panel. n8n for AI agents — but the agents are real Claude SDK sessions doing real work.
 
 <p align="center">
-  <img src="docs/screenshots/tasks-templates.png" alt="Tasks modal showing built-in mission templates and custom user tasks" />
+  <img src="docs/screenshots/feature_3_dark.png" alt="Flow canvas with chained agents and bezier connectors" />
 </p>
 
-### Layouts — Save Your Pane Setups
+### 04 · Tasks — pre-wired templates for common workflows
 
-Named pane-tree presets, separate from Tasks. Where Tasks bundle a layout *plus* agent assignments, Layouts are just the shape — useful when you want the same arrangement (a 2x2 grid, a triangle review, a wide-and-narrow split) but plan to drop different agents in each session. Apply a layout and your current panes rearrange in place; agents already running keep their transcripts and stay attached to their new slots.
+Nine built-in task templates ship with the app — pre-wiring layouts, agent bindings, and prompts for common scenarios like code review, debugging, or feature building.
+
+Capture your current session as a custom task to replay later. One click and you're back in the zone.
 
 <p align="center">
-  <img src="docs/screenshots/layouts-templates.png" alt="Layouts modal with named pane-tree presets" />
+  <img src="docs/screenshots/feature_4_dark.png" alt="Tasks modal with built-in templates and custom user tasks" />
 </p>
 
-### Pane Focus Tabs + Fullscreen
+### 05 · Layouts — named pane presets, shape without assignment
 
-A horizontal tabs strip below the workspace bar gives you one tab per pane plus an "All" tab. Click a pane tab to fullscreen that pane — every other agent keeps running in the background, transcripts intact, just not visible. Click "All" to return. Press `⌘F` to toggle fullscreen on whichever pane is active. Each tab carries the agent's emoji and a soft agent-coloured underline when selected, so a 6-pane workspace stays scannable instead of a blur of identical headers.
+Layouts are pane-tree presets separate from Tasks — the shape of your workspace without agent assignments.
+
+Switch between 1, 2, 4, 6, 8, or 10-pane grids instantly, or save custom arrangements for different work modes.
 
 <p align="center">
-  <img src="docs/screenshots/pane-focus.png" alt="Pane focus tabs strip below the workspace bar" />
+  <img src="docs/screenshots/feature_5_dark.png" alt="Layout presets for pane arrangements" />
 </p>
 
-### Worktrees — Parallel Branches Without Stepping On Yourself
+### 06 · Pane focus — fullscreen one pane, others keep running
 
-Spin up a git worktree off any branch directly from the sidebar. INZONE creates a sibling directory with its own branch (with optional `feature/`, `fix/`, `chore/`, `experiment/` prefix) and registers it as a sister project under the parent, indented in the sidebar with a "WT" chip. Run several agents on different branches of the same repo in parallel without them clobbering each other's working trees.
+A horizontal tab strip lets you toggle any pane to fullscreen while the others continue working invisibly in the background.
+
+`⌘F` to focus. `⌘F` again to return. Your agents never stop.
 
 <p align="center">
-  <img src="docs/screenshots/worktree-feature.png" alt="Worktree projects indented under their parent in the sidebar" />
+  <img src="docs/screenshots/feature_6_dark.png" alt="Pane focus tabs strip below the workspace bar" />
 </p>
 
-### Built-In Diff Review + PR Workflow
+### 07 · Worktrees — parallel branches, zero conflicts
 
-The second half of the worktree story. A Review chip in the workspace bar opens a per-pane file tree of changes with a side-by-side / inline diff viewer. Per-hunk approve/reject. Rejected hunks plus a comment can be sent back to the agent for revision. Once clean, **Open PR** detects `gh` CLI, supports multi-account push, switches SSH-only remotes to HTTPS for you, and drafts the PR title/body from the diff. After merge, INZONE pulls into the parent project, removes the worktree, and switches you back.
+Spin up a git worktree off any branch directly from the sidebar. Several agents can work in parallel branches without stepping on each other's changes.
+
+Optional prefixes and a `WT` chip keep your worktrees organized. INZONE24 cleans up when you're done.
 
 <p align="center">
-  <img src="docs/screenshots/in-app-diff.png" alt="Side-by-side diff review with per-hunk controls" />
+  <img src="docs/screenshots/feature_7_dark.png" alt="Git worktree management from the sidebar" />
 </p>
 
-### Built-In Terminal
+### 08 · Diff review + PR — review, approve, ship without leaving the app
 
-A real PTY shell (zsh/bash via node-pty) docked at the bottom of the pane host. `⌘T` toggles a slide-up overlay with a blurred backdrop. Full ANSI color support, interactive programs, persistent across panel open/close. Configurable shortcut buttons for quick commands like `npm run dev` or `git status`. Terminal cwd follows the active project's folder automatically. GPU-accelerated WebGL renderer (with graceful canvas2d fallback) keeps scrolling smooth even under heavy output like `npm install` or full test runs.
+The Review tab shows a side-by-side or inline diff with per-hunk approve/reject controls. Send feedback back to the agent for revision loops.
+
+When the work is ready, one click opens a PR via the `gh` CLI. INZONE24 handles the rest — title and body are auto-drafted from the diff.
 
 <p align="center">
-  <img src="docs/screenshots/in-app-terminal.png" alt="Built-in terminal docked at the bottom" />
+  <img src="docs/screenshots/feature_8_dark.png" alt="Diff review interface with side-by-side comparison and per-hunk approve / reject controls" />
 </p>
 
-### Preview Window
+### 09 · Terminal — a real shell inside every pane
 
-In-app browser for localhost. INZONE auto-detects URLs printed by agents *and* by the terminal, surfaces a Preview pill in the workspace bar, and opens a centered 16:10 webview at 90% viewport with `⌘⇧P`. Multi-URL picker when several services are running, with a kill action to free a port. Liveness sweeps prune URLs that no longer respond.
+A full PTY terminal (zsh/bash) with ANSI color support, WebGL-accelerated rendering, and persistent state across sessions.
+
+Add customizable shortcut buttons for your most-used commands. Your agents can run shell commands; so can you.
 
 <p align="center">
-  <img src="docs/screenshots/browser-preview.png" alt="In-app browser preview window" />
+  <img src="docs/screenshots/feature_9_dark.png" alt="Built-in terminal with ANSI colors and WebGL acceleration" />
 </p>
 
-### Project Wiki — LLM-Maintained Knowledge Base
+### 10 · Preview — localhost in the app, no tab-switching
 
-A persistent, agent-editable wiki that lives at `.inzone/wiki/` inside your project (committed to git, shared with the team). Inspired by Andrej Karpathy's "LLM Wiki" pattern. One click initialises a starter scaffold (architecture, glossary, gotchas, decisions, conventions) plus a schema file that defines the conventions agents must follow. **Scan project** drops a structured ingest prompt into the focused agent so it populates the pages from your real source. After that, every agent session automatically gets the schema + curated index injected into its system prompt, plus instructions to update pages as it learns — edits show up as visible Write/Edit tool calls in the transcript. **Lint** audits Sources cites, flags stale / orphan / broken-wikilink pages. A built-in markdown editor and an activity dashboard (page count, recent ingests, recent edits) round out the loop.
+An in-app browser auto-detects localhost URLs from your project. The card swaps in next to your panes with a real toolbar: back / forward / reload, address bar, seven-step zoom (`⌘+` / `⌘-` / `⌘0`), a 375px mobile-viewport simulator, reload-on-save (chokidar watches your sources), and inline DevTools.
+
+Multi-URL picker when several dev servers are running. Port-kill action built in.
 
 <p align="center">
-  <img src="docs/screenshots/wiki-feature.png" alt="Project wiki sidebar with page tree, dashboard strip, and the in-app markdown viewer" />
+  <img src="docs/screenshots/feature_10_dark.png" alt="In-app browser preview for localhost URLs with browser-grade toolbar" />
 </p>
 
-### Voice Agent — Drive INZONE Hands-Free
+### 11 · Project wiki — living documentation your agents read and write
 
-A dedicated voice agent (powered by ElevenLabs Conversational AI) that operates the rest of INZONE for you. Tap the mic in the sidebar, ask in plain English, and it calls real INZONE actions on your behalf:
+A markdown wiki at `.inzone/wiki/` that agents can edit, query, and cite. A bundled, non-overridable agent protocol auto-injects into every agent's system prompt the moment a project initialises its wiki — making sure the wiki actually gets updated after every code-touching task, not just when the user remembers to ask.
 
-- **"Spin up a frontend agent and a backend agent side by side"** — splits the pane tree and binds the matching agents
-- **"Switch to Lead mode and promote the frontend agent"** — flips the workspace mode and sets the orchestrator
-- **"Send the diff review notes to the backend pane"** — routes a message into a specific pane's composer
-- **"What's the architecture of this project?"** — reads `.inzone/wiki/` and answers from your documented source, with proper citations to the wiki pages it pulled from
-
-The wiki Q&A is the big one: the voice agent has `list_wiki_pages`, `read_wiki_page`, and `search_wiki` tools, so it grounds project questions in *your* committed documentation rather than guessing from training. Ask it a real codebase question while you're walking around, away from the keyboard.
-
-API key encrypted at rest in macOS keychain via Electron `safeStorage`. A three-slide setup wizard walks first-time users through getting it configured.
+Schema enforcement, structured ingestion, linting, and wiki-grounded voice Q&A. Your project knowledge, always up to date.
 
 <p align="center">
-  <img src="docs/screenshots/voice-panes-wiki.png" alt="Voice agent creating panes and answering wiki questions hands-free" />
+  <img src="docs/screenshots/feature_11_dark.png" alt="Project wiki with agent-editable markdown pages" />
 </p>
 
-### Workers Tab — Agents + CLI Tools In One Place
+### 12 · Voice — talk to your fleet
 
-The middle sidebar tab houses both LLM agents and non-agent CLI tools. The **Other** section ships with presets for **Claude Code**, **Codex CLI**, **Aider**, **Gemini CLI**, plus a plain **Terminal**. Drop one onto a pane and it flips from a chat surface into an embedded shell running that tool. Install detection shows a "not installed" pill with a one-click install path that types the right command into the bottom-bar terminal — no tab switching.
+> "Spin up a frontend agent on this folder."<br/>
+> "Tell the backend agent to add the auth endpoint."<br/>
+> "What did the reviewer say?"
 
-### MCP Server Support
+Drive INZONE24 by voice with ElevenLabs Conversational AI. Pane creation, mode switching, project switching, wiki queries with citations, reading agent responses aloud — all hands-free. Bring your own ElevenLabs account.
 
-Connect external MCP servers — Figma, JIRA, Atlassian, Context7, Supabase, GitHub, Filesystem, custom. Built-in OAuth flow (PKCE + localhost callback) for connectors that need it. Tokens persist in macOS keychain via `safeStorage`. Per-agent opt-in keeps each agent's toolbox focused. Reads MCP servers from Claude Code's project-local and project-other config files automatically.
+<p align="center">
+  <img src="docs/screenshots/feature_12_dark.png" alt="Voice interface for controlling agents hands-free" />
+</p>
 
-### Bundled Starter Library
+### 13 · Workers tab — agents and CLI tools share one shelf
 
-On first launch, INZONE copies a curated set of starter agents and skills into `~/.claude/` — never overwriting anything you've authored:
+Drop a Claude agent on a pane to chat with it; drop Claude Code, Codex CLI, Aider, Gemini CLI, or a plain shell on a pane to embed that tool right in the layout.
 
-- **5 starter agents**: backend-developer, fullstack-developer, frontend-developer, solo-founder, lead-users-agent
-- **8 starter skills**: code-reviewer, frontend-design, mobile-design, motion-system, senior-frontend, senior-fullstack, senior-prompt-engineer, seo-optimizer
+Same drag, same surface — choose the right tool for each task. Install detection flags missing binaries with a one-click guided install path.
 
-Plus a **Recommended skills** section in Settings → Skills with one-click install of curated community skills (starting with VoltAgent's Awesome Design — 55+ reverse-engineered brand design systems as Claude skills). Installs are idempotent shallow git clones into `~/.claude/skills/` — no overwrite of anything you've authored.
+<p align="center">
+  <img src="docs/screenshots/feature_13_dark.png" alt="Workers tab showing agents and CLI tools together" />
+</p>
 
-### Vim Mode + Editor Preferences
+### 14 · MCP servers — external tools, native integration
 
-A Vim mode toggle in Settings → Editor turns on modal editing across every CodeMirror surface in the app: the agent / skill prompt editor, the wiki page editor, the CLAUDE.md editor, and the MCP raw-JSON view. Normal / insert / visual modes, registers, marks, search, and dot-repeat all work — backed by `@replit/codemirror-vim`. Off by default. Toggle takes effect immediately in every open editor (and across every open INZONE window) without a reload. Settings → Shortcuts has the full keyboard reference, with modifier glyphs that match your OS.
+OAuth-integrated MCP servers for Figma, JIRA, Linear, Atlassian, Notion, GitHub, Filesystem, and custom endpoints. Tokens stored securely in the macOS keychain.
 
-### Project Resume + Auto-Update
+A curated Recommended MCPs rail offers 13 one-click installs covering both local stdio servers (Filesystem, Playwright, Brave Search, PostgreSQL, etc.) and remote OAuth connectors. Your agents can pull designs, create issues, and read files from anywhere you authorize.
 
-Pane layouts, agent assignments, transcripts, Claude SDK session ids, mode (Multi or Lead), Lead-pane history, terminal-pane preset bindings, and pipeline configuration all persist across restarts. Reopen the app and the same agents are right where you left them with full context intact.
+<p align="center">
+  <img src="docs/screenshots/feature_14_dark.png" alt="MCP server settings with curated Recommended MCPs" />
+</p>
 
-`electron-updater` checks the release feed every 30 minutes and silently downloads new versions in the background. When a download completes, you get a small "Update ready" prompt with Restart now / Later — never a forced restart.
+### 15 · Mission Control — every agent, every project, one glance
+
+`⌘⇧M` opens a full-screen overview of every project across your active workspace — agents, status, current tool, cost, last activity.
+
+Click a pane to jump to it. The closest thing to a process monitor for AI agents.
+
+<p align="center">
+  <img src="docs/screenshots/feature_15_dark.png" alt="Mission Control showing all projects and agents in a single overview" />
+</p>
+
+<a id="everything-else"></a>
+
+## Everything else
+
+The features above are the headliners. Plenty more is wired into the app:
+
+- **Plugins + Marketplaces** — browse, install, and toggle Claude Code plugins (agents, skills, slash commands, MCPs, hooks) from inside the app. Anthropic's official marketplace plus any third-party one.
+- **Slash commands** — `/` picker in the composer pulls project + user + plugin + built-in commands (`/plan`, `/think`, `/review`, `/explain`, `/test`). Argument templates included.
+- **Recommended Skills** — curated one-click skills (VoltAgent Awesome Design, Printing Press, Slack, Linear, Stripe, Notion, Figma, X/Twitter, Firecrawl, and more). Setup guides for ones that need API keys.
+- **In-app agent + skill editor** — wide drawer with CodeMirror Markdown, per-agent tool/skill/MCP allowlists, 12-color identity palette, and an AI-generated system-prompt button.
+- **CLAUDE.md memory** — per-project and global memory files injected into every agent's system prompt, with a scope picker.
+- **Multi-project workspaces** — group related projects; switch the whole context with one click. Inactive projects keep streaming in the background.
+- **Cost & usage telemetry** — live per-pane, per-project, and global cost counters. Settings → Usage breaks totals down by day, agent, and model.
+- **AskUserQuestion** — agents can render a structured multi-choice form to you instead of guessing or rambling in prose.
+- **Caveman Mode (experimental)** — optional token-compression layer cuts ~65–75% of natural-language tokens in assistant replies. Code, paths, and identifiers preserved verbatim.
+- **Light + Dark themes** — warm paper-and-ink light, deep slate + amber dark, live toggle in the workspace bar. Every surface adapts.
+- **Vim mode** — Settings → Editor toggle applies modal editing to every CodeMirror surface (agent prompts, wiki, CLAUDE.md, MCP JSON). Synced across windows.
+- **Image attachments** — drop, paste, or attach PNG/JPEG/WEBP/GIF in the composer. Vision-capable models see them as part of the user turn.
+- **Keyboard polish** — Settings → Shortcuts reference with platform-aware glyphs; auto-scroll pin with "Jump to latest" pill; collapsing tool-call rows; ⌘P swap panes ↔ preview, ⌘S Settings, ⌘M toggle Multi/Lead, ⌘⇧M Mission Control, ⌘T terminal, ⌘F fullscreen pane.
+
+For the full feature list and design notes see [FEATURES.md](FEATURES.md).
 
 <a id="quick-start"></a>
 
-## Quick start
+## Get started in three steps
 
-1. **[Download the latest release](https://github.com/eimis1990/inzone/releases/latest)** — pick the Apple Silicon zip if you're on M-series, the Intel zip otherwise.
-2. **Unzip and drag `INZONE.app` to Applications.** Safari unzips automatically; right-click → Open the first time if Gatekeeper hesitates (it shouldn't — the build is notarized).
-3. **First launch — choose your auth path:**
-   - **API key**: paste your Claude API key from `console.anthropic.com` into Settings → Profile. Encrypted at rest in macOS keychain.
-   - **Subscription**: if you've already run `claude login` from the Claude Code CLI, INZONE picks up the credentials automatically.
-4. **Pick a project folder** in the welcome modal. Every pane in that project will run with that folder as its working directory.
-5. **Drop an agent on a pane** — the Workers tab shows your library. Click any card to bind it.
-6. **Open another pane** with one of the layout templates (1, 2, 4, 6, 8, 10) and let two agents go at it in parallel.
+From download to your first agent conversation in under a minute.
 
-That's it. From there, explore Lead mode, Flow, worktrees, the Review chip, and the Voice setup wizard at your own pace.
+**1. Download** — [DMG for Apple Silicon or Intel](https://github.com/eimis1990/inzone/releases/latest). Drag to Applications.
+
+**2. Sign in to Claude** — paste your API key from `console.anthropic.com` into Settings → Profile, **or** run `claude login` from the Claude Code CLI and INZONE24 picks up the credentials automatically. Either works.
+
+**3. Open a project** — pick a folder, split into panes, drop agents in, start working.
+
+## Honest comparison
+
+Different tools excel at different things. Here's where INZONE24 fits.
+
+| Use case | INZONE24 | Claude Code | Cursor |
+| --- | :---: | :---: | :---: |
+| Single agent, fast feedback loop | ✓ | ✓✓ | ✓✓ |
+| Multiple agents in parallel | ✓✓ | — | — |
+| Sequential pipelines (Flow) | ✓✓ | — | — |
+| Voice control | ✓✓ | — | — |
+| Inline diff review + 1-click PR | ✓✓ | — | ✓ |
+| Project wiki agents maintain | ✓✓ | — | — |
+| Built-in IDE features (lints, etc.) | — | — | ✓✓ |
+
+<sub>— not really · ✓ supported · ✓✓ shines here</sub>
+
+## Privacy & ownership
+
+Your code never leaves your laptop.
+
+All transcripts, agent definitions, MCP configs, OAuth tokens (encrypted via macOS keychain), preview cookies, voice settings, and pipeline state live on your machine. The only data that leaves goes to:
+
+- **Anthropic** — the prompts you send to Claude, billed against your subscription or API key
+- **ElevenLabs** — voice prompts, only if you enable the Voice agent
+- **MCP server endpoints you explicitly add** — under your control, per-agent opt-in
+- **The auto-update feed** — version check; the binary itself is signed and notarized
+
+No analytics. No cloud account. No lock-in.
+
+## Compatibility with Claude Code
+
+INZONE24 reads the same configuration directories Claude Code uses:
+
+- `~/.claude/agents/` — global agent definitions
+- `~/.claude/skills/` — global skill definitions
+- `<project>/.claude/agents/` — project-scoped agents
+- `<project>/CLAUDE.md` and `~/.claude/CLAUDE.md` — memory files
+- `<project>/.mcp.json` — project-local MCP servers
+- `~/.claude.json` — project-other MCP servers
+- `~/.claude/plugins/` + `~/.claude/settings.json` `enabledPlugins` — plugin install state
+
+Whatever you've already set up for Claude Code keeps working.
 
 ## Requirements
 
 - macOS 12 or later (Apple Silicon or Intel)
 - A Claude API key (`console.anthropic.com`) **or** an active Claude Code subscription
-- (Optional) An ElevenLabs account for the Voice agent
-- (Optional) `gh` CLI installed for the one-click PR flow
+- *(Optional)* An ElevenLabs account for the Voice agent
+- *(Optional)* `gh` CLI installed for the one-click PR flow
 
 <a id="for-developers"></a>
 
 ## For developers
 
-INZONE is open source. To run from source:
+INZONE24 is open source. To run from source:
 
 ```bash
 git clone https://github.com/eimis1990/inzone.git
@@ -217,7 +307,7 @@ npm install
 npm run dev          # HMR dev mode
 ```
 
-Other useful scripts:
+Useful scripts:
 
 ```bash
 npm run typecheck    # tsc --noEmit for main + renderer
@@ -248,28 +338,15 @@ npm run package:dir  # build an unsigned .app for local testing — fastest iter
 │                       │    └─ @anthropic-ai/claude-agent-sdk │
 │                       └── SessionController (pane B) …       │
 │   Agents/skills watcher · MCP loader · Git ops · PTYs        │
-│   AskUserQuestion in-process MCP server                      │
-│   Auto-update (electron-updater)                             │
+│   Plugins loader · AskUserQuestion in-process MCP server     │
+│   Preview chokidar watcher · Auto-update                     │
 │   Persistence (electron-store + JSONL transcripts)           │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Core stack: **Electron + TypeScript + React + Zustand**, `@anthropic-ai/claude-agent-sdk` for agent runtime, `react-resizable-panels` for tiled splits, `node-pty` + `xterm.js` for terminals, `electron-builder` for packaging, `electron-updater` for in-app updates.
+Core stack: **Electron + TypeScript + React + Zustand**, `@anthropic-ai/claude-agent-sdk` for agent runtime, `react-resizable-panels` for tiled splits, `node-pty` + `xterm.js` for terminals, `chokidar` for the preview reload-on-save, `electron-builder` for packaging, `electron-updater` for in-app updates.
 
 For a deeper feature list see [FEATURES.md](FEATURES.md). For the release flow see [RELEASE.md](RELEASE.md).
-
-## Compatibility with Claude Code
-
-INZONE reads the same configuration directories Claude Code uses:
-
-- `~/.claude/agents/` — global agent definitions
-- `~/.claude/skills/` — global skill definitions
-- `<project>/.claude/agents/` — project-scoped agents
-- `<project>/CLAUDE.md` and `~/.claude/CLAUDE.md` — memory files
-- `<project>/.mcp.json` — project-local MCP servers
-- `~/.claude.json` — project-other MCP servers
-
-Whatever you've already set up for Claude Code keeps working.
 
 ## License
 
