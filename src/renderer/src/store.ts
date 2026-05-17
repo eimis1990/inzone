@@ -272,6 +272,18 @@ interface StoreState {
    * project switches. The swap animation lives in CSS — flipping
    * this value triggers a slide-cross transition on the stack. */
   paneViewMode: 'panes' | 'preview';
+  /**
+   * Wiki page currently opened in the pane area. When non-null, a
+   * WikiPagePane overlay renders inside `.pane-preview-stack` and
+   * covers the active forward card with the same framed chrome.
+   * Runtime-only (not persisted): wiki pages are a "look at this for
+   * a moment" surface, not state we want restored on next launch.
+   * Setting null closes it; setting a string opens that wiki-relative
+   * path. The agent transcripts in the panes underneath keep running
+   * — closing the wiki page returns the user to whatever was forward
+   * before (panes or preview), unchanged.
+   */
+  wikiPagePath: string | null;
   /** Pane id of the Lead agent when windowMode === 'lead'. */
   leadPaneId: PaneId | null;
   /**
@@ -555,6 +567,10 @@ interface StoreActions {
   /** Set the pane/preview swap to a specific mode (rare — used to
    *  force back to 'panes' when the URL list goes empty). */
   setPaneViewMode: (mode: 'panes' | 'preview') => void;
+  /** Open a wiki page in the pane-area overlay, or close it (null).
+   *  Same overlay also handles internal [[wikilink]] navigation by
+   *  flipping this value to the resolved target. */
+  setWikiPagePath: (relPath: string | null) => void;
   setLeadAgent: (agentName: string) => Promise<void>;
   refreshUsage: () => Promise<void>;
   setMemoryScope: (scope: MemoryScope) => void;
@@ -1396,6 +1412,7 @@ export const useStore = create<Store>((set, get) => ({
   soundEnabled: true,
   windowMode: 'multi',
   paneViewMode: 'panes',
+  wikiPagePath: null,
   leadPaneId: null,
   leadPaneName: null,
   memoryScope: 'project' as MemoryScope,
@@ -1766,6 +1783,7 @@ export const useStore = create<Store>((set, get) => ({
       activePaneId: id,
       windowMode: 'multi',
   paneViewMode: 'panes',
+      wikiPagePath: null,
       leadPaneId: null,
       leadPaneName: null,
       memoryScope: 'project',
@@ -2625,7 +2643,8 @@ export const useStore = create<Store>((set, get) => ({
         tree: { kind: 'leaf', id: placeholderLeafId },
         activePaneId: placeholderLeafId,
         windowMode: 'multi',
-  paneViewMode: 'panes',
+        paneViewMode: 'panes',
+        wikiPagePath: null,
         leadPaneId: null,
         leadPaneName: null,
         previewUrl: null,
@@ -2982,6 +3001,10 @@ export const useStore = create<Store>((set, get) => ({
   setPaneViewMode: (mode) => {
     if (mode === get().paneViewMode) return;
     set({ paneViewMode: mode });
+  },
+  setWikiPagePath: (relPath) => {
+    if (relPath === get().wikiPagePath) return;
+    set({ wikiPagePath: relPath });
   },
 
   setWindowMode: (mode) => {
@@ -3458,6 +3481,7 @@ export const useStore = create<Store>((set, get) => ({
       activePaneId: newPaneId,
       windowMode: 'multi',
   paneViewMode: 'panes',
+      wikiPagePath: null,
       leadPaneId: null,
       leadPaneName: null,
       memoryScope: 'project',
@@ -3535,6 +3559,7 @@ export const useStore = create<Store>((set, get) => ({
       activePaneId: newPaneId,
       windowMode: 'multi',
   paneViewMode: 'panes',
+      wikiPagePath: null,
       leadPaneId: null,
       leadPaneName: null,
       memoryScope: 'project',
@@ -4517,9 +4542,10 @@ export const useStore = create<Store>((set, get) => ({
           windowId: nanoid(10),
           activePaneId: null,
           windowMode: 'multi',
-  paneViewMode: 'panes',
+          paneViewMode: 'panes',
+          wikiPagePath: null,
           leadPaneId: null,
-  leadPaneName: null,
+          leadPaneName: null,
                   memoryScope: 'project',
         });
         await window.cowork.state.setActiveSession(undefined);

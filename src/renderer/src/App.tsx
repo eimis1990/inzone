@@ -15,6 +15,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { EditorModal } from './components/EditorModal';
 import { AppLogo } from './components/AppLogo';
 import { PreviewPane } from './components/PreviewPane';
+import { WikiPagePane } from './components/WikiPagePane';
 import { TerminalPanel } from './components/TerminalPanel';
 import { PipelineBoardSafe } from './components/PipelineBoardSafe';
 import { ReviewViewSafe } from './components/ReviewViewSafe';
@@ -34,6 +35,12 @@ export function App() {
   const focusedPaneId = useStore((s) => s.focusedPaneId);
   const paneViewMode = useStore((s) => s.paneViewMode);
   const setPaneViewMode = useStore((s) => s.setPaneViewMode);
+  // Wiki page open-state — when non-null, WikiPagePane mounts inside
+  // the pane-preview-stack on top of pane-host/preview-host with the
+  // same framed chrome. Stored centrally so the sidebar's WikiSection
+  // and the pane-area host stay in sync.
+  const wikiPagePath = useStore((s) => s.wikiPagePath);
+  const setWikiPagePath = useStore((s) => s.setWikiPagePath);
   // The preview card mounts only when at least one localhost URL is
   // available — either a user-set previewUrl, a terminal-detected
   // URL, or an agent-transcript-mined URL that hasn't been hidden.
@@ -61,6 +68,27 @@ export function App() {
       setPaneViewMode('panes');
     }
   }, [hasPreviewableUrl, paneViewMode, setPaneViewMode]);
+  // Auto-close the wiki overlay when the user does anything that
+  // would otherwise be hidden behind it. Two triggers:
+  //   - paneViewMode flips to 'preview' (preview-host slides in
+  //     under the wiki-host's z-index, so the user's preview click
+  //     would visually do nothing — close the wiki instead).
+  //   - windowMode changes (Multi ↔ Lead — the user is clearly
+  //     reshaping the workspace, so they probably don't want the
+  //     wiki blocking the new layout).
+  // setWikiPagePath is a no-op when wikiPagePath is already null,
+  // so these effects are cheap on every render.
+  useEffect(() => {
+    if (paneViewMode === 'preview') setWikiPagePath(null);
+  }, [paneViewMode, setWikiPagePath]);
+  useEffect(() => {
+    setWikiPagePath(null);
+    // We don't include setWikiPagePath in deps so this only re-runs
+    // when windowMode itself changes — adding the setter would still
+    // be safe (it's stable) but it makes the intent of the effect
+    // clearer when the dep list is the literal trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowMode]);
   // PreviewPane is heavy — its <webview> tag spawns a full Chromium
   // renderer process plus whatever the loaded page brings (JS, timers,
   // websockets, HMR). We only mount it while the user is actually on
@@ -371,6 +399,15 @@ export function App() {
             {hasPreviewableUrl && cwd && (
               <div className="preview-host" aria-hidden={paneViewMode !== 'preview'}>
                 {previewMounted && <PreviewPane />}
+              </div>
+            )}
+            {wikiPagePath && cwd && (
+              <div className="wiki-host" role="region" aria-label="Wiki page">
+                <WikiPagePane
+                  relPath={wikiPagePath}
+                  onClose={() => setWikiPagePath(null)}
+                  onNavigate={(target) => setWikiPagePath(target)}
+                />
               </div>
             )}
           </div>

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getPaneDisplayName, useStore } from '../store';
 import type { WikiPageMeta, WikiStatus } from '@shared/types';
 import { Tooltip } from './Tooltip';
-import { WikiPageModal } from './WikiPageModal';
 
 /**
  * The ingest prompt we drop into the active agent when the user
@@ -90,7 +89,12 @@ export function WikiSection() {
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [viewingPath, setViewingPath] = useState<string | null>(null);
+  // Wiki page open-state lives in the store now so the WikiPagePane
+  // can mount inside the pane area (`.pane-preview-stack`) instead of
+  // a portaled full-screen modal. We still read+write it here for the
+  // sidebar's click handler and the active-row highlight.
+  const viewingPath = useStore((s) => s.wikiPagePath);
+  const setViewingPath = useStore((s) => s.setWikiPagePath);
   // Brief one-shot acknowledgement after the user kicks off a scan.
   // We swap it for the regular toolbar after a couple seconds so the
   // sidebar doesn't accumulate stale chrome.
@@ -124,6 +128,16 @@ export function WikiSection() {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  // WikiPagePane (rendered by App.tsx inside the pane area) fires
+  // `inzone:wiki-page-saved` after a successful save so the sidebar's
+  // dashboard (last-updated / page count / recent entries) refreshes
+  // without us threading a callback through the mount.
+  useEffect(() => {
+    const handler = () => void refresh();
+    window.addEventListener('inzone:wiki-page-saved', handler);
+    return () => window.removeEventListener('inzone:wiki-page-saved', handler);
   }, [refresh]);
 
   const init = useCallback(async () => {
@@ -394,18 +408,11 @@ export function WikiSection() {
         )}
       </div>
 
-      {viewingPath && (
-        <WikiPageModal
-          relPath={viewingPath}
-          onClose={() => setViewingPath(null)}
-          onNavigate={(target) => setViewingPath(target)}
-          /* After an in-modal edit we refresh status + page list so
-             the dashboard's "last updated" / page count / recent
-             entries reflect the change immediately, without the user
-             having to click Refresh. */
-          onSaved={() => void refresh()}
-        />
-      )}
+      {/* WikiPagePane is mounted by App.tsx inside `.pane-preview-stack`
+          so the page renders in the pane area (same frame chrome as
+          pane-host) instead of as a portaled full-screen modal. The
+          `viewingPath` state above is now read from / written to the
+          store so App.tsx can react to selection changes. */}
     </div>
   );
 }
