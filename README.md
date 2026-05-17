@@ -90,7 +90,7 @@ Live logs surface in a side panel. n8n for AI agents — but the agents are real
 
 ### 04 · Tasks — pre-wired templates for common workflows
 
-Nine built-in task templates ship with the app — pre-wiring layouts, agent bindings, and prompts for common scenarios like code review, debugging, or feature building.
+Built-in task templates ship with the app — pre-wiring layouts, agent bindings, and prompts for common scenarios like Website Redesign, Mobile Feature, Greenfield Project, Bug Fix, Code Review, Browser Automation, and more. Lead-orchestrated templates carry a `LEAD` chip; multi-agent ones get a `MULTI` chip.
 
 Capture your current session as a custom task to replay later. One click and you're back in the zone.
 
@@ -98,77 +98,67 @@ Capture your current session as a custom task to replay later. One click and you
   <img src="docs/screenshots/feature_4_dark.png" alt="Tasks modal with built-in templates and custom user tasks" />
 </p>
 
-### 05 · Layouts — named pane presets, shape without assignment
-
-Layouts are pane-tree presets separate from Tasks — the shape of your workspace without agent assignments.
-
-Switch between 1, 2, 4, 6, 8, or 10-pane grids instantly, or save custom arrangements for different work modes.
-
-<p align="center">
-  <img src="docs/screenshots/feature_5_dark.png" alt="Layout presets for pane arrangements" />
-</p>
-
-### 06 · Pane focus — fullscreen one pane, others keep running
-
-A horizontal tab strip lets you toggle any pane to fullscreen while the others continue working invisibly in the background.
-
-`⌘F` to focus. `⌘F` again to return. Your agents never stop.
-
-<p align="center">
-  <img src="docs/screenshots/feature_6_dark.png" alt="Pane focus tabs strip below the workspace bar" />
-</p>
-
-### 07 · Worktrees — parallel branches, zero conflicts
+### 05 · Worktrees — parallel branches, zero conflicts
 
 Spin up a git worktree off any branch directly from the sidebar. Several agents can work in parallel branches without stepping on each other's changes.
 
 Optional prefixes and a `WT` chip keep your worktrees organized. INZONE24 cleans up when you're done.
 
 <p align="center">
-  <img src="docs/screenshots/feature_7_dark.png" alt="Git worktree management from the sidebar" />
+  <img src="docs/screenshots/feature_5_dark.png" alt="Worktree project in the sidebar with a feature branch and dedicated agent panes" />
 </p>
 
-### 08 · Diff review + PR — review, approve, ship without leaving the app
+### 06 · Diff review + PR — review, approve, ship without leaving the app
 
 The Review tab shows a side-by-side or inline diff with per-hunk approve/reject controls. Send feedback back to the agent for revision loops.
 
 When the work is ready, one click opens a PR via the `gh` CLI. INZONE24 handles the rest — title and body are auto-drafted from the diff.
 
 <p align="center">
-  <img src="docs/screenshots/feature_8_dark.png" alt="Diff review interface with side-by-side comparison and per-hunk approve / reject controls" />
+  <img src="docs/screenshots/feature_6_dark.png" alt="Diff review interface with side-by-side comparison and per-hunk approve / reject controls" />
 </p>
 
-### 09 · Terminal — a real shell inside every pane
+### 07 · Mission Control — every agent, every project, one glance
 
-A full PTY terminal (zsh/bash) with ANSI color support, WebGL-accelerated rendering, and persistent state across sessions.
+`⌘⇧M` opens a full-screen overview of every project across your active workspace — agents, status, current tool, cost, last activity.
 
-Add customizable shortcut buttons for your most-used commands. Your agents can run shell commands; so can you.
+Click a pane to jump to it. The closest thing to a process monitor for AI agents.
 
 <p align="center">
-  <img src="docs/screenshots/feature_9_dark.png" alt="Built-in terminal with ANSI colors and WebGL acceleration" />
+  <img src="docs/screenshots/feature_7_dark.png" alt="Mission Control showing all projects and agents in a single overview" />
 </p>
 
-### 10 · Preview — localhost in the app, no tab-switching
+### 08 · Preview — localhost in the app, no tab-switching
 
 An in-app browser auto-detects localhost URLs from your project. The card swaps in next to your panes with a real toolbar: back / forward / reload, address bar, seven-step zoom (`⌘+` / `⌘-` / `⌘0`), a 375px mobile-viewport simulator, reload-on-save (chokidar watches your sources), and inline DevTools.
 
 Multi-URL picker when several dev servers are running. Port-kill action built in.
 
 <p align="center">
-  <img src="docs/screenshots/feature_10_dark.png" alt="In-app browser preview for localhost URLs with browser-grade toolbar" />
+  <img src="docs/screenshots/feature_8_dark.png" alt="In-app browser preview for localhost URLs with browser-grade toolbar" />
 </p>
 
-### 11 · Project wiki — living documentation your agents read and write
+### 09 · Terminal — a real shell inside every pane
+
+A full PTY terminal (zsh/bash) with ANSI color support, WebGL-accelerated rendering, and persistent state across sessions. Add customizable shortcut buttons for your most-used commands (Run Serve, Run Dev, Kill Port 3000, Git Pull Origin, Expo Login, …) right above the terminal.
+
+Your agents can run shell commands; so can you.
+
+<p align="center">
+  <img src="docs/screenshots/feature_9_dark.png" alt="Built-in terminal with shortcut buttons and ANSI-colored output" />
+</p>
+
+### 10 · Project wiki — living documentation your agents read and write
 
 A markdown wiki at `.inzone/wiki/` that agents can edit, query, and cite. A bundled, non-overridable agent protocol auto-injects into every agent's system prompt the moment a project initialises its wiki — making sure the wiki actually gets updated after every code-touching task, not just when the user remembers to ask.
 
 Schema enforcement, structured ingestion, linting, and wiki-grounded voice Q&A. Your project knowledge, always up to date.
 
 <p align="center">
-  <img src="docs/screenshots/feature_11_dark.png" alt="Project wiki with agent-editable markdown pages" />
+  <img src="docs/screenshots/feature_10_dark.png" alt="Project wiki with agent-editable markdown pages and schema enforcement" />
 </p>
 
-### 12 · Voice — talk to your fleet
+### 11 · Voice — talk to your fleet
 
 > "Spin up a frontend agent on this folder."<br/>
 > "Tell the backend agent to add the auth endpoint."<br/>
@@ -177,37 +167,47 @@ Schema enforcement, structured ingestion, linting, and wiki-grounded voice Q&A. 
 Drive INZONE24 by voice with ElevenLabs Conversational AI. Pane creation, mode switching, project switching, wiki queries with citations, reading agent responses aloud — all hands-free. Bring your own ElevenLabs account.
 
 <p align="center">
-  <img src="docs/screenshots/feature_12_dark.png" alt="Voice interface for controlling agents hands-free" />
+  <img src="docs/screenshots/feature_11_dark.png" alt="Voice tab with animated orb next to a multi-agent workspace" />
 </p>
 
-### 13 · Workers tab — agents and CLI tools share one shelf
+### 12 · Plugins + Marketplaces — install agents, skills, commands, MCPs in one bundle
+
+Browse, install, and toggle Claude Code plugins from inside the app — bundles that can contribute any combination of agents, skills, slash commands, MCP servers, and hooks. Anthropic's official marketplace ships as a recommended starter; add any third-party marketplace by URL.
+
+Activation is per-plugin and mirrors into Claude Code's `~/.claude/settings.json`, so the two apps stay in sync.
+
+<p align="center">
+  <img src="docs/screenshots/feature_12_dark.png" alt="Plugins settings with installed plugins, marketplaces, and recommended starters" />
+</p>
+
+### 13 · Slash commands — project, user, plugin, and built-in commands in one picker
+
+`/` in the composer opens a searchable popover with every slash command available to the active pane's project. Sources merge in priority order: project-local commands → your user commands → plugin commands → five built-in starters (`/plan`, `/think`, `/review`, `/explain`, `/test`).
+
+Pick a command, type your arguments, send. Templates with `$ARGUMENTS` get expanded automatically.
+
+<p align="center">
+  <img src="docs/screenshots/feature_13_dark.png" alt="Slash command picker in the composer with project and plugin commands" />
+</p>
+
+### 14 · Workers tab — agents and CLI tools share one shelf
 
 Drop a Claude agent on a pane to chat with it; drop Claude Code, Codex CLI, Aider, Gemini CLI, or a plain shell on a pane to embed that tool right in the layout.
 
 Same drag, same surface — choose the right tool for each task. Install detection flags missing binaries with a one-click guided install path.
 
 <p align="center">
-  <img src="docs/screenshots/feature_13_dark.png" alt="Workers tab showing agents and CLI tools together" />
+  <img src="docs/screenshots/feature_14_dark.png" alt="Panes running Claude Code, Codex CLI, and Gemini CLI alongside a Claude agent pane" />
 </p>
 
-### 14 · MCP servers — external tools, native integration
+### 15 · In-app agent + skill editor — author your own, your way
 
-OAuth-integrated MCP servers for Figma, JIRA, Linear, Atlassian, Notion, GitHub, Filesystem, and custom endpoints. Tokens stored securely in the macOS keychain.
+Edit (or create) any agent without leaving the app. The drawer covers identity (name, emoji, vibe), capabilities (model + tool / skill / MCP allowlists), appearance (12-colour palette), and the full system prompt in a CodeMirror Markdown editor. An "AI-generate prompt" button drafts a polished system prompt from the agent's name + description when you don't want to start from a blank page.
 
-A curated Recommended MCPs rail offers 13 one-click installs covering both local stdio servers (Filesystem, Playwright, Brave Search, PostgreSQL, etc.) and remote OAuth connectors. Your agents can pull designs, create issues, and read files from anywhere you authorize.
-
-<p align="center">
-  <img src="docs/screenshots/feature_14_dark.png" alt="MCP server settings with curated Recommended MCPs" />
-</p>
-
-### 15 · Mission Control — every agent, every project, one glance
-
-`⌘⇧M` opens a full-screen overview of every project across your active workspace — agents, status, current tool, cost, last activity.
-
-Click a pane to jump to it. The closest thing to a process monitor for AI agents.
+The same editor pattern works for skills.
 
 <p align="center">
-  <img src="docs/screenshots/feature_15_dark.png" alt="Mission Control showing all projects and agents in a single overview" />
+  <img src="docs/screenshots/feature_15_dark.png" alt="Edit Agent drawer with identity, capabilities, appearance, and color palette" />
 </p>
 
 <a id="everything-else"></a>
@@ -216,12 +216,12 @@ Click a pane to jump to it. The closest thing to a process monitor for AI agents
 
 The features above are the headliners. Plenty more is wired into the app:
 
-- **Plugins + Marketplaces** — browse, install, and toggle Claude Code plugins (agents, skills, slash commands, MCPs, hooks) from inside the app. Anthropic's official marketplace plus any third-party one.
-- **Slash commands** — `/` picker in the composer pulls project + user + plugin + built-in commands (`/plan`, `/think`, `/review`, `/explain`, `/test`). Argument templates included.
-- **Recommended Skills** — curated one-click skills (VoltAgent Awesome Design, Printing Press, Slack, Linear, Stripe, Notion, Figma, X/Twitter, Firecrawl, and more). Setup guides for ones that need API keys.
-- **In-app agent + skill editor** — wide drawer with CodeMirror Markdown, per-agent tool/skill/MCP allowlists, 12-color identity palette, and an AI-generated system-prompt button.
-- **CLAUDE.md memory** — per-project and global memory files injected into every agent's system prompt, with a scope picker.
+- **MCP servers + Recommended MCPs** — OAuth-integrated MCP servers for Figma, JIRA, Linear, Atlassian, Notion, GitHub, Filesystem, and custom endpoints. A Recommended MCPs rail ships 13 one-click installs covering both local stdio servers (Filesystem, Playwright, Brave Search, PostgreSQL, etc.) and remote OAuth connectors. Tokens encrypted in the macOS keychain. Per-agent opt-in.
+- **Layouts** — named pane-tree presets separate from Tasks. Switch between 1, 2, 4, 6, 8, or 10-pane grids instantly, or save your own arrangements for different work modes.
+- **Pane focus + ⌘F fullscreen** — a horizontal tab strip under the workspace bar lets you fullscreen any pane while the others keep running invisibly in the background. ⌘F to focus, ⌘F again to return.
 - **Multi-project workspaces** — group related projects; switch the whole context with one click. Inactive projects keep streaming in the background.
+- **Recommended Skills** — curated one-click skills (VoltAgent Awesome Design, Printing Press, Slack, Linear, Stripe, Notion, Figma, X/Twitter, Firecrawl, and more). Setup guides for ones that need API keys.
+- **CLAUDE.md memory** — per-project and global memory files injected into every agent's system prompt, with a scope picker.
 - **Cost & usage telemetry** — live per-pane, per-project, and global cost counters. Settings → Usage breaks totals down by day, agent, and model.
 - **AskUserQuestion** — agents can render a structured multi-choice form to you instead of guessing or rambling in prose.
 - **Caveman Mode (experimental)** — optional token-compression layer cuts ~65–75% of natural-language tokens in assistant replies. Code, paths, and identifiers preserved verbatim.
