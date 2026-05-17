@@ -535,9 +535,9 @@ export function WorkspaceBar() {
           anchored 20px from the viewport). Was outside the frame
           in the first v1.15 iteration; moved inside for visual
           alignment. */}
-      <div className="wb-brand" title="INZONE">
+      <div className="wb-brand" title="INZONE24">
         <span className="wb-wordmark" aria-hidden>
-          INZONE
+          INZONE<span className="wb-wordmark-accent">24</span>
         </span>
         <AppLogo size={30} />
       </div>

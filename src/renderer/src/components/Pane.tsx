@@ -35,7 +35,13 @@ import {
   mergeCommands,
 } from '@shared/builtin-commands';
 import type { ProjectCommand } from '@shared/types';
-import placemarkUrl from '../assets/in-zone-placeholder.png';
+// Two theme-tuned placemark variants. Both ship into the bundle and
+// both `<img>` elements are always in the DOM — CSS toggles which one
+// is visible based on `:root.theme-light` (same pattern AppLogo uses).
+// That keeps the swap reactive to live theme changes without any
+// React state, and the extra image weight is negligible.
+import placemarkDarkUrl from '../assets/inzone-placeholder-dark.png';
+import placemarkLightUrl from '../assets/inzone-placeholder-light.png';
 
 /**
  * Friendly, humane status labels. "waiting_for_input" means two things
@@ -913,8 +919,13 @@ export function Pane({ id }: PaneProps) {
             <div className="pane-empty">
               <div className="pane-empty-icon" aria-hidden>
                 <img
-                  className="pane-empty-mark"
-                  src={placemarkUrl}
+                  className="pane-empty-mark pane-empty-mark-dark"
+                  src={placemarkDarkUrl}
+                  alt=""
+                />
+                <img
+                  className="pane-empty-mark pane-empty-mark-light"
+                  src={placemarkLightUrl}
                   alt=""
                 />
               </div>

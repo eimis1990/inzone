@@ -227,27 +227,6 @@ function WorkersTab() {
   const panes = useStore((s) => s.panes);
   const leadPaneId = useStore((s) => s.leadPaneId);
   const openAgentEditor = useStore((s) => s.openAgentEditor);
-  const refreshAgents = useStore((s) => s.refreshAgents);
-  // Tracks an in-flight manual refresh from the section header's
-  // reload button. Disables the button + shows "…" while fetching.
-  // Keeps a hard floor of ~250ms shown so the icon doesn't flicker
-  // for fast IPC calls — feels more deliberate.
-  const [refreshingAgents, setRefreshingAgents] = useState(false);
-  const handleRefreshAgents = useCallback(async () => {
-    if (refreshingAgents) return;
-    setRefreshingAgents(true);
-    const startedAt = Date.now();
-    try {
-      await refreshAgents();
-    } finally {
-      const elapsed = Date.now() - startedAt;
-      const minVisible = 250;
-      if (elapsed < minVisible) {
-        await new Promise((r) => setTimeout(r, minVisible - elapsed));
-      }
-      setRefreshingAgents(false);
-    }
-  }, [refreshAgents, refreshingAgents]);
   const activeAgent = activePaneId ? panes[activePaneId]?.agentName : undefined;
   const activePresetId =
     activePaneId && panes[activePaneId]?.workerKind === 'terminal'
@@ -493,8 +472,6 @@ function WorkersTab() {
           count={sortedAgents.length}
           collapsed={agentsCollapsed}
           onToggle={() => setAgentsCollapsed((v) => !v)}
-          onRefresh={() => void handleRefreshAgents()}
-          refreshing={refreshingAgents}
         />
         {!agentsCollapsed && (
           <>

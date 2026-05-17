@@ -398,7 +398,9 @@ function EmptyState() {
         <div className="empty-logo" aria-hidden>
           <AppLogo size={84} />
         </div>
-        <h1 className="empty-wordmark">INZONE</h1>
+        <h1 className="empty-wordmark">
+          INZONE<span className="empty-wordmark-accent">24</span>
+        </h1>
         <p>Pick a project folder to start a session.</p>
         <button className="primary" onClick={() => void pickFolder()}>
           Choose folder…

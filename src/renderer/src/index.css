@@ -1060,6 +1060,16 @@ textarea {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
+/* The "24" half of the wordmark — picks up the theme accent so the
+   year tag reads as a brand mark distinct from the INZONE base.
+   Sits tight against the E with the same letter-spacing so the two
+   halves still read as one wordmark, not two words. */
+.wb-wordmark-accent {
+  color: var(--accent);
+}
+.empty-wordmark-accent {
+  color: var(--accent);
+}
 
 .workspace-bar .spacer {
   flex: 1;
@@ -1366,6 +1376,24 @@ textarea {
   display: none;
 }
 :root.theme-light .app-logo-light {
+  display: block;
+}
+
+/* Same dark/light variant pattern for the pane empty-state placemark
+   (see Pane.tsx). Two `<img>` elements always in the DOM; CSS hides
+   whichever variant doesn't match the active theme. The selectors
+   chain `.pane-empty-mark` with the variant class because the
+   single-class `.pane-empty-mark` rule lives later in this file
+   (~line 4863) and a single-class `.pane-empty-mark-light` would
+   lose the cascade by source order. Chaining bumps specificity to
+   0,2,0 so these always win. */
+.pane-empty-mark.pane-empty-mark-light {
+  display: none;
+}
+:root.theme-light .pane-empty-mark.pane-empty-mark-dark {
+  display: none;
+}
+:root.theme-light .pane-empty-mark.pane-empty-mark-light {
   display: block;
 }
 
@@ -1847,15 +1875,29 @@ textarea {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: url('./assets/sidebar-pattern.svg');
+  /* Default = dark theme. Light theme overrides this below with a
+     paper-tuned variant of the same brick layout. Two distinct SVGs
+     (rather than one with CSS-filtered colour) so each theme's
+     pattern can be drawn at the right tonal level — the dark theme
+     uses the deep-slate placemark, the light theme uses the
+     paper/ink placemark. */
+  background-image: url('./assets/sidebar-pattern-dark.svg');
   background-repeat: repeat;
   background-size: 180px 140px;
-  /* Bumped 0.10 → 0.18 in v1.15.1 — the pattern was almost
-     imperceptible against the panel's dark fill; ~80% brighter
-     gives the brick layout a subtle but recognizable texture
-     without crowding the content. */
-  opacity: 0.18;
+  /* Bumped 0.18 → 0.4 with the new dark placemark — the new mark
+     reads softer than the old one, so the brick layout was getting
+     lost again at 0.18. 0.4 brings back the same visual weight the
+     previous placemark had at 0.18. */
+  opacity: 0.4;
   pointer-events: none;
+}
+:root.theme-light .sidebar-host::before {
+  /* Light placemark is naturally low-contrast (paper-toned glyphs
+     on a paper background), so the dark-theme alpha is too dim
+     here. 0.8 reads as a present-but-quiet texture under the agent
+     rows without competing with content. */
+  background-image: url('./assets/sidebar-pattern-light.svg');
+  opacity: 0.8;
 }
 .sidebar-inner {
   position: relative;
@@ -13151,6 +13193,46 @@ select:focus {
 }
 :root.theme-light .review-line-ctx {
   color: rgb(70, 60, 50);
+}
+
+/* Agent cards (sidebar Workers list) in light mode — the dark theme
+   uses #1c1c1e on the dark slate body, a clear elevation jump. The
+   light theme's `--surface-tile` resolves to #FDFAF0 (paper-50)
+   which sits ABOVE #F9F4E6 (paper-100, the body bg) by only ~4
+   units per channel — basically invisible. The cards looked floaty
+   and "whitish" against the warm cream. Override to paper-200
+   (#F1E9D2) so the cards read as slightly deeper warm cells, with
+   paper-300 (#E6DBB8) on hover. Border swaps from the dark-mode
+   rgba(255,255,255,0.06) (white-on-cream → invisible) to the
+   warm-paper hairline. */
+:root.theme-light .agent-card {
+  background: #F1E9D2;
+  border-color: #E6DBB8;
+}
+:root.theme-light .agent-card:hover:not(:disabled) {
+  background: #E6DBB8;
+  border-color: #C9B98A;
+}
+
+/* Wiki page rows in light mode — the dark-mode rule leaves them
+   fully transparent so the sidebar bg shows through. On the light
+   paper canvas the brand pattern bleeds through behind the text
+   and makes both the name + the size hard to read. Give each row
+   a paper-tile bg with a hairline warm border so it reads as a
+   contained cell. Active state keeps its accent tint but with a
+   firmer border. */
+:root.theme-light .wiki-page-row {
+  background: #F1E9D2;
+  border-color: #E6DBB8;
+  margin-bottom: 4px;
+}
+:root.theme-light .wiki-page-row:hover {
+  background: #E6DBB8;
+  border-color: #C9B98A;
+}
+:root.theme-light .wiki-page-row.active {
+  background: color-mix(in srgb, var(--accent) 18%, #F1E9D2);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .review-empty,
